@@ -1,8 +1,3 @@
-.byt "NES",$1A
-.byt $01, $01, $00, $00
-.byt $00, $10, $00, $00
-.byt $00, $00, $00, $00
-
 PPUCTRL = $2000
 PPUMASK = $2001
 PPUSTATUS = $2002
@@ -13,7 +8,8 @@ PPUDATA = $2007
 TIH = $00
 TIL = $01
 
-* = $C000
+; * = $C000
+.CODE
 reset:
   sei            ; Ignore IRQs.
   cld            ; Disable decimal mode.
@@ -148,7 +144,5 @@ write_attribute:
 irq:
   rti
 
-end:
-* = $fffa
-.dsb * - end, $55
+.SEGMENT "INTERRUPTS"
 .word nmi, reset, irq
