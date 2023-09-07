@@ -79,10 +79,15 @@ EXIT:
   iny
   lda RSLOC,Y
   sta IPH
-  iny
   sty RSP
 
   jmp NEXT
+
+F_PUSH2S:
+  .addr DOCOL
+  .addr F_PUSH2
+  .addr F_PUSH2
+  .addr F_EXIT
 
 F_PUSH2:
   .addr PUSH2
@@ -117,8 +122,7 @@ END:
   jmp END  ; Loop forever.
 
 FORTH_MAIN:
-  .addr F_PUSH2
-  .addr F_PUSH2
+  .addr F_PUSH2S
   .addr F_ADD
   .addr F_END
 
