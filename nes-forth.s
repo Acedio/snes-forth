@@ -68,9 +68,13 @@ DOCOL:
 
   jmp NEXT
 
-F_EXIT:
-  .addr EXIT
-EXIT:
+.macro defcode name
+  .ident(.concat("F_", name)):
+    .addr .ident(name)
+  .ident(name):
+.endmacro
+
+defcode "EXIT"
   ; Pop the return stack into IP, then NEXT.
   ldy RSP
   iny
@@ -83,24 +87,67 @@ EXIT:
 
   jmp NEXT
 
-F_PUSH2S:
-  .addr DOCOL
-  .addr F_PUSH2
-  .addr F_PUSH2
-  .addr F_EXIT
-
-F_PUSH2:
-  .addr PUSH2
-PUSH2:
-  lda #$FF
+defcode "LIT"
+  ldy #01
+  lda (IPL),Y
   pha
-  lda #$FE
+  dey
+  lda (IPL),Y
+  pha
+  lda IPL
+  adc #02
+  sta IPL
+  bcc @nocarry
+  inc IPH
+@nocarry:
+  jmp NEXT
+
+defcode "DROP"
+  pla
+  pla
+  jmp NEXT
+
+defcode "SWAP"
+  ; 46 Cycles, slightly faster than pop * 4 push * 4
+  tsx ; 2
+  lda $100+2,X ; 4
+  tay          ; 2
+  lda $100+4,X ; 4
+  sta $100+2,X ; 5
+  tya          ; 2
+  sta $100+4,X ; 5
+
+  lda $100+1,X ; 4
+  tay          ; 2
+  lda $100+3,X ; 4
+  sta $100+1,X ; 5
+  tya          ; 2
+  sta $100+3,X ; 5
+  jmp NEXT
+
+defcode "DUP"
+  tsx
+  ; Can grab certain elements of the stack by adding to the stack base.
+  lda $100+2,X
+  pha
+  lda $100+1,X
   pha
   jmp NEXT
 
-F_ADD:
-  .addr ADD
-ADD:
+defcode "OVER"
+  tsx
+  txa
+  clc
+  adc #04
+  tax
+  lda $100,X
+  pha
+  dex
+  lda $100,X
+  pha
+  jmp NEXT
+
+defcode "ADD"
   clc
   pla
   sta TMPL
@@ -116,14 +163,23 @@ ADD:
   pha
   jmp NEXT
 
-F_END:
-  .addr END
-END:
+defcode "END"
   jmp END  ; Loop forever.
 
-FORTH_MAIN:
-  .addr F_PUSH2S
+F_FORTHWORD:
+  .addr DOCOL
+  .addr F_LIT
+  .word 1
+  .addr F_LIT
+  .word 2
+  .addr F_SWAP
+  .addr F_LIT
+  .word 3
   .addr F_ADD
+  .addr F_EXIT
+
+FORTH_MAIN:
+  .addr F_FORTHWORD
   .addr F_END
 
 reset:
