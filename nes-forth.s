@@ -5,6 +5,8 @@ PPUSCROLL = $2005
 PPUADDR = $2006
 PPUDATA = $2007
 
+; The bottom of the paramter and return stacks.
+PSLOC = $0100
 RSLOC = $0200
 
 .ZEROPAGE
@@ -69,9 +71,14 @@ DOCOL:
   jmp NEXT
 
 .macro defcode name
-  .ident(.concat("F_", name)):
-    .addr .ident(name)
-  .ident(name):
+.ident(name):
+  .addr .ident(.concat(name, "_ASM"))
+.ident(.concat(name, "_ASM")):
+.endmacro
+
+.macro defword name
+.ident(name):
+  .addr DOCOL
 .endmacro
 
 defcode "EXIT"
@@ -103,49 +110,75 @@ defcode "LIT"
   jmp NEXT
 
 defcode "DROP"
-  pla
-  pla
+  pla ; 4
+  pla ; 4
   jmp NEXT
 
 defcode "SWAP"
   ; 46 Cycles, slightly faster than pop * 4 push * 4
   tsx ; 2
-  lda $100+2,X ; 4
-  tay          ; 2
-  lda $100+4,X ; 4
-  sta $100+2,X ; 5
-  tya          ; 2
-  sta $100+4,X ; 5
+  lda PSLOC+2,X ; 4
+  tay           ; 2
+  lda PSLOC+4,X ; 4
+  sta PSLOC+2,X ; 5
+  tya           ; 2
+  sta PSLOC+4,X ; 5
 
-  lda $100+1,X ; 4
-  tay          ; 2
-  lda $100+3,X ; 4
-  sta $100+1,X ; 5
-  tya          ; 2
-  sta $100+3,X ; 5
+  lda PSLOC+1,X ; 4
+  tay           ; 2
+  lda PSLOC+3,X ; 4
+  sta PSLOC+1,X ; 5
+  tya           ; 2
+  sta PSLOC+3,X ; 5
   jmp NEXT
 
 defcode "DUP"
   tsx
   ; Can grab certain elements of the stack by adding to the stack base.
-  lda $100+2,X
+  lda PSLOC+2,X
   pha
-  lda $100+1,X
+  lda PSLOC+1,X
   pha
   jmp NEXT
 
 defcode "OVER"
   tsx
-  txa
-  clc
-  adc #04
-  tax
-  lda $100,X
+  lda PSLOC+4,X
   pha
-  dex
-  lda $100,X
+  lda PSLOC+3,X
   pha
   jmp NEXT
+
+defcode "ROT"
+  tsx
+  lda PSLOC+6,X
+  sta TMPH
+  lda PSLOC+4,X
+  sta PSLOC+6,X
+  lda PSLOC+2,X
+  sta PSLOC+4,X
+  lda TMPH
+  sta PSLOC+2,X
+  ; Could shrink code size here by decreasing X and looping once.
+  lda PSLOC+5,X
+  sta TMPL
+  lda PSLOC+3,X
+  sta PSLOC+5,X
+  lda PSLOC+1,X
+  sta PSLOC+3,X
+  lda TMPL
+  sta PSLOC+1,X
+  jmp NEXT
+
+defword "NROT"  ; -ROT
+  .addr ROT
+  .addr ROT
+  .addr EXIT
+
+defword "TWODROP" ; 2DROP
+  .addr DROP
+  .addr DROP
+  .addr EXIT
 
 defcode "ADD"
   clc
@@ -166,21 +199,19 @@ defcode "ADD"
 defcode "END"
   jmp END  ; Loop forever.
 
-F_FORTHWORD:
-  .addr DOCOL
-  .addr F_LIT
+defword "FORTHWORD"
+  .addr LIT
   .word 1
-  .addr F_LIT
+  .addr LIT
   .word 2
-  .addr F_SWAP
-  .addr F_LIT
+  .addr LIT
   .word 3
-  .addr F_ADD
-  .addr F_EXIT
+  .addr NROT
+  .addr EXIT
 
 FORTH_MAIN:
-  .addr F_FORTHWORD
-  .addr F_END
+  .addr FORTHWORD
+  .addr END
 
 reset:
   sei            ; Ignore IRQs.
