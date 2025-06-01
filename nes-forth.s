@@ -18,7 +18,8 @@ IPH = $03
 ; Return stack pointer (occupies the $0200 block and grows down)
 RSP = $04
 ; Stores the instruction for an indirect JMP ($6C)
-WJMP = $05
+WJMP:
+  jmp $beef  ; Garbage at first.
 ; Stores the address of the codeword of the next word to execute.
 WL = $06
 WH = $07
@@ -219,9 +220,6 @@ reset:
   ldx #$ff
   txs            ; Set up the stack.
   stx RSP        ; Set up return stack.
-
-  lda #$6C       ; Set up indirect jump SMC. If you jmp WJMP then it will
-  sta WJMP       ; perform an indirect jump to W.
 
   lda #.lobyte(FORTH_MAIN)
   sta IPL

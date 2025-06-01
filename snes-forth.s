@@ -1,6 +1,6 @@
 .p816
 .i16
-.a8
+.a16
 
 .segment "HEADERNAME"
   .byte "SNES TEST"
@@ -18,11 +18,17 @@
 
 .segment "CODE"
 
+WPTR = $00  ; 3 bytes
+
+NEXT:
+  ; W = *IP and then increment IP
+  inc a:IPDB
+  jml (WPTR)
+
 reset:
   clc  ; native mode
   xce
-  rep #$10  ; X/Y 16-bit
-  sep #$20  ; A 8-bit
+  rep #$30  ; A/X/Y 16-bit
   ; Clear PPU registers
   ldx #$33
 @loop:  stz $2100,x
@@ -30,15 +36,20 @@ reset:
   dex
   bpl @loop
 
+  sep #$20
+  .a8
   ; Set background color to $03E0
   lda #$1F
   sta $2122
   lda #$3C
   sta $2122
+  ; sta z:$12
 
   ; Maximum screen brightness
   lda #$0F
   sta $2100
+  rep #$20
+  .a16
 
 forever:
   jmp forever

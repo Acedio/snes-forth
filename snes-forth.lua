@@ -14,31 +14,52 @@ function stack:pop()
   return self[self.top]
 end
 
-local dictionary = {
-  top = 2,
-  [1] = {
-    name = ".",
-    xt = function()
-      print(stack:pop())
-    end,
-  },
-}
-
-function dictionary:find(name)
-  local i = self.top - 1
-  while i > 0 do
-    if self[i].name == name then
-      return self[i].xt, 1
-    end
-    i = i - 1
-  end
-  return name, 0
-end
-
+local latest = 0
+local here = 1
 local input = {
   str = io.read("*all"),
   i = 0,
 }
+
+local dataspace = {}
+
+local dictionary = {}
+
+function dictionary:find(name)
+  local i = latest
+  while i > 0 do
+    if dataspace[i].name == name then
+      return dataspace[i].xt, 1
+    end
+    i = dataspace[i].prev
+  end
+  return nil, 0
+end
+
+function dictionary:colon(name, fn)
+  dataspace[here] = {
+    name = name,
+    xt = fn,
+    prev = latest,
+  }
+  latest = here
+  here = here + 1
+end
+
+dictionary:colon("CREATE", function()
+  local addr = here
+  local name = input:word()
+  dictionary:colon(name, function()
+    stack:push(addr)
+  end)
+end)
+
+dictionary:colon(".", function()
+  print(stack:pop())
+end)
+
+print("latest: "..latest)
+print("here: "..here)
 
 function input:word()
   local first, last = string.find(self.str, "%S+", self.i)
@@ -71,5 +92,4 @@ while true do
   end
 end
 
--- TODO: Need to figure out how we should actually structure the dictionary so
--- that HERE and , and friends work. Also CREATE.
+-- TODO: ALLOT, ",", stack manipulation, compiling vs interpreting, actual colon
