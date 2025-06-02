@@ -1,21 +1,32 @@
 #!/usr/bin/lua
 
-local stack = {
-  top = 1
-}
+local Stack = {}
 
-function stack:push(val)
-  self[self.top] = val
-  self.top = self.top + 1
+function Stack:new()
+  local stack = {}
+  setmetatable(stack, self)
+  self.__index = self
+  return stack
 end
 
-function stack:pop()
-  self.top = self.top - 1
-  return self[self.top]
+function Stack:push(val)
+  self[#self+1] = val
 end
+
+function Stack:pop()
+  local val = self[#self]
+  self[#self] = nil
+  return val
+end
+
+local datastack = Stack:new()
+local returnstack = Stack:new()
 
 local latest = 0
 local here = 1
+local ip = 0
+-- non-zero (true) if compiling
+local state = 0
 local input = {
   str = io.read("*all"),
   i = 0,
@@ -23,40 +34,107 @@ local input = {
 
 local dataspace = {}
 
-local dictionary = {}
+local Dictionary = {}
+local DICTIONARY_HEADER_SIZE = 1
 
-function dictionary:find(name)
+-- Returns address or nil if missing
+function Dictionary.find(name)
   local i = latest
   while i > 0 do
     if dataspace[i].name == name then
-      return dataspace[i].xt, 1
+      return i
     end
     i = dataspace[i].prev
   end
-  return nil, 0
+  return nil
 end
 
-function dictionary:colon(name, fn)
+function nextIp()
+  local oldip = ip
+  ip = ip + 1
+  print("oldIp: " .. oldip .. " newIp: " .. ip)
+  dataspace[dataspace[oldip]].xt()
+end
+
+function addnext(fn)
+  return function()
+    fn()
+    nextIp()
+  end
+end
+
+function Dictionary.native(name, fn)
   dataspace[here] = {
     name = name,
-    xt = fn,
+    xt = addnext(fn),
     prev = latest,
   }
   latest = here
+  here = here + DICTIONARY_HEADER_SIZE
+end
+
+function docol(there)
+  returnstack:push(ip)
+  ip = there -- TODO: Also, alignment?
+  nextIp()
+end
+
+function Dictionary.colon(name)
+  local there = here + DICTIONARY_HEADER_SIZE
+  dataspace[here] = {
+    name = name,
+    xt = function()
+      docol(there)
+    end,
+    prev = latest,
+  }
+  latest = here
+  here = here + DICTIONARY_HEADER_SIZE
+  -- TODO: How do we want to handle colon definitions? Do we have DOCOL
+  -- somewhere? How does that translate to subroutine-threaded code?
+end
+
+Dictionary.native("CREATE", function()
+  local addr = here
+  local name = input:word()
+  Dictionary.native(name, nil)  -- Use a placeholder fn initially.
+  local dataaddr = here  -- HERE has been updated by calling native()
+  -- Now update the fn with the new HERE.
+  dataspace[addr].xt = function()
+    datastack:push(dataaddr)
+  end
+end)
+
+Dictionary.native("EXIT", function()
+  ip = returnstack:pop()
+end)
+
+Dictionary.native(".", function()
+  print(datastack:pop())
+end)
+
+-- TODO: QUIT currently just ends the program (by not calling nextIp), but
+-- should actually be the eval loop.
+Dictionary.native("QUIT", nil)
+dataspace[Dictionary.find("QUIT")].xt = function()
+  print("WE DONE!")
+end
+
+Dictionary.colon("TEST")
+-- Add word to the current colon defintion
+function addWord(name)
+  index = Dictionary.find(name)
+  assert(index ~= 0)
+  dataspace[here] = index
   here = here + 1
 end
 
-dictionary:colon("CREATE", function()
-  local addr = here
-  local name = input:word()
-  dictionary:colon(name, function()
-    stack:push(addr)
-  end)
-end)
-
-dictionary:colon(".", function()
-  print(stack:pop())
-end)
+datastack:push(1)
+addWord(".")
+addWord("EXIT")
+addWord("TEST")
+ip = here - 1  -- start on TEST, above
+addWord("QUIT")
 
 print("latest: "..latest)
 print("here: "..here)
@@ -70,13 +148,21 @@ function input:word()
   return string.sub(self.str, first, last)
 end
 
+-- Print dataspace.
+for k,v in ipairs(dataspace) do
+  print(k .. ": " .. (type(v) == "number" and v or v.name))
+end
+
+nextIp()
+
+--[[
 while true do
   local word = input:word()
   if word == nil then
     break
   end
-  local xt, immediate = dictionary:find(word)
-  if immediate == 0 then
+  local addr = Dictionary.find(word)
+  if addr == nil then
     -- not found
     -- try parse number
     local num = tonumber(word)
@@ -85,11 +171,14 @@ while true do
       print("Couldn't parse " .. word .. ".")
       break
     end
-    stack:push(num)
+    datastack:push(num)
+  elseif dataspace[addr].immediate or state == 0 then
+    -- found and immediate or we're not compiling, execute
+    dataspace[addr].xt()
   else
-    -- found, execute
-    xt()
+    -- compiling
   end
 end
+]]
 
 -- TODO: ALLOT, ",", stack manipulation, compiling vs interpreting, actual colon
