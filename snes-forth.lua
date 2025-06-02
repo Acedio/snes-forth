@@ -19,6 +19,10 @@ function Stack:pop()
   return val
 end
 
+function Stack:top()
+  return self[#self]
+end
+
 local datastack = Stack:new()
 local returnstack = Stack:new()
 
@@ -113,31 +117,24 @@ Dictionary.native(".", function()
   print(datastack:pop())
 end)
 
--- TODO: QUIT currently just ends the program (by not calling nextIp), but
--- should actually be the eval loop.
-Dictionary.native("QUIT", nil)
-dataspace[Dictionary.find("QUIT")].xt = function()
+Dictionary.native("BYE", nil)
+dataspace[Dictionary.find("BYE")].xt = function()
   print("WE DONE!")
+  -- BYE ends the program by not calling nextIp
 end
 
-Dictionary.colon("TEST")
 -- Add word to the current colon defintion
 function addWord(name)
   index = Dictionary.find(name)
-  assert(index ~= 0)
+  assert(index, "Couldn't find " .. name)
   dataspace[here] = index
   here = here + 1
 end
 
-datastack:push(1)
-addWord(".")
-addWord("EXIT")
-addWord("TEST")
-ip = here - 1  -- start on TEST, above
-addWord("QUIT")
-
-print("latest: "..latest)
-print("here: "..here)
+function addNumber(number)
+  dataspace[here] = number
+  here = here + 1
+end
 
 function input:word()
   local first, last = string.find(self.str, "%S+", self.i)
@@ -147,6 +144,80 @@ function input:word()
   self.i = last+1
   return string.sub(self.str, first, last)
 end
+
+Dictionary.native("WORD", function()
+  datastack:push(input:word() or "")
+end)
+
+-- Can probably be written in Forth? Though not interpreted-Forth.
+Dictionary.native("FIND", function()
+  local word = datastack:pop()
+  local index = Dictionary.find(word)
+  if not index then
+    datastack:push(word)
+    datastack:push(0)
+  elseif dataspace[index].immediate then
+    datastack:push(index)
+    datastack:push(1)
+  else
+    datastack:push(index)
+    datastack:push(-1)
+  end
+end)
+
+Dictionary.native("DUP", function()
+  datastack:push(datastack:top())
+end)
+
+Dictionary.native(">R", function()
+  returnstack:push(datastack:pop())
+end)
+
+Dictionary.native("R>", function()
+  datastack:push(returnstack:pop())
+end)
+
+Dictionary.native("BRANCH0", function()
+  if datastack:pop() == 0 then
+    ip = dataspace[ip]
+  else
+    ip = ip + 1
+  end
+end)
+
+Dictionary.native("@", function()
+  datastack:push(dataspace[datastack:pop()])
+end)
+
+Dictionary.native("!", function()
+  local addr = datastack:pop()
+  local val = datastack:pop()
+  dataspace[addr] = val
+end)
+
+Dictionary.native("1+", function()
+  datastack:push(datastack:pop() + 1)
+end)
+
+Dictionary.colon("LIT")
+addWord("R>")
+addWord("DUP")
+addWord("1+")
+addWord(">R")
+addWord("@")
+addWord("EXIT")
+
+Dictionary.colon("TEST")
+addWord("LIT")
+addNumber(21)
+addWord(".")
+addWord("EXIT")
+ip = here -- start on TEST, below
+addWord("TEST")
+addWord("BYE")
+
+print("latest: "..latest)
+print("here: "..here)
 
 -- Print dataspace.
 for k,v in ipairs(dataspace) do
