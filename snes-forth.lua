@@ -146,6 +146,19 @@ function addWord(name)
   here = here + 1
 end
 
+function addWords(names)
+  local first = 0
+  local last = 0
+  while true do
+    first, last = string.find(names, "%S+", last)
+    if first == nil then
+      break
+    end
+    addWord(string.sub(names, first, last))
+    last = last + 1
+  end
+end
+
 function addNumber(number)
   dataspace[here] = number
   here = here + 1
@@ -154,7 +167,7 @@ end
 function input:word()
   local first, last = string.find(self.str, "%S+", self.i)
   if first == nil then
-    return nil
+    return ""
   end
   self.i = last+1
   return string.sub(self.str, first, last)
@@ -182,8 +195,32 @@ Dictionary.native("FIND", function()
   nextIp()
 end)
 
+-- TODO: Non-standard.
+Dictionary.native(">NUMBER", function()
+  datastack:push(tonumber(datastack:pop()) or 0)
+  nextIp()
+end)
+
 Dictionary.native("DUP", function()
   datastack:push(datastack:top())
+  nextIp()
+end)
+
+Dictionary.native("DROP", function()
+  datastack:pop()
+  nextIp()
+end)
+
+Dictionary.native("COMPILE,", function()
+  dataspace[here] = datastack:pop()
+  here = here + 1
+  nextIp()
+end)
+
+-- TODO: Not standard.
+Dictionary.native("COUNT", function()
+  local str = datastack:pop()
+  datastack:push(string.len(str))
   nextIp()
 end)
 
@@ -228,22 +265,130 @@ Dictionary.native("EXECUTE", function()
   -- No nextIp() is needed because the xt() should call it.
 end)
 
-Dictionary.colon("LIT")
-addWord("R>")
-addWord("DUP")
-addWord("1+")
-addWord(">R")
-addWord("@")
-addWord("EXIT")
+function unaryOp(name, op)
+  Dictionary.native(name, function()
+    local a = datastack:pop()
+    datastack:push(op(a) & 0xFFFF)
+    nextIp()
+  end)
+end
 
-Dictionary.colon("QUIT")
-addWord("LIT")
-addNumber(21)
-addWord("WORD")
-addWord("FIND")
-addWord(".")
-addWord("EXECUTE")
-addWord("EXIT")
+unaryOp("NEGATE", function(a)
+  return -a
+end)
+
+unaryOp("INVERT", function(a)
+  return ~a
+end)
+
+function binaryOp(name, op)
+  Dictionary.native(name, function()
+    local b = datastack:pop()
+    local a = datastack:pop()
+    datastack:push(op(a,b) & 0xFFFF)
+    nextIp()
+  end)
+end
+
+binaryOp("AND", function(a,b)
+  return a & b
+end)
+
+binaryOp("OR", function(a,b)
+  return a | b
+end)
+
+binaryOp("XOR", function(a,b)
+  return a ~ b
+end)
+
+binaryOp("-", function(a,b)
+  return a - b
+end)
+
+binaryOp("+", function(a,b)
+  return a + b
+end)
+
+function binaryCmpOp(name, op)
+  Dictionary.native(name, function()
+    local b = datastack:pop()
+    local a = datastack:pop()
+    datastack:push(op(a,b) and 0xFFFF or 0)
+    nextIp()
+  end)
+end
+
+binaryCmpOp("=", function(a, b)
+  return a == b
+end)
+
+binaryCmpOp("<", function(a, b)
+  return a < b
+end)
+
+binaryCmpOp(">", function(a, b)
+  return a > b
+end)
+
+binaryCmpOp("<=", function(a, b)
+  return a <= b
+end)
+
+binaryCmpOp(">=", function(a, b)
+  return a >= b
+end)
+
+binaryCmpOp("<>", function(a, b)
+  return a ~= b
+end)
+
+Dictionary.colon("LIT")
+  addWord("R>")
+  addWord("DUP")
+  addWord("1+")
+  addWord(">R")
+  addWord("@")
+  addWord("EXIT")
+
+do
+  Dictionary.colon("QUIT")
+  local loop = here
+  addWords("WORD DUP COUNT BRANCH0")
+  local eofBranchAddr = here
+  addNumber(2000)
+
+  addWords("FIND")
+
+  addWords("DUP LIT")
+  addNumber(0)
+  addWords("= BRANCH0")
+    local notNumberBranchAddr = here
+    addNumber("2000") -- will be replaced later
+    addWords("DROP >NUMBER LIT")
+    addNumber(0)
+    addWord("BRANCH0")
+    addNumber(loop)
+  dataspace[notNumberBranchAddr] = here
+
+  addWords("DUP LIT")
+  addNumber(0)
+  addWords("> STATE @ INVERT OR BRANCH0")
+    local branchAddrIfNotImmediate = here
+    addNumber("2000") -- will be replaced later
+    addWords("DROP EXECUTE LIT")
+    addNumber(0)
+    addWord("BRANCH0")
+    addNumber(loop)
+  dataspace[branchAddrIfNotImmediate] = here
+
+  addWords("DROP")  -- else, compiling
+  addWords("COMPILE,")
+  addNumber(loop)
+
+  dataspace[eofBranchAddr] = here
+  addWord("EXIT")
+end
 
 ip = here -- start on TEST, below
 addWord("QUIT")
@@ -252,12 +397,31 @@ addWord("BYE")
 print("latest: "..latest)
 print("here: "..here)
 
+function cellString(contents)
+  if type(contents) == "number" then
+    if contents >= 0 and contents < here and type(dataspace[contents]) == "table" and dataspace[contents].name ~= nil then
+      return contents .. " (? " .. dataspace[contents].name .. ")"
+    else
+      return tostring(contents)
+    end
+  elseif type(contents) == "table" and contents.name ~= nil then
+    return contents.name
+  else
+    return "???"
+  end
+end
+
 -- Print dataspace.
 for k,v in ipairs(dataspace) do
-  print(k .. ": " .. (type(v) == "number" and v or v.name))
+  cellString(v)
+  print(k .. ": " .. cellString(v))
 end
 
 nextIp()
+
+for k,v in ipairs(datastack) do
+  print(k .. ": " .. v)
+end
 
 --[[
 while true do
@@ -286,4 +450,3 @@ end
 ]]
 
 -- TODO: ALLOT, ",", stack manipulation, compiling vs interpreting, actual colon
--- TODO: QUIT (eval loop)
