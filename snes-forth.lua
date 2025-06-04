@@ -10,13 +10,11 @@ function Stack:new()
 end
 
 function Stack:push(val)
-  self[#self+1] = val
+  table.insert(self, val)
 end
 
 function Stack:pop()
-  local val = self[#self]
-  self[#self] = nil
-  return val
+  return table.remove(self)
 end
 
 function Stack:top()
@@ -225,6 +223,11 @@ Dictionary.native("1+", function()
   nextIp()
 end)
 
+Dictionary.native("EXECUTE", function()
+  dataspace[datastack:pop()].xt()
+  -- No nextIp() is needed because the xt() should call it.
+end)
+
 Dictionary.colon("LIT")
 addWord("R>")
 addWord("DUP")
@@ -234,10 +237,14 @@ addWord("@")
 addWord("EXIT")
 
 Dictionary.colon("QUIT")
-addWord("STATE")
-addWord("@")
+addWord("LIT")
+addNumber(21)
+addWord("WORD")
+addWord("FIND")
 addWord(".")
+addWord("EXECUTE")
 addWord("EXIT")
+
 ip = here -- start on TEST, below
 addWord("QUIT")
 addWord("BYE")
