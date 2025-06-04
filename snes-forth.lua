@@ -27,16 +27,15 @@ local datastack = Stack:new()
 local returnstack = Stack:new()
 
 local latest = 0
-local here = 1
 local ip = 0
--- non-zero (true) if compiling
-local state = 0
 local input = {
   str = io.read("*all"),
   i = 0,
 }
 
 local dataspace = {}
+
+local here = #dataspace + 1
 
 local Dictionary = {}
 local DICTIONARY_HEADER_SIZE = 1
@@ -60,7 +59,7 @@ function nextIp()
   dataspace[dataspace[oldip]].xt()
 end
 
-function addnext(fn)
+function addNext(fn)
   return function()
     fn()
     nextIp()
@@ -70,7 +69,7 @@ end
 function Dictionary.native(name, fn)
   dataspace[here] = {
     name = name,
-    xt = addnext(fn),
+    xt = fn,
     prev = latest,
   }
   latest = here
@@ -106,22 +105,40 @@ Dictionary.native("CREATE", function()
   -- Now update the fn with the new HERE.
   dataspace[addr].xt = function()
     datastack:push(dataaddr)
+    nextIp()
   end
 end)
 
+function Dictionary.makeVariable(name)
+  local addr = here
+  Dictionary.native(name, nil)
+  local dataaddr = here
+  dataspace[addr].xt = function()
+    datastack:push(dataaddr)
+    nextIp()
+  end
+  -- initialize the var
+  dataspace[here] = 0
+  -- space for the var
+  here = here + 1
+end
+
+Dictionary.makeVariable("STATE")
+
 Dictionary.native("EXIT", function()
   ip = returnstack:pop()
+  nextIp()
 end)
 
 Dictionary.native(".", function()
   print(datastack:pop())
+  nextIp()
 end)
 
-Dictionary.native("BYE", nil)
-dataspace[Dictionary.find("BYE")].xt = function()
+Dictionary.native("BYE", function()
   print("WE DONE!")
   -- BYE ends the program by not calling nextIp
-end
+end)
 
 -- Add word to the current colon defintion
 function addWord(name)
@@ -147,6 +164,7 @@ end
 
 Dictionary.native("WORD", function()
   datastack:push(input:word() or "")
+  nextIp()
 end)
 
 -- Can probably be written in Forth? Though not interpreted-Forth.
@@ -163,18 +181,22 @@ Dictionary.native("FIND", function()
     datastack:push(index)
     datastack:push(-1)
   end
+  nextIp()
 end)
 
 Dictionary.native("DUP", function()
   datastack:push(datastack:top())
+  nextIp()
 end)
 
 Dictionary.native(">R", function()
   returnstack:push(datastack:pop())
+  nextIp()
 end)
 
 Dictionary.native("R>", function()
   datastack:push(returnstack:pop())
+  nextIp()
 end)
 
 Dictionary.native("BRANCH0", function()
@@ -183,20 +205,24 @@ Dictionary.native("BRANCH0", function()
   else
     ip = ip + 1
   end
+  nextIp()
 end)
 
 Dictionary.native("@", function()
   datastack:push(dataspace[datastack:pop()])
+  nextIp()
 end)
 
 Dictionary.native("!", function()
   local addr = datastack:pop()
   local val = datastack:pop()
   dataspace[addr] = val
+  nextIp()
 end)
 
 Dictionary.native("1+", function()
   datastack:push(datastack:pop() + 1)
+  nextIp()
 end)
 
 Dictionary.colon("LIT")
@@ -207,13 +233,13 @@ addWord(">R")
 addWord("@")
 addWord("EXIT")
 
-Dictionary.colon("TEST")
-addWord("LIT")
-addNumber(21)
+Dictionary.colon("QUIT")
+addWord("STATE")
+addWord("@")
 addWord(".")
 addWord("EXIT")
 ip = here -- start on TEST, below
-addWord("TEST")
+addWord("QUIT")
 addWord("BYE")
 
 print("latest: "..latest)
@@ -253,3 +279,4 @@ end
 ]]
 
 -- TODO: ALLOT, ",", stack manipulation, compiling vs interpreting, actual colon
+-- TODO: QUIT (eval loop)
