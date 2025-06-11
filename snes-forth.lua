@@ -107,6 +107,12 @@ Dictionary.native("CREATE", function()
   end
 end)
 
+-- Immediate word.
+Dictionary.native("DOES>", function()
+  local addr = here
+  -- Create a new nameless DOCOL definition here and update the LATEST word's xt
+  -- to call into it. Then keep compiling.
+
 function Dictionary.makeVariable(name)
   local addr = here
   Dictionary.native(name, nil)
@@ -260,10 +266,35 @@ Dictionary.native("1+", function()
   nextIp()
 end)
 
+Dictionary.colon("LIT")
+  addWord("R>")
+  addWord("DUP")
+  addWord("1+")
+  addWord(">R")
+  addWord("@")
+  addWord("EXIT")
+
 Dictionary.native("EXECUTE", function()
   dataspace[datastack:pop()].xt()
   -- No nextIp() is needed because the xt() should call it.
 end)
+
+Dictionary.colon("TRUE")
+  addWord("LIT")
+  addNumber(0xFFFF)
+  addWord("EXIT")
+
+Dictionary.colon("FALSE")
+  addWord("LIT")
+  addNumber(0)
+  addWord("EXIT")
+
+Dictionary.colon("[")
+  addWords("TRUE STATE ! EXIT")
+
+Dictionary.colon("]")
+  addWords("FALSE STATE ! EXIT")
+dataspace[latest].immediate = true
 
 function unaryOp(name, op)
   Dictionary.native(name, function()
@@ -342,14 +373,6 @@ end)
 binaryCmpOp("<>", function(a, b)
   return a ~= b
 end)
-
-Dictionary.colon("LIT")
-  addWord("R>")
-  addWord("DUP")
-  addWord("1+")
-  addWord(">R")
-  addWord("@")
-  addWord("EXIT")
 
 do
   Dictionary.colon("QUIT")
