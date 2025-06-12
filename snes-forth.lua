@@ -54,7 +54,7 @@ function nextIp()
   local oldip = ip
   ip = ip + 1
   print("oldIp: " .. oldip .. " newIp: " .. ip)
-  dataspace[dataspace[oldip]].xt()
+  dataspace[dataspace[oldip]].runtime()
 end
 
 function addNext(fn)
@@ -67,25 +67,25 @@ end
 function Dictionary.native(name, fn)
   dataspace[here] = {
     name = name,
-    xt = fn,
+    runtime = fn,
     prev = latest,
   }
   latest = here
   here = here + DICTIONARY_HEADER_SIZE
 end
 
-function docol(there)
+function docol(dataaddr)
   returnstack:push(ip)
-  ip = there -- TODO: Also, alignment?
+  ip = dataaddr -- TODO: Also, alignment?
   nextIp()
 end
 
 function Dictionary.colon(name)
-  local there = here + DICTIONARY_HEADER_SIZE
+  local dataaddr = here + DICTIONARY_HEADER_SIZE
   dataspace[here] = {
     name = name,
-    xt = function()
-      docol(there)
+    runtime = function()
+      docol(dataaddr)
     end,
     prev = latest,
   }
@@ -95,29 +95,47 @@ function Dictionary.colon(name)
   -- somewhere? How does that translate to subroutine-threaded code?
 end
 
+-- Set the XT for the latest word
+Dictionary.native("SET-XT", function()
+  local xt = datastack.pop()
+  dataspace[latest].runtime = function()
+    dataspace[xt].runtime()
+  end
+end)
+
 Dictionary.native("CREATE", function()
   local addr = here
   local name = input:word()
   Dictionary.native(name, nil)  -- Use a placeholder fn initially.
   local dataaddr = here  -- HERE has been updated by calling native()
   -- Now update the fn with the new HERE.
-  dataspace[addr].xt = function()
+  dataspace[addr].runtime = function()
     datastack:push(dataaddr)
     nextIp()
   end
 end)
 
--- Immediate word.
+Dictionary.native("CREATEDOCOL", function()
+  local name = input:word()
+  Dictionary.colon(name)
+  nextIp()
+end)
+
+--[[
+Dictionary.colon("DOES>")
+  addWords("R> SET-XT EXIT")
+
 Dictionary.native("DOES>", function()
   local addr = here
   -- Create a new nameless DOCOL definition here and update the LATEST word's xt
   -- to call into it. Then keep compiling.
+  --]]
 
 function Dictionary.makeVariable(name)
   local addr = here
   Dictionary.native(name, nil)
   local dataaddr = here
-  dataspace[addr].xt = function()
+  dataspace[addr].runtime = function()
     datastack:push(dataaddr)
     nextIp()
   end
@@ -219,6 +237,7 @@ end)
 
 Dictionary.native("COMPILE,", function()
   dataspace[here] = datastack:pop()
+  print("  Compiling! " .. dataspace[here])
   here = here + 1
   nextIp()
 end)
@@ -275,8 +294,8 @@ Dictionary.colon("LIT")
   addWord("EXIT")
 
 Dictionary.native("EXECUTE", function()
-  dataspace[datastack:pop()].xt()
-  -- No nextIp() is needed because the xt() should call it.
+  dataspace[datastack:pop()].runtime()
+  -- No nextIp() is needed because the runtime() should call it.
 end)
 
 Dictionary.colon("TRUE")
@@ -375,6 +394,20 @@ binaryCmpOp("<>", function(a, b)
 end)
 
 do
+  Dictionary.colon(":")
+  addWords("CREATEDOCOL ] EXIT")
+end
+
+do
+  Dictionary.colon(";")
+  addWords("[ LIT")
+  addNumber(Dictionary.find("EXIT"))
+  -- Also need to make the word visible now.
+  addWords("COMPILE, EXIT")
+  dataspace[latest].immediate = true
+end
+
+do
   Dictionary.colon("QUIT")
   local loop = here
   addWords("WORD DUP COUNT BRANCH0")
@@ -406,7 +439,9 @@ do
   dataspace[branchAddrIfNotImmediate] = here
 
   addWords("DROP")  -- else, compiling
-  addWords("COMPILE,")
+  addWords("COMPILE, LIT")
+  addNumber(0)
+  addWord("BRANCH0")
   addNumber(loop)
 
   dataspace[eofBranchAddr] = here
@@ -442,6 +477,11 @@ end
 
 nextIp()
 
+for k,v in ipairs(dataspace) do
+  cellString(v)
+  print(k .. ": " .. cellString(v))
+end
+
 for k,v in ipairs(datastack) do
   print(k .. ": " .. v)
 end
@@ -465,7 +505,7 @@ while true do
     datastack:push(num)
   elseif dataspace[addr].immediate or state == 0 then
     -- found and immediate or we're not compiling, execute
-    dataspace[addr].xt()
+    dataspace[addr].runtime()
   else
     -- compiling
   end
