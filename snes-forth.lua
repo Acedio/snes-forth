@@ -53,7 +53,7 @@ end
 function nextIp()
   local oldip = ip
   ip = ip + 1
-  print("oldIp: " .. oldip .. " newIp: " .. ip)
+  -- print("oldIp: " .. oldip .. " newIp: " .. ip)
   dataspace[dataspace[oldip]].runtime()
 end
 
@@ -237,7 +237,6 @@ end)
 
 Dictionary.native("COMPILE,", function()
   dataspace[here] = datastack:pop()
-  print("  Compiling! " .. dataspace[here])
   here = here + 1
   nextIp()
 end)
@@ -309,10 +308,10 @@ Dictionary.colon("FALSE")
   addWord("EXIT")
 
 Dictionary.colon("[")
-  addWords("TRUE STATE ! EXIT")
+  addWords("FALSE STATE ! EXIT")
 
 Dictionary.colon("]")
-  addWords("FALSE STATE ! EXIT")
+  addWords("TRUE STATE ! EXIT")
 dataspace[latest].immediate = true
 
 function unaryOp(name, op)
@@ -512,4 +511,4 @@ while true do
 end
 ]]
 
--- TODO: ALLOT, ",", stack manipulation, compiling vs interpreting, actual colon
+-- TODO: ALLOT, ",", stack manipulation
