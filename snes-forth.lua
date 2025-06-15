@@ -95,11 +95,11 @@ function Dictionary.colon(name)
   -- somewhere? How does that translate to subroutine-threaded code?
 end
 
--- Set the XT for the latest word
-Dictionary.native("SET-XT", function()
-  local xt = datastack.pop()
+-- Set the XT for the latest word to start a docol at addr
+Dictionary.native("SET-XT-DOCOL", function()
+  local addr = datastack.pop()
   dataspace[latest].runtime = function()
-    dataspace[xt].runtime()
+    docol(addr)
   end
 end)
 
@@ -122,9 +122,6 @@ Dictionary.native("CREATEDOCOL", function()
 end)
 
 --[[
-Dictionary.colon("DOES>")
-  addWords("R> SET-XT EXIT")
-
 Dictionary.native("DOES>", function()
   local addr = here
   -- Create a new nameless DOCOL definition here and update the LATEST word's xt
@@ -313,6 +310,9 @@ Dictionary.colon("[")
 Dictionary.colon("]")
   addWords("TRUE STATE ! EXIT")
 dataspace[latest].immediate = true
+
+Dictionary.colon("DOES>")
+  addWords("R> SET-XT-DOCOL EXIT")
 
 function unaryOp(name, op)
   Dictionary.native(name, function()
