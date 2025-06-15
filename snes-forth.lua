@@ -33,6 +33,20 @@ local input = {
 
 local dataspace = {}
 
+-- Print dataspace.
+function printDataspace()
+  for k,v in ipairs(dataspace) do
+    cellString(v)
+    print(k .. ": " .. cellString(v))
+  end
+end
+
+function printDatastack()
+  for k,v in ipairs(datastack) do
+    print(k .. ": " .. v)
+  end
+end
+
 local here = #dataspace + 1
 
 local Dictionary = {}
@@ -54,14 +68,7 @@ function nextIp()
   local oldip = ip
   ip = ip + 1
   -- print("oldIp: " .. oldip .. " newIp: " .. ip)
-  dataspace[dataspace[oldip]].runtime()
-end
-
-function addNext(fn)
-  return function()
-    fn()
-    nextIp()
-  end
+  return dataspace[dataspace[oldip]].runtime()
 end
 
 function Dictionary.native(name, fn)
@@ -77,7 +84,7 @@ end
 function docol(dataaddr)
   returnstack:push(ip)
   ip = dataaddr -- TODO: Also, alignment?
-  nextIp()
+  return nextIp()
 end
 
 function Dictionary.colon(name)
@@ -85,7 +92,7 @@ function Dictionary.colon(name)
   dataspace[here] = {
     name = name,
     runtime = function()
-      docol(dataaddr)
+      return docol(dataaddr)
     end,
     prev = latest,
   }
@@ -95,12 +102,36 @@ function Dictionary.colon(name)
   -- somewhere? How does that translate to subroutine-threaded code?
 end
 
+Dictionary.native("DATASPACE", function()
+  printDataspace()
+  return nextIp()
+end)
+
+Dictionary.native(".S", function()
+  printDatastack()
+  return nextIp()
+end)
+
 -- Set the XT for the latest word to start a docol at addr
-Dictionary.native("SET-XT-DOCOL", function()
-  local addr = datastack.pop()
+Dictionary.native("SET-XT", function()
+  local xt = datastack.pop()
   dataspace[latest].runtime = function()
-    docol(addr)
+    return dataspace[addr].runtime()
   end
+  return nextIp()
+end)
+
+Dictionary.native("COMPILE-DOCOL", function()
+  local addr = here + DICTIONARY_HEADER_SIZE
+  dataspace[here] = {
+    name = "docol-fn",
+    runtime = function()
+      docol(addr)
+    end,
+    -- No prev because this isn't a dictionary entry.
+  }
+  here = here + DICTIONARY_HEADER_SIZE
+  return nextIp()
 end)
 
 Dictionary.native("CREATE", function()
@@ -111,14 +142,15 @@ Dictionary.native("CREATE", function()
   -- Now update the fn with the new HERE.
   dataspace[addr].runtime = function()
     datastack:push(dataaddr)
-    nextIp()
+    return nextIp()
   end
+  return nextIp()
 end)
 
 Dictionary.native("CREATEDOCOL", function()
   local name = input:word()
   Dictionary.colon(name)
-  nextIp()
+  return nextIp()
 end)
 
 --[[
@@ -134,7 +166,7 @@ function Dictionary.makeVariable(name)
   local dataaddr = here
   dataspace[addr].runtime = function()
     datastack:push(dataaddr)
-    nextIp()
+    return nextIp()
   end
   -- initialize the var
   dataspace[here] = 0
@@ -146,12 +178,12 @@ Dictionary.makeVariable("STATE")
 
 Dictionary.native("EXIT", function()
   ip = returnstack:pop()
-  nextIp()
+  return nextIp()
 end)
 
 Dictionary.native(".", function()
   print(datastack:pop())
-  nextIp()
+  return nextIp()
 end)
 
 Dictionary.native("BYE", function()
@@ -194,9 +226,34 @@ function input:word()
   return string.sub(self.str, first, last)
 end
 
+function input:peek()
+  return string.byte(string.sub(self.str, self.i, self.i))
+end
+
+function input:key()
+  local c = input:peek()
+  self.i = self.i + 1
+  return c
+end
+
+Dictionary.native("EMIT", function()
+  io.write(string.char(datastack:pop()))
+  return nextIp()
+end)
+
 Dictionary.native("WORD", function()
   datastack:push(input:word() or "")
-  nextIp()
+  return nextIp()
+end)
+
+Dictionary.native("PEEK", function()
+  datastack:push(input:peek())
+  return nextIp()
+end)
+
+Dictionary.native("KEY", function()
+  datastack:push(input:key())
+  return nextIp()
 end)
 
 -- Can probably be written in Forth? Though not interpreted-Forth.
@@ -213,46 +270,46 @@ Dictionary.native("FIND", function()
     datastack:push(index)
     datastack:push(-1)
   end
-  nextIp()
+  return nextIp()
 end)
 
 -- TODO: Non-standard.
 Dictionary.native(">NUMBER", function()
   datastack:push(tonumber(datastack:pop()) or 0)
-  nextIp()
+  return nextIp()
 end)
 
 Dictionary.native("DUP", function()
   datastack:push(datastack:top())
-  nextIp()
+  return nextIp()
 end)
 
 Dictionary.native("DROP", function()
   datastack:pop()
-  nextIp()
+  return nextIp()
 end)
 
 Dictionary.native("COMPILE,", function()
   dataspace[here] = datastack:pop()
   here = here + 1
-  nextIp()
+  return nextIp()
 end)
 
 -- TODO: Not standard.
 Dictionary.native("COUNT", function()
   local str = datastack:pop()
   datastack:push(string.len(str))
-  nextIp()
+  return nextIp()
 end)
 
 Dictionary.native(">R", function()
   returnstack:push(datastack:pop())
-  nextIp()
+  return nextIp()
 end)
 
 Dictionary.native("R>", function()
   datastack:push(returnstack:pop())
-  nextIp()
+  return nextIp()
 end)
 
 Dictionary.native("BRANCH0", function()
@@ -261,24 +318,24 @@ Dictionary.native("BRANCH0", function()
   else
     ip = ip + 1
   end
-  nextIp()
+  return nextIp()
 end)
 
 Dictionary.native("@", function()
   datastack:push(dataspace[datastack:pop()])
-  nextIp()
+  return nextIp()
 end)
 
 Dictionary.native("!", function()
   local addr = datastack:pop()
   local val = datastack:pop()
   dataspace[addr] = val
-  nextIp()
+  return nextIp()
 end)
 
 Dictionary.native("1+", function()
   datastack:push(datastack:pop() + 1)
-  nextIp()
+  return nextIp()
 end)
 
 Dictionary.colon("LIT")
@@ -290,7 +347,7 @@ Dictionary.colon("LIT")
   addWord("EXIT")
 
 Dictionary.native("EXECUTE", function()
-  dataspace[datastack:pop()].runtime()
+  return dataspace[datastack:pop()].runtime()
   -- No nextIp() is needed because the runtime() should call it.
 end)
 
@@ -304,6 +361,11 @@ Dictionary.colon("FALSE")
   addNumber(0)
   addWord("EXIT")
 
+Dictionary.colon("CR")
+  addWord("LIT")
+  addNumber(string.byte("\n"))
+  addWords("EMIT EXIT")
+
 Dictionary.colon("[")
   addWords("FALSE STATE ! EXIT")
 
@@ -311,14 +373,20 @@ Dictionary.colon("]")
   addWords("TRUE STATE ! EXIT")
 dataspace[latest].immediate = true
 
+Dictionary.colon("DODOES")
+  addWords(".S R> .S SET-XT EXIT")  -- Ends the calling word early.
+
 Dictionary.colon("DOES>")
-  addWords("R> SET-XT-DOCOL EXIT")
+  addWords("DATASPACE")
+  addNumber(Dictionary.find("DODOES"))
+  addWords("COMPILE, COMPILE-DOCOL EXIT")
+dataspace[latest].immediate = true
 
 function unaryOp(name, op)
   Dictionary.native(name, function()
     local a = datastack:pop()
     datastack:push(op(a) & 0xFFFF)
-    nextIp()
+    return nextIp()
   end)
 end
 
@@ -335,7 +403,7 @@ function binaryOp(name, op)
     local b = datastack:pop()
     local a = datastack:pop()
     datastack:push(op(a,b) & 0xFFFF)
-    nextIp()
+    return nextIp()
   end)
 end
 
@@ -364,7 +432,7 @@ function binaryCmpOp(name, op)
     local b = datastack:pop()
     local a = datastack:pop()
     datastack:push(op(a,b) and 0xFFFF or 0)
-    nextIp()
+    return nextIp()
   end)
 end
 
@@ -405,6 +473,30 @@ do
   addWords("COMPILE, EXIT")
   dataspace[latest].immediate = true
 end
+
+Dictionary.colon("DO.\"")
+do
+  local loop = here
+  addWords("R> DUP 1+ >R @ DUP EMIT LIT")
+  addNumber(string.byte('"'))
+  addWords("= BRANCH0")
+  addNumber(loop)
+  addWords("EXIT")
+end
+
+Dictionary.colon(".\"")
+do
+  addWords("LIT")
+  addNumber(Dictionary.find("DO.\""))
+  addWords("COMPILE,")
+  local loop = here
+  addWords("KEY DUP COMPILE, LIT")
+  addNumber(string.byte('"'))
+  addWords("= BRANCH0")
+  addNumber(loop)
+  addWords("EXIT")
+end
+dataspace[latest].immediate = true
 
 do
   Dictionary.colon("QUIT")
@@ -468,22 +560,13 @@ function cellString(contents)
   end
 end
 
--- Print dataspace.
-for k,v in ipairs(dataspace) do
-  cellString(v)
-  print(k .. ": " .. cellString(v))
-end
+printDataspace()
 
 nextIp()
 
-for k,v in ipairs(dataspace) do
-  cellString(v)
-  print(k .. ": " .. cellString(v))
-end
+printDataspace()
 
-for k,v in ipairs(datastack) do
-  print(k .. ": " .. v)
-end
+printDatastack()
 
 --[[
 while true do
