@@ -67,7 +67,7 @@ end
 function nextIp()
   local oldip = ip
   ip = ip + 1
-  -- print("oldIp: " .. oldip .. " newIp: " .. ip)
+  print("oldIp: " .. oldip .. " (" .. cellString(dataspace[dataspace[oldip]]) .. ") newIp: " .. ip)
   return dataspace[dataspace[oldip]].runtime()
 end
 
@@ -98,8 +98,6 @@ function Dictionary.colon(name)
   }
   latest = here
   here = here + DICTIONARY_HEADER_SIZE
-  -- TODO: How do we want to handle colon definitions? Do we have DOCOL
-  -- somewhere? How does that translate to subroutine-threaded code?
 end
 
 Dictionary.native("DATASPACE", function()
@@ -114,7 +112,7 @@ end)
 
 -- Set the XT for the latest word to start a docol at addr
 Dictionary.native("SET-XT", function()
-  local xt = datastack.pop()
+  local addr = datastack:pop()
   dataspace[latest].runtime = function()
     return dataspace[addr].runtime()
   end
@@ -152,13 +150,6 @@ Dictionary.native("CREATEDOCOL", function()
   Dictionary.colon(name)
   return nextIp()
 end)
-
---[[
-Dictionary.native("DOES>", function()
-  local addr = here
-  -- Create a new nameless DOCOL definition here and update the LATEST word's xt
-  -- to call into it. Then keep compiling.
-  --]]
 
 function Dictionary.makeVariable(name)
   local addr = here
@@ -374,10 +365,10 @@ Dictionary.colon("]")
 dataspace[latest].immediate = true
 
 Dictionary.colon("DODOES")
-  addWords(".S R> .S SET-XT EXIT")  -- Ends the calling word early.
+  addWords("R> SET-XT EXIT")  -- Ends the calling word (CREATEing) early.
 
 Dictionary.colon("DOES>")
-  addWords("DATASPACE")
+  addWords("LIT")
   addNumber(Dictionary.find("DODOES"))
   addWords("COMPILE, COMPILE-DOCOL EXIT")
 dataspace[latest].immediate = true
