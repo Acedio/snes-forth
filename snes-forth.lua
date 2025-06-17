@@ -113,7 +113,9 @@ end)
 -- Set the XT for the latest word to start a docol at addr
 Dictionary.native("SET-XT", function()
   local addr = datastack:pop()
+  local dataaddr = latest + 1
   dataspace[latest].runtime = function()
+    datastack:push(dataaddr)
     return dataspace[addr].runtime()
   end
   return nextIp()
@@ -129,6 +131,12 @@ Dictionary.native("COMPILE-DOCOL", function()
     -- No prev because this isn't a dictionary entry.
   }
   here = here + DICTIONARY_HEADER_SIZE
+  return nextIp()
+end)
+
+Dictionary.native(",", function()
+  dataspace[here] = datastack:pop()
+  here = here + 1
   return nextIp()
 end)
 
