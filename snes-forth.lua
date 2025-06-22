@@ -11,36 +11,39 @@ local ip = 0
 
 local input = Input:stdin()
 
+local outputs = io.stderr
+local infos = io.stderr
+local errors = io.stderr
+
 local dataspace = {}
 
 -- HERE is the DATASPACE pointer
 local here = #dataspace + 1
 
 -- Print dataspace.
-function printDataspace()
+function printDataspace(file)
   for k,v in ipairs(dataspace) do
-    cellString(v)
-    print(k .. ": " .. cellString(v))
+    file:write(k .. ": " .. cellString(v) .. "\n")
   end
 end
 
-function snesAssembly()
+function snesAssembly(file)
   for k,v in ipairs(dataspace) do
     if type(v) == "table" then
       if v.label then
-        print(string.format("%s:", v.label))
+        file:write(string.format("%s:\n", v.label))
       end
       if v.asm then
-        print(v.asm())
+        file:write(v.asm())
       else
-        print("; TODO: Not implemented\n; TODO: abort?")
+        file:write("; TODO: Not implemented\n; TODO: abort?\n")
       end
     elseif type(v) == "number" then
       if v >= 0 and v < here and type(dataspace[v]) == "table" and dataspace[v].name ~= nil then
         assert(dataspace[v].label, "label was nil for " .. dataspace[v].name)
-        print(string.format("JML %s", dataspace[v].label))
+        file:write(string.format("JML %s\n", dataspace[v].label))
       else
-        print(string.format(".WORD %d", v & 0xFFFF))
+        file:write(string.format(".WORD %d\n", v & 0xFFFF))
       end
     end
   end
@@ -64,7 +67,7 @@ end
 function nextIp()
   local oldip = ip
   ip = ip + 1
-  print("oldIp: " .. oldip .. " (" .. cellString(dataspace[dataspace[oldip]]) .. ") newIp: " .. ip)
+  infos:write("oldIp: " .. oldip .. " (" .. cellString(dataspace[dataspace[oldip]]) .. ") newIp: " .. ip .. "\n")
   return dataspace[dataspace[oldip]].runtime()
 end
 
@@ -115,12 +118,12 @@ function Dictionary.colon(name)
 end
 
 Dictionary.native{name="DATASPACE", runtime=function()
-  printDataspace()
+  printDataspace(io.stderr)
   return nextIp()
 end}
 
 Dictionary.native{name=".S", label="_DOT_S", runtime=function()
-  datastack:print()
+  datastack:print(errors)
   return nextIp()
 end}
 
@@ -199,12 +202,12 @@ Dictionary.native{name="EXIT", runtime=function()
 end}
 
 Dictionary.native{name=".", label="_DOT", runtime=function()
-  print(datastack:pop())
+  outputs:write(datastack:pop() .. "\n")
   return nextIp()
 end}
 
 Dictionary.native{name="BYE", runtime=function()
-  print("WE DONE!")
+  infos:write("WE DONE!" .. "\n")
   -- BYE ends the program by not calling nextIp
 end}
 
@@ -235,7 +238,7 @@ function addNumber(number)
 end
 
 Dictionary.native{name="EMIT", runtime=function()
-  io.write(string.char(datastack:pop()))
+  outputs:write(string.char(datastack:pop()))
   return nextIp()
 end}
 
@@ -576,8 +579,8 @@ ip = here -- start on TEST, below
 addWord("QUIT")
 addWord("BYE")
 
-print("latest: "..latest)
-print("here: "..here)
+infos:write("latest: "..latest .. "\n")
+infos:write("here: "..here .. "\n")
 
 -- TODO: Should probably be a Dataspace method.
 function cellString(contents)
@@ -594,12 +597,12 @@ function cellString(contents)
   end
 end
 
-printDataspace()
+printDataspace(io.stderr)
 
 nextIp()
 
-printDataspace()
+printDataspace(io.stderr)
 
-datastack:print()
+datastack:print(io.stderr)
 
-snesAssembly()
+snesAssembly(io.stdout)

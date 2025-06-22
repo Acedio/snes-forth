@@ -21,9 +21,9 @@ function Stack:top()
   return self[#self]
 end
 
-function Stack:print()
+function Stack:print(file)
   for k,v in ipairs(self) do
-    print(k .. ": " .. v)
+    file:write(k .. ": " .. v .. "\n")
   end
 end
 
