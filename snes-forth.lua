@@ -69,6 +69,15 @@ function nextIp()
 end
 
 -- Table should have at least name and runtime specified.
+-- TODO: Maybe we can also support inlining by specifying an `inline` field
+-- that, if specified, overrides the Forth word call and instead causes code to
+-- be added directly. e.g. LIT would be
+--   lda #LITERAL_NUM
+--   PUSH_A
+-- instead of the usual
+--   JML LIT
+--   .WORD LITERNAL_NUM
+-- which is a lot slower.
 function Dictionary.native(entry)
   entry.prev = latest
   if not entry.label then
@@ -327,13 +336,43 @@ Dictionary.native{name="1+", label="_INCR", runtime=function()
   return nextIp()
 end}
 
-Dictionary.colon("LIT")
-  addWord("R>")
-  addWord("DUP")
-  addWord("1+")
-  addWord(">R")
-  addWord("@")
-  addWord("EXIT")
+Dictionary.native{name="LIT", runtime=function()
+  -- return stack should be the next IP, where the literal is located
+  local litaddr = ip
+  -- increment the return address to skip the literal
+  ip = ip + 1
+  datastack:push(dataspace[litaddr])
+  return nextIp()
+end,
+-- TODO: calls to LIT should probably just be inlined :P
+asm=function() return [[
+  ; We have the 24 bit return address on the stack, need to grab that value to a
+  ; DP location (it's already in the DP because it's on the stack, but we need
+  ; to pull it to a static location because that's the only indirect long
+  ; addressing that exists) and increment it, then do a LDA indirect long
+  ; addressing to grab the actual literal value.
+  ;
+  ; Can we do something silly like treating the return stack like the DP?
+  tsc
+  tcd ; set the DP to the return stack
+
+  ldy #1
+  lda [1],Y ; indirect long read the address on the top of the stack + 1
+
+  tay ; save the literal while we reset the DP
+  lda #0
+  tcd ; reset DP before we PUSH
+
+  PUSH_Y
+
+  ; Increment return address past the literal word
+  lda #2
+  adc 1, S
+  sta 1, S
+  ; TODO: handle the carry here
+
+  rtl
+]] end}
 
 Dictionary.native{name="EXECUTE", runtime=function()
   return dataspace[datastack:pop()].runtime()
