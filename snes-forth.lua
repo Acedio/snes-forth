@@ -1,35 +1,15 @@
 #!/usr/bin/lua
 
-local Stack = {}
-
-function Stack:new()
-  local stack = {}
-  setmetatable(stack, self)
-  self.__index = self
-  return stack
-end
-
-function Stack:push(val)
-  table.insert(self, val)
-end
-
-function Stack:pop()
-  return table.remove(self)
-end
-
-function Stack:top()
-  return self[#self]
-end
+local Stack = require("stack")
+local Input = require("input")
 
 local datastack = Stack:new()
 local returnstack = Stack:new()
 
 local latest = 0
 local ip = 0
-local input = {
-  str = io.read("*all"),
-  i = 0,
-}
+
+local input = Input:stdin()
 
 local dataspace = {}
 
@@ -38,12 +18,6 @@ function printDataspace()
   for k,v in ipairs(dataspace) do
     cellString(v)
     print(k .. ": " .. cellString(v))
-  end
-end
-
-function printDatastack()
-  for k,v in ipairs(datastack) do
-    print(k .. ": " .. v)
   end
 end
 
@@ -87,6 +61,7 @@ function docol(dataaddr)
   return nextIp()
 end
 
+-- TODO: Can we express this neatly in terms of Dictionary.native()?
 function Dictionary.colon(name)
   local dataaddr = here + DICTIONARY_HEADER_SIZE
   dataspace[here] = {
@@ -106,7 +81,7 @@ Dictionary.native("DATASPACE", function()
 end)
 
 Dictionary.native(".S", function()
-  printDatastack()
+  datastack:print()
   return nextIp()
 end)
 
@@ -214,25 +189,6 @@ end
 function addNumber(number)
   dataspace[here] = number
   here = here + 1
-end
-
-function input:word()
-  local first, last = string.find(self.str, "%S+", self.i)
-  if first == nil then
-    return ""
-  end
-  self.i = last+1
-  return string.sub(self.str, first, last)
-end
-
-function input:peek()
-  return string.byte(string.sub(self.str, self.i, self.i))
-end
-
-function input:key()
-  local c = input:peek()
-  self.i = self.i + 1
-  return c
 end
 
 Dictionary.native("EMIT", function()
@@ -545,6 +501,7 @@ addWord("BYE")
 print("latest: "..latest)
 print("here: "..here)
 
+-- TODO: Should probably be a Dataspace method.
 function cellString(contents)
   if type(contents) == "number" then
     if contents >= 0 and contents < here and type(dataspace[contents]) == "table" and dataspace[contents].name ~= nil then
@@ -565,32 +522,4 @@ nextIp()
 
 printDataspace()
 
-printDatastack()
-
---[[
-while true do
-  local word = input:word()
-  if word == nil then
-    break
-  end
-  local addr = Dictionary.find(word)
-  if addr == nil then
-    -- not found
-    -- try parse number
-    local num = tonumber(word)
-    if num == nil then
-      -- not a number, crash
-      print("Couldn't parse " .. word .. ".")
-      break
-    end
-    datastack:push(num)
-  elseif dataspace[addr].immediate or state == 0 then
-    -- found and immediate or we're not compiling, execute
-    dataspace[addr].runtime()
-  else
-    -- compiling
-  end
-end
-]]
-
--- TODO: ALLOT, ",", stack manipulation
+datastack:print()
