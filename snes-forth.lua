@@ -13,6 +13,9 @@ local input = Input:stdin()
 
 local dataspace = {}
 
+-- HERE is the DATASPACE pointer
+local here = #dataspace + 1
+
 -- Print dataspace.
 function printDataspace()
   for k,v in ipairs(dataspace) do
@@ -21,7 +24,23 @@ function printDataspace()
   end
 end
 
-local here = #dataspace + 1
+function snesAssembly()
+  for k,v in ipairs(dataspace) do
+    if type(v) == "table" then
+      if v.label then
+        print(string.format("%s:", v.label))
+      end
+      print(v.asm())
+    elseif type(v) == "number" then
+      if v >= 0 and v < here and type(dataspace[v]) == "table" and dataspace[v].name ~= nil then
+        assert(dataspace[v].label, "label was nil for " .. dataspace[v].name)
+        print(string.format("JML %s", dataspace[v].label))
+      else
+        print(string.format(".B %d", v & 0xFFFF))
+      end
+    end
+  end
+end
 
 local Dictionary = {}
 local DICTIONARY_HEADER_SIZE = 1
@@ -45,14 +64,29 @@ function nextIp()
   return dataspace[dataspace[oldip]].runtime()
 end
 
-function Dictionary.native(name, fn)
+function snes_not_implemented(name)
+  return function()
+    return [[
+  ; Not Implemented Yet
+  ; TODO: abort?
+]]
+  end
+end
+
+function Dictionary.nativeWithLabel(name, label, fn)
   dataspace[here] = {
     name = name,
+    label = label,
     runtime = fn,
+    asm = snes_not_implemented(label),
     prev = latest,
   }
   latest = here
   here = here + DICTIONARY_HEADER_SIZE
+end
+
+function Dictionary.native(name, fn)
+  Dictionary.nativeWithLabel(name, name, fn)
 end
 
 function docol(dataaddr)
@@ -62,17 +96,23 @@ function docol(dataaddr)
 end
 
 -- TODO: Can we express this neatly in terms of Dictionary.native()?
-function Dictionary.colon(name)
+function Dictionary.colonWithLabel(name, label)
   local dataaddr = here + DICTIONARY_HEADER_SIZE
   dataspace[here] = {
     name = name,
+    label = label,
     runtime = function()
       return docol(dataaddr)
     end,
+    asm = snes_not_implemented(label),
     prev = latest,
   }
   latest = here
   here = here + DICTIONARY_HEADER_SIZE
+end
+
+function Dictionary.colon(name)
+  Dictionary.colonWithLabel(name, name)
 end
 
 Dictionary.native("DATASPACE", function()
@@ -80,13 +120,14 @@ Dictionary.native("DATASPACE", function()
   return nextIp()
 end)
 
-Dictionary.native(".S", function()
+Dictionary.nativeWithLabel(".S", "_DOT_S", function()
   datastack:print()
   return nextIp()
 end)
 
 -- Set the XT for the latest word to start a docol at addr
-Dictionary.native("SET-XT", function()
+-- TODO: How will this work on the SNES?
+Dictionary.nativeWithLabel("XT!", "_XT_STORE", function()
   local addr = datastack:pop()
   local dataaddr = latest + 1
   dataspace[latest].runtime = function()
@@ -96,10 +137,11 @@ Dictionary.native("SET-XT", function()
   return nextIp()
 end)
 
-Dictionary.native("COMPILE-DOCOL", function()
+Dictionary.nativeWithLabel("COMPILE-DOCOL", "_COMPILE_DOCOL", function()
   local addr = here + DICTIONARY_HEADER_SIZE
   dataspace[here] = {
     name = "docol-fn",
+    label = nil,
     runtime = function()
       docol(addr)
     end,
@@ -109,7 +151,7 @@ Dictionary.native("COMPILE-DOCOL", function()
   return nextIp()
 end)
 
-Dictionary.native(",", function()
+Dictionary.nativeWithLabel(",", "_COMMA", function()
   dataspace[here] = datastack:pop()
   here = here + 1
   return nextIp()
@@ -155,7 +197,7 @@ Dictionary.native("EXIT", function()
   return nextIp()
 end)
 
-Dictionary.native(".", function()
+Dictionary.nativeWithLabel(".", "_DOT", function()
   print(datastack:pop())
   return nextIp()
 end)
@@ -229,7 +271,7 @@ Dictionary.native("FIND", function()
 end)
 
 -- TODO: Non-standard.
-Dictionary.native(">NUMBER", function()
+Dictionary.nativeWithLabel(">NUMBER", "_TO_NUMBER", function()
   datastack:push(tonumber(datastack:pop()) or 0)
   return nextIp()
 end)
@@ -244,7 +286,7 @@ Dictionary.native("DROP", function()
   return nextIp()
 end)
 
-Dictionary.native("COMPILE,", function()
+Dictionary.nativeWithLabel("COMPILE,", "_COMPILE_COMMA", function()
   dataspace[here] = datastack:pop()
   here = here + 1
   return nextIp()
@@ -257,12 +299,12 @@ Dictionary.native("COUNT", function()
   return nextIp()
 end)
 
-Dictionary.native(">R", function()
+Dictionary.nativeWithLabel(">R", "_TO_R", function()
   returnstack:push(datastack:pop())
   return nextIp()
 end)
 
-Dictionary.native("R>", function()
+Dictionary.nativeWithLabel("R>", "_FROM_R", function()
   datastack:push(returnstack:pop())
   return nextIp()
 end)
@@ -276,19 +318,19 @@ Dictionary.native("BRANCH0", function()
   return nextIp()
 end)
 
-Dictionary.native("@", function()
+Dictionary.nativeWithLabel("@", "_FETCH", function()
   datastack:push(dataspace[datastack:pop()])
   return nextIp()
 end)
 
-Dictionary.native("!", function()
+Dictionary.nativeWithLabel("!", "_STORE", function()
   local addr = datastack:pop()
   local val = datastack:pop()
   dataspace[addr] = val
   return nextIp()
 end)
 
-Dictionary.native("1+", function()
+Dictionary.nativeWithLabel("1+", "_INCR", function()
   datastack:push(datastack:pop() + 1)
   return nextIp()
 end)
@@ -321,45 +363,50 @@ Dictionary.colon("CR")
   addNumber(string.byte("\n"))
   addWords("EMIT EXIT")
 
-Dictionary.colon("[")
+Dictionary.colonWithLabel("[", "_LBRACK")
   addWords("FALSE STATE ! EXIT")
 
-Dictionary.colon("]")
+Dictionary.colonWithLabel("]", "_RBRACK")
   addWords("TRUE STATE ! EXIT")
 dataspace[latest].immediate = true
 
 Dictionary.colon("DODOES")
-  addWords("R> SET-XT EXIT")  -- Ends the calling word (CREATEing) early.
+  addWords("R> XT! EXIT")  -- Ends the calling word (CREATEing) early.
 
-Dictionary.colon("DOES>")
+Dictionary.colonWithLabel("DOES>", "_DOES")
   addWords("LIT")
   addNumber(Dictionary.find("DODOES"))
   addWords("COMPILE, COMPILE-DOCOL EXIT")
 dataspace[latest].immediate = true
 
-function unaryOp(name, op)
-  Dictionary.native(name, function()
+function unaryOp(name, label, op)
+  Dictionary.nativeWithLabel(name, label, function()
     local a = datastack:pop()
     datastack:push(op(a) & 0xFFFF)
     return nextIp()
   end)
 end
 
-unaryOp("NEGATE", function(a)
+-- TODO: Maybe pull these out into a mathops.lua file?
+unaryOp("NEGATE", "NEGATE", function(a)
   return -a
 end)
 
-unaryOp("INVERT", function(a)
+unaryOp("INVERT", "INVERT", function(a)
   return ~a
 end)
 
-function binaryOp(name, op)
-  Dictionary.native(name, function()
+function binaryOpWithLabel(name, label, op)
+  Dictionary.nativeWithLabel(name, label, function()
     local b = datastack:pop()
     local a = datastack:pop()
     datastack:push(op(a,b) & 0xFFFF)
     return nextIp()
   end)
+end
+
+function binaryOp(name, op)
+  binaryOpWithLabel(name, name, op)
 end
 
 binaryOp("AND", function(a,b)
@@ -374,16 +421,16 @@ binaryOp("XOR", function(a,b)
   return a ~ b
 end)
 
-binaryOp("-", function(a,b)
+binaryOpWithLabel("-", "_MINUS", function(a,b)
   return a - b
 end)
 
-binaryOp("+", function(a,b)
+binaryOpWithLabel("+", "_PLUS", function(a,b)
   return a + b
 end)
 
-function binaryCmpOp(name, op)
-  Dictionary.native(name, function()
+function binaryCmpOp(name, label, op)
+  Dictionary.nativeWithLabel(name, label, function()
     local b = datastack:pop()
     local a = datastack:pop()
     datastack:push(op(a,b) and 0xFFFF or 0)
@@ -391,37 +438,37 @@ function binaryCmpOp(name, op)
   end)
 end
 
-binaryCmpOp("=", function(a, b)
+binaryCmpOp("=", "_EQ", function(a, b)
   return a == b
 end)
 
-binaryCmpOp("<", function(a, b)
+binaryCmpOp("<", "_LT", function(a, b)
   return a < b
 end)
 
-binaryCmpOp(">", function(a, b)
+binaryCmpOp(">", "_GT", function(a, b)
   return a > b
 end)
 
-binaryCmpOp("<=", function(a, b)
+binaryCmpOp("<=", "_LTE", function(a, b)
   return a <= b
 end)
 
-binaryCmpOp(">=", function(a, b)
+binaryCmpOp(">=", "_GTE", function(a, b)
   return a >= b
 end)
 
-binaryCmpOp("<>", function(a, b)
+binaryCmpOp("<>", "_NE", function(a, b)
   return a ~= b
 end)
 
 do
-  Dictionary.colon(":")
+  Dictionary.colonWithLabel(":", "_COLON")
   addWords("CREATEDOCOL ] EXIT")
 end
 
 do
-  Dictionary.colon(";")
+  Dictionary.colonWithLabel(";", "_SEMICOLON")
   addWords("[ LIT")
   addNumber(Dictionary.find("EXIT"))
   -- Also need to make the word visible now.
@@ -429,7 +476,7 @@ do
   dataspace[latest].immediate = true
 end
 
-Dictionary.colon("DO.\"")
+Dictionary.colonWithLabel("DO.\"", "_DO_STRING")
 do
   local loop = here
   addWords("R> DUP 1+ >R @ DUP EMIT LIT")
@@ -439,7 +486,7 @@ do
   addWords("EXIT")
 end
 
-Dictionary.colon(".\"")
+Dictionary.colonWithLabel(".\"", "_STRING")
 do
   addWords("LIT")
   addNumber(Dictionary.find("DO.\""))
@@ -523,3 +570,5 @@ nextIp()
 printDataspace()
 
 datastack:print()
+
+snesAssembly()
