@@ -30,13 +30,17 @@ function snesAssembly()
       if v.label then
         print(string.format("%s:", v.label))
       end
-      print(v.asm())
+      if v.asm then
+        print(v.asm())
+      else
+        print("; TODO: Not implemented\n; TODO: abort?")
+      end
     elseif type(v) == "number" then
       if v >= 0 and v < here and type(dataspace[v]) == "table" and dataspace[v].name ~= nil then
         assert(dataspace[v].label, "label was nil for " .. dataspace[v].name)
         print(string.format("JML %s", dataspace[v].label))
       else
-        print(string.format(".B %d", v & 0xFFFF))
+        print(string.format(".WORD %d", v & 0xFFFF))
       end
     end
   end
@@ -64,29 +68,15 @@ function nextIp()
   return dataspace[dataspace[oldip]].runtime()
 end
 
-function snes_not_implemented(name)
-  return function()
-    return [[
-  ; Not Implemented Yet
-  ; TODO: abort?
-]]
+-- Table should have at least name and runtime specified.
+function Dictionary.native(entry)
+  entry.prev = latest
+  if not entry.label then
+    entry.label = entry.name
   end
-end
-
-function Dictionary.nativeWithLabel(name, label, fn)
-  dataspace[here] = {
-    name = name,
-    label = label,
-    runtime = fn,
-    asm = snes_not_implemented(label),
-    prev = latest,
-  }
+  dataspace[here] = entry
   latest = here
   here = here + DICTIONARY_HEADER_SIZE
-end
-
-function Dictionary.native(name, fn)
-  Dictionary.nativeWithLabel(name, name, fn)
 end
 
 function docol(dataaddr)
@@ -104,7 +94,7 @@ function Dictionary.colonWithLabel(name, label)
     runtime = function()
       return docol(dataaddr)
     end,
-    asm = snes_not_implemented(label),
+    asm = function() return "; DOCOL has no codeword." end,
     prev = latest,
   }
   latest = here
@@ -115,19 +105,19 @@ function Dictionary.colon(name)
   Dictionary.colonWithLabel(name, name)
 end
 
-Dictionary.native("DATASPACE", function()
+Dictionary.native{name="DATASPACE", runtime=function()
   printDataspace()
   return nextIp()
-end)
+end}
 
-Dictionary.nativeWithLabel(".S", "_DOT_S", function()
+Dictionary.native{name=".S", label="_DOT_S", runtime=function()
   datastack:print()
   return nextIp()
-end)
+end}
 
 -- Set the XT for the latest word to start a docol at addr
 -- TODO: How will this work on the SNES?
-Dictionary.nativeWithLabel("XT!", "_XT_STORE", function()
+Dictionary.native{name="XT!", label="_XT_STORE", runtime=function()
   local addr = datastack:pop()
   local dataaddr = latest + 1
   dataspace[latest].runtime = function()
@@ -135,9 +125,9 @@ Dictionary.nativeWithLabel("XT!", "_XT_STORE", function()
     return dataspace[addr].runtime()
   end
   return nextIp()
-end)
+end}
 
-Dictionary.nativeWithLabel("COMPILE-DOCOL", "_COMPILE_DOCOL", function()
+Dictionary.native{name="COMPILE-DOCOL", label="_COMPILE_DOCOL", runtime=function()
   local addr = here + DICTIONARY_HEADER_SIZE
   dataspace[here] = {
     name = "docol-fn",
@@ -149,18 +139,18 @@ Dictionary.nativeWithLabel("COMPILE-DOCOL", "_COMPILE_DOCOL", function()
   }
   here = here + DICTIONARY_HEADER_SIZE
   return nextIp()
-end)
+end}
 
-Dictionary.nativeWithLabel(",", "_COMMA", function()
+Dictionary.native{name=",", label="_COMMA", runtime=function()
   dataspace[here] = datastack:pop()
   here = here + 1
   return nextIp()
-end)
+end}
 
-Dictionary.native("CREATE", function()
+Dictionary.native{name="CREATE", runtime=function()
   local addr = here
   local name = input:word()
-  Dictionary.native(name, nil)  -- Use a placeholder fn initially.
+  Dictionary.native{name=name}  -- Use a placeholder fn initially.
   local dataaddr = here  -- HERE has been updated by calling native()
   -- Now update the fn with the new HERE.
   dataspace[addr].runtime = function()
@@ -168,17 +158,17 @@ Dictionary.native("CREATE", function()
     return nextIp()
   end
   return nextIp()
-end)
+end}
 
-Dictionary.native("CREATEDOCOL", function()
+Dictionary.native{name="CREATEDOCOL", runtime=function()
   local name = input:word()
   Dictionary.colon(name)
   return nextIp()
-end)
+end}
 
 function Dictionary.makeVariable(name)
   local addr = here
-  Dictionary.native(name, nil)
+  Dictionary.native{name=name}
   local dataaddr = here
   dataspace[addr].runtime = function()
     datastack:push(dataaddr)
@@ -192,20 +182,22 @@ end
 
 Dictionary.makeVariable("STATE")
 
-Dictionary.native("EXIT", function()
+-- TODO: For now we'll actually implement EXIT in ASM, but on the SNES it should
+-- just be a `RSL` and not `JSL EXIT` like other Forth words.
+Dictionary.native{name="EXIT", runtime=function()
   ip = returnstack:pop()
   return nextIp()
-end)
+end}
 
-Dictionary.nativeWithLabel(".", "_DOT", function()
+Dictionary.native{name=".", label="_DOT", runtime=function()
   print(datastack:pop())
   return nextIp()
-end)
+end}
 
-Dictionary.native("BYE", function()
+Dictionary.native{name="BYE", runtime=function()
   print("WE DONE!")
   -- BYE ends the program by not calling nextIp
-end)
+end}
 
 -- Add word to the current colon defintion
 function addWord(name)
@@ -233,28 +225,28 @@ function addNumber(number)
   here = here + 1
 end
 
-Dictionary.native("EMIT", function()
+Dictionary.native{name="EMIT", runtime=function()
   io.write(string.char(datastack:pop()))
   return nextIp()
-end)
+end}
 
-Dictionary.native("WORD", function()
+Dictionary.native{name="WORD", runtime=function()
   datastack:push(input:word() or "")
   return nextIp()
-end)
+end}
 
-Dictionary.native("PEEK", function()
+Dictionary.native{name="PEEK", runtime=function()
   datastack:push(input:peek())
   return nextIp()
-end)
+end}
 
-Dictionary.native("KEY", function()
+Dictionary.native{name="KEY", runtime=function()
   datastack:push(input:key())
   return nextIp()
-end)
+end}
 
 -- Can probably be written in Forth? Though not interpreted-Forth.
-Dictionary.native("FIND", function()
+Dictionary.native{name="FIND", runtime=function()
   local word = datastack:pop()
   local index = Dictionary.find(word)
   if not index then
@@ -268,72 +260,72 @@ Dictionary.native("FIND", function()
     datastack:push(-1)
   end
   return nextIp()
-end)
+end}
 
 -- TODO: Non-standard.
-Dictionary.nativeWithLabel(">NUMBER", "_TO_NUMBER", function()
+Dictionary.native{name=">NUMBER", label="_TO_NUMBER", runtime=function()
   datastack:push(tonumber(datastack:pop()) or 0)
   return nextIp()
-end)
+end}
 
-Dictionary.native("DUP", function()
+Dictionary.native{name="DUP", runtime=function()
   datastack:push(datastack:top())
   return nextIp()
-end)
+end}
 
-Dictionary.native("DROP", function()
+Dictionary.native{name="DROP", runtime=function()
   datastack:pop()
   return nextIp()
-end)
+end}
 
-Dictionary.nativeWithLabel("COMPILE,", "_COMPILE_COMMA", function()
+Dictionary.native{name="COMPILE,", label="_COMPILE_COMMA", runtime=function()
   dataspace[here] = datastack:pop()
   here = here + 1
   return nextIp()
-end)
+end}
 
 -- TODO: Not standard.
-Dictionary.native("COUNT", function()
+Dictionary.native{name="COUNT", runtime=function()
   local str = datastack:pop()
   datastack:push(string.len(str))
   return nextIp()
-end)
+end}
 
-Dictionary.nativeWithLabel(">R", "_TO_R", function()
+Dictionary.native{name=">R", label="_TO_R", runtime=function()
   returnstack:push(datastack:pop())
   return nextIp()
-end)
+end}
 
-Dictionary.nativeWithLabel("R>", "_FROM_R", function()
+Dictionary.native{name="R>", label="_FROM_R", runtime=function()
   datastack:push(returnstack:pop())
   return nextIp()
-end)
+end}
 
-Dictionary.native("BRANCH0", function()
+Dictionary.native{name="BRANCH0", runtime=function()
   if datastack:pop() == 0 then
     ip = dataspace[ip]
   else
     ip = ip + 1
   end
   return nextIp()
-end)
+end}
 
-Dictionary.nativeWithLabel("@", "_FETCH", function()
+Dictionary.native{name="@", label="_FETCH", runtime=function()
   datastack:push(dataspace[datastack:pop()])
   return nextIp()
-end)
+end}
 
-Dictionary.nativeWithLabel("!", "_STORE", function()
+Dictionary.native{name="!", label="_STORE", runtime=function()
   local addr = datastack:pop()
   local val = datastack:pop()
   dataspace[addr] = val
   return nextIp()
-end)
+end}
 
-Dictionary.nativeWithLabel("1+", "_INCR", function()
+Dictionary.native{name="1+", label="_INCR", runtime=function()
   datastack:push(datastack:pop() + 1)
   return nextIp()
-end)
+end}
 
 Dictionary.colon("LIT")
   addWord("R>")
@@ -343,10 +335,10 @@ Dictionary.colon("LIT")
   addWord("@")
   addWord("EXIT")
 
-Dictionary.native("EXECUTE", function()
+Dictionary.native{name="EXECUTE", runtime=function()
   return dataspace[datastack:pop()].runtime()
   -- No nextIp() is needed because the runtime() should call it.
-end)
+end}
 
 Dictionary.colon("TRUE")
   addWord("LIT")
@@ -380,11 +372,11 @@ Dictionary.colonWithLabel("DOES>", "_DOES")
 dataspace[latest].immediate = true
 
 function unaryOp(name, label, op)
-  Dictionary.nativeWithLabel(name, label, function()
+  Dictionary.native{name=name, label=label, runtime=function()
     local a = datastack:pop()
     datastack:push(op(a) & 0xFFFF)
     return nextIp()
-  end)
+  end}
 end
 
 -- TODO: Maybe pull these out into a mathops.lua file?
@@ -397,12 +389,12 @@ unaryOp("INVERT", "INVERT", function(a)
 end)
 
 function binaryOpWithLabel(name, label, op)
-  Dictionary.nativeWithLabel(name, label, function()
+  Dictionary.native{name=name, label=label, runtime=function()
     local b = datastack:pop()
     local a = datastack:pop()
     datastack:push(op(a,b) & 0xFFFF)
     return nextIp()
-  end)
+  end}
 end
 
 function binaryOp(name, op)
@@ -430,12 +422,12 @@ binaryOpWithLabel("+", "_PLUS", function(a,b)
 end)
 
 function binaryCmpOp(name, label, op)
-  Dictionary.nativeWithLabel(name, label, function()
+  Dictionary.native{name=name, label=label, runtime=function()
     local b = datastack:pop()
     local a = datastack:pop()
     datastack:push(op(a,b) and 0xFFFF or 0)
     return nextIp()
-  end)
+  end}
 end
 
 binaryCmpOp("=", "_EQ", function(a, b)
