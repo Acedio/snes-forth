@@ -41,7 +41,7 @@ function snesAssembly(file)
     elseif type(v) == "number" then
       if v >= 0 and v < here and type(dataspace[v]) == "table" and dataspace[v].name ~= nil then
         assert(dataspace[v].label, "label was nil for " .. dataspace[v].name)
-        file:write(string.format("JML %s\n", dataspace[v].label))
+        file:write(string.format("JSL %s\n", dataspace[v].label))
       else
         file:write(string.format(".WORD %d\n", v & 0xFFFF))
       end
@@ -78,7 +78,7 @@ end
 --   lda #LITERAL_NUM
 --   PUSH_A
 -- instead of the usual
---   JML LIT
+--   JSL LIT
 --   .WORD LITERNAL_NUM
 -- which is a lot slower.
 function Dictionary.native(entry)
@@ -106,7 +106,7 @@ function Dictionary.colonWithLabel(name, label)
     runtime = function()
       return docol(dataaddr)
     end,
-    asm = function() return "; DOCOL has no codeword." end,
+    asm = function() return "; DOCOL has no codeword.\n" end,
     prev = latest,
   }
   latest = here
@@ -199,7 +199,17 @@ Dictionary.makeVariable("STATE")
 Dictionary.native{name="EXIT", runtime=function()
   ip = returnstack:pop()
   return nextIp()
-end}
+end,
+asm=function() return [[
+  ; Remove the caller's return address (3 bytes, hence the sep) and return.
+  pla
+  sep #$20
+  .a8
+  pla
+  rep #$20
+  .a16
+  rts
+]] end}
 
 Dictionary.native{name=".", label="_DOT", runtime=function()
   outputs:write(datastack:pop() .. "\n")
@@ -370,6 +380,7 @@ asm=function() return [[
 
   ; Increment return address past the literal word
   lda #2
+  clc
   adc 1, S
   sta 1, S
   ; TODO: handle the carry here
@@ -430,20 +441,24 @@ unaryOp("INVERT", "INVERT", function(a)
   return ~a
 end)
 
-function binaryOpWithLabel(name, label, op)
-  Dictionary.native{name=name, label=label, runtime=function()
+function binaryOpRt(op)
+  return function()
     local b = datastack:pop()
     local a = datastack:pop()
     datastack:push(op(a,b) & 0xFFFF)
     return nextIp()
-  end}
+  end
+end
+
+function binaryOpWithLabel(name, label, op)
+  Dictionary.native{name=name, label=label, runtime=binaryOpRt(op)}
 end
 
 function binaryOp(name, op)
   binaryOpWithLabel(name, name, op)
 end
 
-binaryOp("AND", function(a,b)
+binaryOpWithLabel("AND", "_AND", function(a,b)
   return a & b
 end)
 
@@ -459,9 +474,15 @@ binaryOpWithLabel("-", "_MINUS", function(a,b)
   return a - b
 end)
 
-binaryOpWithLabel("+", "_PLUS", function(a,b)
+Dictionary.native{name="+", label="_PLUS", runtime=binaryOpRt(function(a,b)
   return a + b
-end)
+end), asm=function() return [[
+  POP_A
+  clc
+  adc a:1, X ; Add stack value
+  sta a:1, X
+  rtl
+]] end}
 
 function binaryCmpOp(name, label, op)
   Dictionary.native{name=name, label=label, runtime=function()
@@ -546,9 +567,20 @@ do
   addWords("DUP LIT")
   addNumber(0)
   addWords("= BRANCH0")
-    local notNumberBranchAddr = here
-    addNumber("2000") -- will be replaced later
-    addWords("DROP >NUMBER LIT")
+  local notNumberBranchAddr = here
+  addNumber("2000") -- will be replaced later
+    -- Not found, try and parse as a number.
+    -- TODO: Handle parse failure here, currently just returns zero.
+    addWords("DROP >NUMBER")
+    -- If we're compiling, compile TOS as a literal.
+    addWords("STATE @ BRANCH0")
+    addNumber(loop)
+    -- LIT the LIT so we can LIT while we LIT.
+    addWord("LIT")
+    addNumber(Dictionary.find("LIT"))
+    -- Compile LIT and then the number.
+    addWords("COMPILE, COMPILE,")
+    addWord("LIT")
     addNumber(0)
     addWord("BRANCH0")
     addNumber(loop)
@@ -557,8 +589,9 @@ do
   addWords("DUP LIT")
   addNumber(0)
   addWords("> STATE @ INVERT OR BRANCH0")
-    local branchAddrIfNotImmediate = here
-    addNumber("2000") -- will be replaced later
+  local branchAddrIfNotImmediate = here
+  addNumber("2000") -- will be replaced later
+    -- Interpreting, just run the word.
     addWords("DROP EXECUTE LIT")
     addNumber(0)
     addWord("BRANCH0")
@@ -575,7 +608,7 @@ do
   addWord("EXIT")
 end
 
-ip = here -- start on TEST, below
+ip = here -- start on QUIT, below
 addWord("QUIT")
 addWord("BYE")
 

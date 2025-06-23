@@ -1,23 +1,23 @@
 .macro POP_A
-  dex
-  dex
-  lda z:0, X
+  lda z:1, X  ; X is the datastack reg
+  inx
+  inx
 .endmacro
 
-.macro POP_A
-  dex
-  dex
-  ldy z:0, X
+.macro POP_Y
+  ldy z:1, X
+  inx
+  inx
 .endmacro
 
 .macro PUSH_A
-  sta z:0, X  ; X is the datastack reg
-  inx
-  inx
+  dex
+  dex
+  sta z:1, X
 .endmacro
 
 .macro PUSH_Y
-  sty z:0, X  ; X is the datastack reg
-  inx
-  inx
+  dex
+  dex
+  sty z:1, X
 .endmacro

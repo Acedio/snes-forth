@@ -18,12 +18,8 @@
 
 .segment "CODE"
 
-WPTR = $00  ; 3 bytes
-
-NEXT:
-  ; W = *IP and then increment IP
-  inc a:IPDB
-  jml (WPTR)
+.include "preamble.s"
+.include "forth.s"
 
 reset:
   clc  ; native mode
@@ -50,6 +46,12 @@ reset:
   sta $2100
   rep #$20
   .a16
+
+  ldx #$01FF
+  txs
+  ldx #$02FF
+
+  jsl MAIN
 
 forever:
   jmp forever
