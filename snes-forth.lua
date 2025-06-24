@@ -202,12 +202,10 @@ Dictionary.native{name="EXIT", runtime=function()
 end,
 asm=function() return [[
   ; Remove the caller's return address (3 bytes, hence the sep) and return.
-  pla
-  sep #$20
-  .a8
-  pla
-  rep #$20
-  .a16
+  tsa
+  clc
+  adc #3
+  tas
   rts
 ]] end}
 
@@ -293,12 +291,20 @@ end}
 Dictionary.native{name="DUP", runtime=function()
   datastack:push(datastack:top())
   return nextIp()
-end}
+end,
+asm=function() return [[
+  lda 1,X
+  PUSH_A
+]] end}
 
 Dictionary.native{name="DROP", runtime=function()
   datastack:pop()
   return nextIp()
-end}
+end,
+asm=function() return [[
+  inx
+  inx
+]] end}
 
 Dictionary.native{name="COMPILE,", label="_COMPILE_COMMA", runtime=function()
   dataspace[here] = datastack:pop()
@@ -313,6 +319,7 @@ Dictionary.native{name="COUNT", runtime=function()
   return nextIp()
 end}
 
+-- TODO: How should this behave given the different bit width's of the stacks?
 Dictionary.native{name=">R", label="_TO_R", runtime=function()
   returnstack:push(datastack:pop())
   return nextIp()
