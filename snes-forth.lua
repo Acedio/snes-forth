@@ -1,5 +1,9 @@
 #!/usr/bin/lua
 
+-- TODO: Some words should have an "address" (3-byte) variant and a normal
+-- 2-byte variant. Not sure if we should store 3 bytes on the stack as two
+-- 2-byte words (with a 0 MSB) or actually three bytes (and lose alignment).
+
 local Stack = require("stack")
 local Input = require("input")
 
@@ -15,6 +19,10 @@ local outputs = io.stderr
 local infos = io.stderr
 local errors = io.stderr
 
+local function Address(addr)
+  return {type = "address", addr = addr}
+end
+
 local dataspace = {}
 
 -- HERE is the DATASPACE pointer
@@ -29,7 +37,8 @@ end
 
 function snesAssembly(file)
   for k,v in ipairs(dataspace) do
-    if type(v) == "table" then
+    assert(type(v) == "table" || v.type == nil, "Invalid entry at addr = " .. k)
+    if v.type == "native" or v.type == "colon" then
       if v.label then
         file:write(string.format("%s:\n", v.label))
       end
@@ -38,13 +47,15 @@ function snesAssembly(file)
       else
         file:write("; TODO: Not implemented\n; TODO: abort?\n")
       end
-    elseif type(v) == "number" then
-      if v >= 0 and v < here and type(dataspace[v]) == "table" and dataspace[v].name ~= nil then
-        assert(dataspace[v].label, "label was nil for " .. dataspace[v].name)
-        file:write(string.format("JSL %s\n", dataspace[v].label))
-      else
-        file:write(string.format(".WORD %d\n", v & 0xFFFF))
-      end
+    elseif v.type == "address" then
+      -- TODO: Should "address" actually be something more like "call"? Because
+      -- uncallable addresses are definitely a thing (e.g. memory mapped stuff).
+      -- Should those memory mapped things be "number"? Probably fine.
+      assert(v.addr > 0 and v.addr < here, "Invalid address " .. v.addr .. " at addr " .. k)
+      assert(dataspace[v.addr].type == "native" or dataspace[v.addr].type == "colon", "Expected fn at " .. v.addr .. ", referenced from addr " .. k)
+      file:write(string.format("JSL %s\n", dataspace[v.addr].label))
+    elseif v.type == "number" then
+      file:write(string.format(".WORD %d\n", v.number & 0xFFFF))
     end
   end
 end
@@ -67,8 +78,13 @@ end
 function nextIp()
   local oldip = ip
   ip = ip + 1
-  infos:write("oldIp: " .. oldip .. " (" .. cellString(dataspace[dataspace[oldip]]) .. ") newIp: " .. ip .. "\n")
-  return dataspace[dataspace[oldip]].runtime()
+  local ref = dataspace[oldip]
+  assert(ref.type == "address", "Expected address at addr " .. oldip)
+
+  local callee = dataspace[ref.addr]
+  infos:write("oldIp: " .. oldip .. " (" .. cellString(callee) .. ") newIp: " .. ip .. "\n")
+  assert(callee.type == "native" or callee.type == "colon", "Uncallable address " .. ref.addr .. " at address " .. oldip)
+  return callee.runtime()
 end
 
 -- Table should have at least name and runtime specified.
@@ -82,6 +98,7 @@ end
 --   .WORD LITERNAL_NUM
 -- which is a lot slower.
 function Dictionary.native(entry)
+  entry.type = "native"
   entry.prev = latest
   if not entry.label then
     entry.label = entry.name
@@ -102,6 +119,7 @@ function Dictionary.colonWithLabel(name, label)
   local dataaddr = here + DICTIONARY_HEADER_SIZE
   dataspace[here] = {
     name = name,
+    type = "colon",
     label = label,
     runtime = function()
       return docol(dataaddr)
@@ -130,6 +148,7 @@ end}
 -- Set the XT for the latest word to start a docol at addr
 -- TODO: How will this work on the SNES?
 Dictionary.native{name="XT!", label="_XT_STORE", runtime=function()
+  -- TODO: datastack tags?
   local addr = datastack:pop()
   local dataaddr = latest + 1
   dataspace[latest].runtime = function()
@@ -143,6 +162,7 @@ Dictionary.native{name="COMPILE-DOCOL", label="_COMPILE_DOCOL", runtime=function
   local addr = here + DICTIONARY_HEADER_SIZE
   dataspace[here] = {
     name = "docol-fn",
+    type = "docol",
     label = nil,
     runtime = function()
       docol(addr)
@@ -154,7 +174,10 @@ Dictionary.native{name="COMPILE-DOCOL", label="_COMPILE_DOCOL", runtime=function
 end}
 
 Dictionary.native{name=",", label="_COMMA", runtime=function()
-  dataspace[here] = datastack:pop()
+  dataspace[here] = {
+    type = "number",
+    number = datastack:pop(),
+  }
   here = here + 1
   return nextIp()
 end}
@@ -187,7 +210,11 @@ function Dictionary.makeVariable(name)
     return nextIp()
   end
   -- initialize the var
-  dataspace[here] = 0
+  dataspace[here] = {
+    -- TODO: This could technically be an address, not just a number.
+    type = "number",
+    number = 0,
+  }
   -- space for the var
   here = here + 1
 end
@@ -223,8 +250,7 @@ end}
 function addWord(name)
   index = Dictionary.find(name)
   assert(index, "Couldn't find " .. name)
-  dataspace[here] = index
-  here = here + 1
+  addAddress(index)
 end
 
 function addWords(names)
@@ -240,8 +266,19 @@ function addWords(names)
   end
 end
 
+function addAddress(addr)
+  dataspace[here] = {
+    type = "address",
+    addr = addr,
+  }
+  here = here + 1
+end
+
 function addNumber(number)
-  dataspace[here] = number
+  dataspace[here] = {
+    type = "number",
+    number = number,
+  }
   here = here + 1
 end
 
@@ -270,6 +307,7 @@ Dictionary.native{name="FIND", runtime=function()
   local word = datastack:pop()
   local index = Dictionary.find(word)
   if not index then
+    -- TODO: This should be a string pointer or something.
     datastack:push(word)
     datastack:push(0)
   elseif dataspace[index].immediate then
@@ -307,8 +345,7 @@ asm=function() return [[
 ]] end}
 
 Dictionary.native{name="COMPILE,", label="_COMPILE_COMMA", runtime=function()
-  dataspace[here] = datastack:pop()
-  here = here + 1
+  addAddress(datastack:pop())
   return nextIp()
 end}
 
@@ -332,22 +369,29 @@ end}
 
 Dictionary.native{name="BRANCH0", runtime=function()
   if datastack:pop() == 0 then
-    ip = dataspace[ip]
+    assert(dataspace[ip].type == "address", "Expected address to jump to at " .. ip)
+    ip = dataspace[ip].addr
   else
     ip = ip + 1
   end
   return nextIp()
 end}
 
+-- Takes an address (3 bytes) off the stack and pushes a 2 byte word.
 Dictionary.native{name="@", label="_FETCH", runtime=function()
-  datastack:push(dataspace[datastack:pop()])
+  local addr = datastack:pop()
+  assert(dataspace[addr].type == "address", "Expected address at " .. addr)
+  datastack:push(dataspace[addr].number)
   return nextIp()
 end}
 
 Dictionary.native{name="!", label="_STORE", runtime=function()
   local addr = datastack:pop()
   local val = datastack:pop()
-  dataspace[addr] = val
+  dataspace[addr] = {
+    type = "number",
+    number = val,
+  }
   return nextIp()
 end}
 
@@ -356,12 +400,18 @@ Dictionary.native{name="1+", label="_INCR", runtime=function()
   return nextIp()
 end}
 
+-- TODO: There should also be an "A.LIT" word.
 Dictionary.native{name="LIT", runtime=function()
   -- return stack should be the next IP, where the literal is located
   local litaddr = ip
   -- increment the return address to skip the literal
   ip = ip + 1
-  datastack:push(dataspace[litaddr])
+  assert(dataspace[litaddr].type == "number" or dataspace[litaddr].type == "address", "Expected number or address for LIT at addr = " .. litaddr)
+  if dataspace[litaddr].type == "number" then
+    datastack:push(dataspace[litaddr].number)
+  else
+    datastack:push(dataspace[litaddr].addr)
+  end
   return nextIp()
 end,
 -- TODO: calls to LIT should probably just be inlined :P
@@ -427,7 +477,7 @@ Dictionary.colon("DODOES")
 
 Dictionary.colonWithLabel("DOES>", "_DOES")
   addWords("LIT")
-  addNumber(Dictionary.find("DODOES"))
+  addAddress(Dictionary.find("DODOES"))
   addWords("COMPILE, COMPILE-DOCOL EXIT")
 dataspace[latest].immediate = true
 
@@ -532,7 +582,7 @@ end
 do
   Dictionary.colonWithLabel(";", "_SEMICOLON")
   addWords("[ LIT")
-  addNumber(Dictionary.find("EXIT"))
+  addAddress(Dictionary.find("EXIT"))
   -- Also need to make the word visible now.
   addWords("COMPILE, EXIT")
   dataspace[latest].immediate = true
@@ -541,23 +591,23 @@ end
 Dictionary.colonWithLabel("DO.\"", "_DO_STRING")
 do
   local loop = here
-  addWords("R> DUP 1+ >R @ DUP EMIT LIT")
+  addWords("A.R> A.DUP A.1+ A.>R @ DUP EMIT LIT")
   addNumber(string.byte('"'))
   addWords("= BRANCH0")
-  addNumber(loop)
+  addAddress(loop)
   addWords("EXIT")
 end
 
 Dictionary.colonWithLabel(".\"", "_STRING")
 do
   addWords("LIT")
-  addNumber(Dictionary.find("DO.\""))
+  addAddress(Dictionary.find("DO.\""))
   addWords("COMPILE,")
   local loop = here
   addWords("KEY DUP COMPILE, LIT")
   addNumber(string.byte('"'))
   addWords("= BRANCH0")
-  addNumber(loop)
+  addAddress(loop)
   addWords("EXIT")
 end
 dataspace[latest].immediate = true
@@ -567,7 +617,7 @@ do
   local loop = here
   addWords("WORD DUP COUNT BRANCH0")
   local eofBranchAddr = here
-  addNumber(2000)
+  addAddress(2000)
 
   addWords("FIND")
 
@@ -575,43 +625,43 @@ do
   addNumber(0)
   addWords("= BRANCH0")
   local notNumberBranchAddr = here
-  addNumber("2000") -- will be replaced later
+  addAddress("2000") -- will be replaced later
     -- Not found, try and parse as a number.
     -- TODO: Handle parse failure here, currently just returns zero.
     addWords("DROP >NUMBER")
     -- If we're compiling, compile TOS as a literal.
     addWords("STATE @ BRANCH0")
-    addNumber(loop)
+    addAddress(loop)
     -- LIT the LIT so we can LIT while we LIT.
     addWord("LIT")
-    addNumber(Dictionary.find("LIT"))
+    addAddress(Dictionary.find("LIT"))
     -- Compile LIT and then the number.
     addWords("COMPILE, COMPILE,")
     addWord("LIT")
     addNumber(0)
     addWord("BRANCH0")
-    addNumber(loop)
-  dataspace[notNumberBranchAddr] = here
+    addAddress(loop)
+  dataspace[notNumberBranchAddr].addr = here
 
   addWords("DUP LIT")
   addNumber(0)
   addWords("> STATE @ INVERT OR BRANCH0")
   local branchAddrIfNotImmediate = here
-  addNumber("2000") -- will be replaced later
+  addAddress("2000") -- will be replaced later
     -- Interpreting, just run the word.
     addWords("DROP EXECUTE LIT")
     addNumber(0)
     addWord("BRANCH0")
-    addNumber(loop)
-  dataspace[branchAddrIfNotImmediate] = here
+    addAddress(loop)
+  dataspace[branchAddrIfNotImmediate].addr = here
 
   addWords("DROP")  -- else, compiling
   addWords("COMPILE, LIT")
   addNumber(0)
   addWord("BRANCH0")
-  addNumber(loop)
+  addAddress(loop)
 
-  dataspace[eofBranchAddr] = here
+  dataspace[eofBranchAddr].addr = here
   addWord("EXIT")
 end
 
@@ -624,12 +674,17 @@ infos:write("here: "..here .. "\n")
 
 -- TODO: Should probably be a Dataspace method.
 function cellString(contents)
-  if type(contents) == "number" then
-    if contents >= 0 and contents < here and type(dataspace[contents]) == "table" and dataspace[contents].name ~= nil then
+  assert(type(contents) == "table" and contents.type ~= nil)
+  if contents.type == "address" then
+    assert(contents.addr > 0 and contents.addr < here, "Invalid address " .. contents.addr )
+    assert(dataspace[contents.addr].type == "native" or dataspace[contents.addr].type == "colon", "Expected fn at " .. contents.addr)
+    if dataspace[contents].name ~= nil then
       return contents .. " (? " .. dataspace[contents].name .. ")"
     else
-      return tostring(contents)
+      return "Unnamed fn: " .. tostring(contents)
     end
+  elseif content.type == "number" then
+    return tostring(content.number)
   elseif type(contents) == "table" and contents.name ~= nil then
     return contents.name
   else
