@@ -1,9 +1,5 @@
 #!/usr/bin/lua
 
--- TODO: Some words should have an "address" (3-byte) variant and a normal
--- 2-byte variant. Not sure if we should store 3 bytes on the stack as two
--- 2-byte words (with a 0 MSB) or actually three bytes (and lose alignment).
-
 local Stack = require("stack")
 local Input = require("input")
 
@@ -47,13 +43,18 @@ function snesAssembly(file)
       else
         file:write("; TODO: Not implemented\n; TODO: abort?\n")
       end
-    elseif v.type == "address" then
-      -- TODO: Should "address" actually be something more like "call"? Because
-      -- uncallable addresses are definitely a thing (e.g. memory mapped stuff).
-      -- Should those memory mapped things be "number"? Probably fine.
+    elseif v.type == "call" then
       assert(v.addr > 0 and v.addr < here, "Invalid address " .. v.addr .. " at addr " .. k)
       assert(dataspace[v.addr].type == "native" or dataspace[v.addr].type == "colon", "Expected fn at " .. v.addr .. ", referenced from addr " .. k)
       file:write(string.format("JSL %s\n", dataspace[v.addr].label))
+    elseif v.type == "address" then
+      assert(v.addr > 0, "Invalid address " .. v.addr .. " at addr " .. k)
+      if dataspace[v.addr].label then
+        file:write(string.format(".FARADDR %s\n", dataspace[v.addr].label))
+      else
+        -- TODO: This doesn't work, we need to calculate the address.
+        file:write(string.format(".FARADDR %d\n", v.addr))
+      end
     elseif v.type == "number" then
       file:write(string.format(".WORD %d\n", v.number & 0xFFFF))
     end
@@ -79,7 +80,7 @@ function nextIp()
   local oldip = ip
   ip = ip + 1
   local ref = dataspace[oldip]
-  assert(ref.type == "address", "Expected address at addr " .. oldip)
+  assert(ref.type == "call", "Expected call at addr " .. oldip)
 
   local callee = dataspace[ref.addr]
   infos:write("oldIp: " .. oldip .. " (" .. cellString(callee) .. ") newIp: " .. ip .. "\n")
@@ -201,6 +202,7 @@ Dictionary.native{name="CREATEDOCOL", runtime=function()
   return nextIp()
 end}
 
+-- TODO: Currently only for words, need another for addresses.
 function Dictionary.makeVariable(name)
   local addr = here
   Dictionary.native{name=name}
@@ -211,7 +213,6 @@ function Dictionary.makeVariable(name)
   end
   -- initialize the var
   dataspace[here] = {
-    -- TODO: This could technically be an address, not just a number.
     type = "number",
     number = 0,
   }
@@ -250,7 +251,7 @@ end}
 function addWord(name)
   index = Dictionary.find(name)
   assert(index, "Couldn't find " .. name)
-  addAddress(index)
+  addCall(index)
 end
 
 function addWords(names)
@@ -264,6 +265,14 @@ function addWords(names)
     addWord(string.sub(names, first, last))
     last = last + 1
   end
+end
+
+function addCall(addr)
+  dataspace[here] = {
+    type = "call",
+    addr = addr,
+  }
+  here = here + 1
 end
 
 function addAddress(addr)
@@ -345,7 +354,7 @@ asm=function() return [[
 ]] end}
 
 Dictionary.native{name="COMPILE,", label="_COMPILE_COMMA", runtime=function()
-  addAddress(datastack:pop())
+  addCall(datastack:pop())
   return nextIp()
 end}
 
@@ -357,6 +366,7 @@ Dictionary.native{name="COUNT", runtime=function()
 end}
 
 -- TODO: How should this behave given the different bit width's of the stacks?
+-- Probably just have >R deal with words and A.>R deal with addresses.
 Dictionary.native{name=">R", label="_TO_R", runtime=function()
   returnstack:push(datastack:pop())
   return nextIp()
@@ -380,7 +390,7 @@ end}
 -- Takes an address (3 bytes) off the stack and pushes a 2 byte word.
 Dictionary.native{name="@", label="_FETCH", runtime=function()
   local addr = datastack:pop()
-  assert(dataspace[addr].type == "address", "Expected address at " .. addr)
+  assert(dataspace[addr].type == "number", "Expected word at " .. addr)
   datastack:push(dataspace[addr].number)
   return nextIp()
 end}
@@ -418,17 +428,17 @@ asm=function() return [[
   ; addressing to grab the actual literal value.
   ;
   ; Can we do something silly like treating the return stack like the DP?
+  dex ; make room for the literal word
+  dex
   tsc
   tcd ; set the DP to the return stack
 
   ldy #1
   lda [1],Y ; indirect long read the address on the top of the stack + 1
+  sta f:1,X ; TODO: Could save a byte here if we can use data page addressing.
 
-  tay ; save the literal while we reset the DP
   lda #0
   tcd ; reset DP before we PUSH
-
-  PUSH_Y
 
   ; Increment return address past the literal word
   lda #2
@@ -440,8 +450,7 @@ asm=function() return [[
   rtl
 ]] end}
 
--- TODO: There should also be an "A.LIT" word.
-Dictionary.native{name="A.LIT", runtime=function()
+Dictionary.native{name="A.LIT", label="A_LIT", runtime=function()
   -- return stack should be the next IP, where the literal is located
   local litaddr = ip
   -- increment the return address to skip the literal
@@ -451,7 +460,7 @@ Dictionary.native{name="A.LIT", runtime=function()
   return nextIp()
 end,
 -- TODO: calls to A.LIT should probably just be inlined :P
--- TODO: This:
+-- TODO: Test this.
 asm=function() return [[
   ; We have the 24 bit return address on the stack, need to grab that value to a
   ; DP location (it's already in the DP because it's on the stack, but we need
@@ -460,20 +469,26 @@ asm=function() return [[
   ; addressing to grab the actual literal value.
   ;
   ; Can we do something silly like treating the return stack like the DP?
-  lda [1],Y ; indirect long read the address on the top of the stack + 1
+  dex ; make room for the literal address
+  dex
+  dex
+  tsc
+  tcd
+  ldy #1
+  lda [1], Y
+  sta z:1, X
+  iny
+  lda [1], Y
+  sta z:2, X
 
-  tay ; save the literal while we reset the DP
-  lda #0
-
-  PUSH_Y
-
-  ; Increment return address past the literal word
-  lda #2
+  lda z:1
   clc
-  adc 1, S
-  sta 1, S
-  ; TODO: handle the carry here
+  adc #3
+  ; TODO: Need to check for carry
+  sta z:1
 
+  lda #0
+  tcd
   rtl
 ]] end}
 
@@ -508,7 +523,7 @@ Dictionary.colon("DODOES")
   addWords("R> XT! EXIT")  -- Ends the calling word (CREATEing) early.
 
 Dictionary.colonWithLabel("DOES>", "_DOES")
-  addWords("LIT")
+  addWords("A.LIT")
   addAddress(Dictionary.find("DODOES"))
   addWords("COMPILE, COMPILE-DOCOL EXIT")
 dataspace[latest].immediate = true
@@ -613,7 +628,7 @@ end
 
 do
   Dictionary.colonWithLabel(";", "_SEMICOLON")
-  addWords("[ LIT")
+  addWords("[ A.LIT")
   addAddress(Dictionary.find("EXIT"))
   -- Also need to make the word visible now.
   addWords("COMPILE, EXIT")
@@ -632,7 +647,7 @@ end
 
 Dictionary.colonWithLabel(".\"", "_STRING")
 do
-  addWords("LIT")
+  addWords("A.LIT")
   addAddress(Dictionary.find("DO.\""))
   addWords("COMPILE,")
   local loop = here
@@ -657,7 +672,7 @@ do
   addNumber(0)
   addWords("= BRANCH0")
   local notNumberBranchAddr = here
-  addAddress("2000") -- will be replaced later
+  addAddress(2000) -- will be replaced later
     -- Not found, try and parse as a number.
     -- TODO: Handle parse failure here, currently just returns zero.
     addWords("DROP >NUMBER")
@@ -665,10 +680,10 @@ do
     addWords("STATE @ BRANCH0")
     addAddress(loop)
     -- LIT the LIT so we can LIT while we LIT.
-    addWord("LIT")
+    addWord("A.LIT")
     addAddress(Dictionary.find("LIT"))
     -- Compile LIT and then the number.
-    addWords("COMPILE, COMPILE,")
+    addWords("COMPILE, ,")
     addWord("LIT")
     addNumber(0)
     addWord("BRANCH0")
@@ -679,7 +694,7 @@ do
   addNumber(0)
   addWords("> STATE @ INVERT OR BRANCH0")
   local branchAddrIfNotImmediate = here
-  addAddress("2000") -- will be replaced later
+  addAddress(2000) -- will be replaced later
     -- Interpreting, just run the word.
     addWords("DROP EXECUTE LIT")
     addNumber(0)
@@ -707,16 +722,19 @@ infos:write("here: "..here .. "\n")
 -- TODO: Should probably be a Dataspace method.
 function cellString(contents)
   assert(type(contents) == "table" and contents.type ~= nil)
-  if contents.type == "address" then
+  if contents.type == "call" then
     assert(contents.addr > 0 and contents.addr < here, "Invalid address " .. contents.addr )
     assert(dataspace[contents.addr].type == "native" or dataspace[contents.addr].type == "colon", "Expected fn at " .. contents.addr)
-    if dataspace[contents].name ~= nil then
-      return contents .. " (? " .. dataspace[contents].name .. ")"
+    if dataspace[contents.addr].name ~= nil then
+      return "Call " .. dataspace[contents.addr].name .. " (" .. contents.addr .. ")"
     else
-      return "Unnamed fn: " .. tostring(contents)
+      return "Unnamed fn at: " .. tostring(contents.addr)
     end
-  elseif content.type == "number" then
-    return tostring(content.number)
+  elseif contents.type == "address" then
+    assert(contents.addr > 0, "Invalid address " .. contents.addr )
+    return "Address: " .. tostring(contents.addr)
+  elseif contents.type == "number" then
+    return "Number: " .. tostring(contents.number)
   elseif type(contents) == "table" and contents.name ~= nil then
     return contents.name
   else
