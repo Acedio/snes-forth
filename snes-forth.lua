@@ -37,7 +37,7 @@ end
 
 function snesAssembly(file)
   for k,v in ipairs(dataspace) do
-    assert(type(v) == "table" || v.type == nil, "Invalid entry at addr = " .. k)
+    assert(type(v) == "table" or v.type == nil, "Invalid entry at addr = " .. k)
     if v.type == "native" or v.type == "colon" then
       if v.label then
         file:write(string.format("%s:\n", v.label))
@@ -400,18 +400,13 @@ Dictionary.native{name="1+", label="_INCR", runtime=function()
   return nextIp()
 end}
 
--- TODO: There should also be an "A.LIT" word.
 Dictionary.native{name="LIT", runtime=function()
   -- return stack should be the next IP, where the literal is located
   local litaddr = ip
   -- increment the return address to skip the literal
   ip = ip + 1
-  assert(dataspace[litaddr].type == "number" or dataspace[litaddr].type == "address", "Expected number or address for LIT at addr = " .. litaddr)
-  if dataspace[litaddr].type == "number" then
-    datastack:push(dataspace[litaddr].number)
-  else
-    datastack:push(dataspace[litaddr].addr)
-  end
+  assert(dataspace[litaddr].type == "number", "Expected number for LIT at addr = " .. litaddr)
+  datastack:push(dataspace[litaddr].number)
   return nextIp()
 end,
 -- TODO: calls to LIT should probably just be inlined :P
@@ -432,6 +427,43 @@ asm=function() return [[
   tay ; save the literal while we reset the DP
   lda #0
   tcd ; reset DP before we PUSH
+
+  PUSH_Y
+
+  ; Increment return address past the literal word
+  lda #2
+  clc
+  adc 1, S
+  sta 1, S
+  ; TODO: handle the carry here
+
+  rtl
+]] end}
+
+-- TODO: There should also be an "A.LIT" word.
+Dictionary.native{name="A.LIT", runtime=function()
+  -- return stack should be the next IP, where the literal is located
+  local litaddr = ip
+  -- increment the return address to skip the literal
+  ip = ip + 1
+  assert(dataspace[litaddr].type == "address", "Expected address for LIT at addr = " .. litaddr)
+  datastack:push(dataspace[litaddr].addr)
+  return nextIp()
+end,
+-- TODO: calls to A.LIT should probably just be inlined :P
+-- TODO: This:
+asm=function() return [[
+  ; We have the 24 bit return address on the stack, need to grab that value to a
+  ; DP location (it's already in the DP because it's on the stack, but we need
+  ; to pull it to a static location because that's the only indirect long
+  ; addressing that exists) and increment it, then do a LDA indirect long
+  ; addressing to grab the actual literal value.
+  ;
+  ; Can we do something silly like treating the return stack like the DP?
+  lda [1],Y ; indirect long read the address on the top of the stack + 1
+
+  tay ; save the literal while we reset the DP
+  lda #0
 
   PUSH_Y
 
