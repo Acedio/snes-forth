@@ -344,6 +344,11 @@ asm=function() return [[
   PUSH_A
 ]] end}
 
+Dictionary.native{name="A.DUP", label="_A_DUP", runtime=function()
+  datastack:push(datastack:top())
+  return nextIp()
+end}
+
 Dictionary.native{name="DROP", runtime=function()
   datastack:pop()
   return nextIp()
@@ -372,7 +377,17 @@ Dictionary.native{name=">R", label="_TO_R", runtime=function()
   return nextIp()
 end}
 
+Dictionary.native{name="A.>R", label="_A_TO_R", runtime=function()
+  returnstack:push(datastack:pop())
+  return nextIp()
+end}
+
 Dictionary.native{name="R>", label="_FROM_R", runtime=function()
+  datastack:push(returnstack:pop())
+  return nextIp()
+end}
+
+Dictionary.native{name="A.R>", label="_A_FROM_R", runtime=function()
   datastack:push(returnstack:pop())
   return nextIp()
 end}
@@ -406,6 +421,11 @@ Dictionary.native{name="!", label="_STORE", runtime=function()
 end}
 
 Dictionary.native{name="1+", label="_INCR", runtime=function()
+  datastack:push(datastack:pop() + 1)
+  return nextIp()
+end}
+
+Dictionary.native{name="A.1+", label="_A_INCR", runtime=function()
   datastack:push(datastack:pop() + 1)
   return nextIp()
 end}
@@ -450,7 +470,7 @@ asm=function() return [[
   rtl
 ]] end}
 
-Dictionary.native{name="A.LIT", label="A_LIT", runtime=function()
+Dictionary.native{name="A.LIT", label="_A_LIT", runtime=function()
   -- return stack should be the next IP, where the literal is located
   local litaddr = ip
   -- increment the return address to skip the literal
