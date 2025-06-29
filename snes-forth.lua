@@ -222,6 +222,12 @@ end
 
 Dictionary.makeVariable("STATE")
 
+Dictionary.native{name="ALLOT", runtime=function()
+  datastack:print(io.stderr)
+  here = here + datastack:pop()
+  return nextIp()
+end}
+
 -- TODO: For now we'll actually implement EXIT in ASM, but on the SNES it should
 -- just be a `RSL` and not `JSL EXIT` like other Forth words.
 Dictionary.native{name="EXIT", runtime=function()
@@ -513,7 +519,9 @@ asm=function() return [[
 ]] end}
 
 Dictionary.native{name="EXECUTE", runtime=function()
-  return dataspace[datastack:pop()].runtime()
+  local addr = datastack:pop()
+  infos:write("Executing " .. dataspace[addr].name .. "\n")
+  return dataspace[addr].runtime()
   -- No nextIp() is needed because the runtime() should call it.
 end}
 
@@ -732,7 +740,7 @@ do
   addWord("EXIT")
 end
 
-ip = here -- start on QUIT, below
+ip = here -- start on creating STATE, below
 addWord("QUIT")
 addWord("BYE")
 
