@@ -9,7 +9,12 @@ local returnstack = Stack:new()
 
 assert(#arg == 2, "Two arguments are required: ./snes-forth.lua [input] [output]")
 
-local input = Input:readAll(arg[1])
+local input = nil
+if arg[1] == "-" then
+  input = Input:stdin()
+else
+  input = Input:readAll(arg[1])
+end
 
 local outputs = io.stderr
 local infos = io.stderr
@@ -41,7 +46,7 @@ function addColonWithLabel(name, label)
   dataspace:dictionaryAdd(name)
   local native = Dataspace.native{
     name = name,
-    size = function() assert(false, "Tried to get the size of a colon dev.") end,
+    size = function() assert(false, "Tried to get the size of a colon def.") end,
     label = label,
     asm = function() return "; DOCOL has no codeword.\n" end,
   }
@@ -181,16 +186,16 @@ end}
 -- Can probably be written in Forth? Though not interpreted-Forth.
 dataspace:addNative{name="FIND", runtime=function()
   local word = datastack:pop()
-  local index = dataspace:dictionaryFind(word)
-  if not index then
+  local dictAddr = dataspace:dictionaryFind(word)
+  if not dictAddr then
     -- TODO: This should be a string pointer or something.
     datastack:push(word)
     datastack:push(0)
-  elseif dataspace[index].immediate then
-    datastack:push(index)
+  elseif dataspace[dictAddr].immediate then
+    datastack:push(Dataspace.toCodeword(dictAddr))
     datastack:push(1)
   else
-    datastack:push(index)
+    datastack:push(Dataspace.toCodeword(dictAddr))
     datastack:push(-1)
   end
   return nextIp()
@@ -259,11 +264,25 @@ dataspace:addNative{name="A.R>", label="_A_FROM_R", runtime=function()
   return nextIp()
 end}
 
+function toSigned(unsigned)
+  if unsigned > 0x7FFF then
+    return unsigned - 0x10000
+  end
+  return unsigned
+end
+
+function toUnsigned(signed)
+  if unsigned < 0 then
+    return (signed + 0x10000) & 0xFFFF
+  end
+  return signed
+end
+
 -- TODO: This should probably be relative and not an absolute branch point?
 dataspace:addNative{name="BRANCH0", runtime=function()
   if datastack:pop() == 0 then
-    assert(dataspace[ip].type == "address", "Expected address to jump to at " .. ip)
-    ip = dataspace[ip].addr
+    assert(dataspace[ip].type == "number", "Expected relative number to jump to at " .. ip)
+    ip = dataspace:fromRelativeAddress(ip, toSigned(dataspace[ip].number))
   else
     ip = ip + 1
   end
@@ -273,7 +292,6 @@ end}
 -- Takes an address (3 bytes) off the stack and pushes a 2 byte word.
 dataspace:addNative{name="@", label="_FETCH", runtime=function()
   local addr = datastack:pop()
-  dataspace:print(io.stderr)
   assert(dataspace[addr].type == "number", "Expected word at " .. addr)
   datastack:push(dataspace[addr].number)
   return nextIp()
@@ -412,7 +430,7 @@ addColon("DODOES")
 
 addColonWithLabel("DOES>", "_DOES")
   dataspace:addWords("A.LIT")
-  dataspace:addAddress(dataspace:dictionaryFind("DODOES"))
+  dataspace:addAddress(dataspace:codewordOf("DODOES"))
   dataspace:addWords("COMPILE, COMPILE-DOCOL EXIT")
 dataspace[dataspace.latest].immediate = true
 
@@ -517,7 +535,7 @@ end
 do
   addColonWithLabel(";", "_SEMICOLON")
   dataspace:addWords("[ A.LIT")
-  dataspace:addAddress(dataspace:dictionaryFind("EXIT"))
+  dataspace:addAddress(dataspace:codewordOf("EXIT"))
   -- Also need to make the word visible now.
   dataspace:addWords("COMPILE, EXIT")
   dataspace[dataspace.latest].immediate = true
@@ -529,20 +547,20 @@ do
   dataspace:addWords("A.R> A.DUP A.1+ A.>R @ DUP EMIT LIT")
   dataspace:addNumber(string.byte('"'))
   dataspace:addWords("= BRANCH0")
-  dataspace:addAddress(loop)
+  dataspace:addNumber(dataspace:getRelativeAddr(dataspace.here, loop))
   dataspace:addWords("EXIT")
 end
 
 addColonWithLabel(".\"", "_STRING")
 do
   dataspace:addWords("A.LIT")
-  dataspace:addAddress(dataspace:dictionaryFind("DO.\""))
+  dataspace:addAddress(dataspace:codewordOf("DO.\""))
   dataspace:addWords("COMPILE,")
   local loop = dataspace.here
   dataspace:addWords("KEY DUP COMPILE, LIT")
   dataspace:addNumber(string.byte('"'))
   dataspace:addWords("= BRANCH0")
-  dataspace:addAddress(loop)
+  dataspace:addNumber(dataspace:getRelativeAddr(dataspace.here, loop))
   dataspace:addWords("EXIT")
 end
 dataspace[dataspace.latest].immediate = true
@@ -552,7 +570,7 @@ do
   local loop = dataspace.here
   dataspace:addWords("WORD DUP COUNT BRANCH0")
   local eofBranchAddr = dataspace.here
-  dataspace:addAddress(2000)
+  dataspace:addNumber(2000)
 
   dataspace:addWords("FIND")
 
@@ -560,43 +578,43 @@ do
   dataspace:addNumber(0)
   dataspace:addWords("= BRANCH0")
   local notNumberBranchAddr = dataspace.here
-  dataspace:addAddress(2000) -- will be replaced later
+  dataspace:addNumber(2000) -- will be replaced later
     -- Not found, try and parse as a number.
     -- TODO: Handle parse failure here, currently just returns zero.
     dataspace:addWords("DROP >NUMBER")
     -- If we're compiling, compile TOS as a literal.
     dataspace:addWords("STATE @ BRANCH0")
-    dataspace:addAddress(loop)
+    dataspace:addNumber(dataspace:getRelativeAddr(dataspace.here, loop))
     -- LIT the LIT so we can LIT while we LIT.
     dataspace:addWord("A.LIT")
-    dataspace:addAddress(dataspace:dictionaryFind("LIT"))
+    dataspace:addAddress(dataspace:codewordOf("LIT"))
     -- Compile LIT and then the number.
     dataspace:addWords("COMPILE, ,")
     dataspace:addWord("LIT")
     dataspace:addNumber(0)
     dataspace:addWord("BRANCH0")
-    dataspace:addAddress(loop)
-  dataspace[notNumberBranchAddr].addr = dataspace.here
+    dataspace:addNumber(dataspace:getRelativeAddr(dataspace.here, loop))
+  dataspace[notNumberBranchAddr].number = dataspace:getRelativeAddr(notNumberBranchAddr, dataspace.here)
 
   dataspace:addWords("DUP LIT")
   dataspace:addNumber(0)
   dataspace:addWords("> STATE @ INVERT OR BRANCH0")
   local branchAddrIfNotImmediate = dataspace.here
-  dataspace:addAddress(2000) -- will be replaced later
+  dataspace:addNumber(2000) -- will be replaced later
     -- Interpreting, just run the word.
     dataspace:addWords("DROP EXECUTE LIT")
     dataspace:addNumber(0)
     dataspace:addWord("BRANCH0")
-    dataspace:addAddress(loop)
-  dataspace[branchAddrIfNotImmediate].addr = dataspace.here
+    dataspace:addNumber(dataspace:getRelativeAddr(dataspace.here, loop))
+  dataspace[branchAddrIfNotImmediate].number = dataspace:getRelativeAddr(branchAddrIfNotImmediate, dataspace.here)
 
   dataspace:addWords("DROP")  -- else, compiling
   dataspace:addWords("COMPILE, LIT")
   dataspace:addNumber(0)
   dataspace:addWord("BRANCH0")
-  dataspace:addAddress(loop)
+  dataspace:addNumber(dataspace:getRelativeAddr(dataspace.here, loop))
 
-  dataspace[eofBranchAddr].addr = dataspace.here
+  dataspace[eofBranchAddr].number = dataspace:getRelativeAddr(eofBranchAddr, dataspace.here)
   dataspace:addWord("EXIT")
 end
 

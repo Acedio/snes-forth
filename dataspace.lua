@@ -61,12 +61,25 @@ function Dataspace:dictionaryFind(name)
   while i > 0 do
     assert(self[i].type == "dictionary-entry", "Expected dictionary entry at addr = " .. i)
     if self[i].name == name then
-      -- Return the address after the dictionary entry.
-      return i + 1
+      -- Return the address of the dictionary entry.
+      return i
     end
     i = self[i].prev
   end
   return nil
+end
+
+function Dataspace.toCodeword(dictAddr)
+  return dictAddr + 1
+end
+
+function Dataspace:codewordOf(name)
+  local dictAddr = self:dictionaryFind(name)
+  if dictAddr then
+    return Dataspace.toCodeword(dictAddr)
+  else
+    return dictAddr
+  end
 end
 
 function Dataspace.native(entry)
@@ -133,6 +146,42 @@ function Dataspace.address(addr)
   return entry
 end
 
+-- Input: lua dataspace addressing
+-- Returns: SNES delta
+function Dataspace:getRelativeAddr(current, to)
+  if current > to then
+    print("relative: " .. -self:getRelativeAddr(to, current))
+    return -self:getRelativeAddr(to, current)
+  end
+
+  local delta = 0
+  while current < to do
+    delta = delta + self[current]:size()
+    current = current + 1
+  end
+  print("relative: " .. delta)
+  return delta
+end
+
+-- Input: Lua address and SNES delta
+-- Returns: Lua address
+function Dataspace:fromRelativeAddress(current, delta)
+  local original = current
+  if delta >= 0 then
+    while delta > 0 do
+      delta = delta - self[current]:size()
+      current = current + 1
+    end
+  else
+    while delta < 0 do
+      current = current - 1
+      delta = delta + self[current]:size()
+    end
+  end
+  assert(delta == 0, "Delta was not zero from: " .. original)
+  return current
+end
+
 function Dataspace.number(number)
   local entry = {
     type = "number",
@@ -178,7 +227,7 @@ end
 
 -- Add word to the current colon defintion
 function Dataspace:addWord(name)
-  index = self:dictionaryFind(name)
+  index = self:codewordOf(name)
   assert(index, "Couldn't find " .. name)
   self:addCall(index)
 end
