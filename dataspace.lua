@@ -14,8 +14,45 @@ end
 
 function Dataspace:print(file)
   for k,v in ipairs(self) do
-    file:write(k .. ": " .. v:toString() .. "\n")
+    file:write(k .. ": " .. v:toString(self) .. "\n")
   end
+end
+
+function Dataspace:assembly(file)
+  for k,v in ipairs(self) do
+    if v.label then
+      file:write(v.label .. ":\n")
+    end
+    file:write(v:asm(self) .. "\n")
+  end
+end
+
+function Dataspace:add(entry)
+  self[self.here] = entry
+  self.here = self.here + 1
+end
+
+function Dataspace.dictionaryEntry(name, prev)
+  local entry = {
+    type = "dictionary-entry",
+    name = name,
+    size = function() assert(false, "Tried to get size of dictionary entry.") end,
+    prev = prev,
+  }
+  function entry:toString(dataspace)
+    return "Dictionary entry: " .. name
+  end
+  function entry:asm(dataspace)
+    -- TODO: Implement.
+    return "; Dictionary entry for " .. name
+  end
+  return entry
+end
+
+function Dataspace:dictionaryAdd(name)
+  local entry = Dataspace.dictionaryEntry(name, self.latest)
+  self.latest = self.here
+  self:add(entry)
 end
 
 -- Returns address or nil if missing
@@ -32,27 +69,6 @@ function Dataspace:dictionaryFind(name)
   return nil
 end
 
-function Dataspace:add(entry)
-  self[self.here] = entry
-  self.here = self.here + 1
-end
-
-function Dataspace.dictionaryEntry(name, prev)
-  return {
-    type = "dictionary-entry",
-    name = name,
-    size = function() assert(false, "Tried to get size of dictionary entry.") end,
-    toString = function(dataspace) return "Dictionary entry" end,
-    prev = prev,
-  }
-end
-
-function Dataspace:dictionaryAdd(name)
-  local entry = Dataspace.dictionaryEntry(name, self.latest)
-  self.latest = self.here
-  self:add(entry)
-end
-
 function Dataspace.native(entry)
   entry.type = "native"
   if not entry.size then
@@ -62,8 +78,8 @@ function Dataspace.native(entry)
     entry.label = entry.name
   end
   if not entry.asm then
-    function entry:asm()
-      return string.format("%s:\n; TODO: Not implemented\n; TODO: abort?\n", self.label)
+    function entry:asm(dataspace)
+      return string.format("; TODO: Not implemented\n; TODO: abort?\n")
     end
   end
   function entry:toString(dataspace)
@@ -79,7 +95,7 @@ function Dataspace.call(addr)
     addr = addr,
   }
   function entry:toString(dataspace)
-    assert(self.addr > 0 and self.addr < here, "Invalid address " .. self.addr )
+    assert(self.addr > 0 and self.addr < dataspace.here, "Invalid address " .. self.addr )
     assert(dataspace[self.addr].type == "native", "Expected fn at " .. self.addr)
     if dataspace[self.addr].name ~= nil then
       return "Call " .. dataspace[self.addr].name .. " (" .. self.addr .. ")"
@@ -88,7 +104,7 @@ function Dataspace.call(addr)
     end
   end
   function entry:asm(dataspace)
-    assert(self.addr > 0 and self.addr < here, "Invalid address " .. self.addr)
+    assert(self.addr > 0 and self.addr < dataspace.here, "Invalid address " .. self.addr)
     assert(dataspace[self.addr].type == "native", "Expected fn at " .. self.addr)
     return string.format("JSL %s\n", dataspace[self.addr].label)
   end
@@ -142,7 +158,7 @@ function Dataspace:addAddress(addr)
 end
 
 function Dataspace:addNumber(number)
-  self:add(Dataspace.number(addr))
+  self:add(Dataspace.number(number))
 end
 
 -- Table should have at least name and runtime specified.

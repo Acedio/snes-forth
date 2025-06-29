@@ -7,15 +7,17 @@ local Dataspace = require("dataspace")
 local datastack = Stack:new()
 local returnstack = Stack:new()
 
-local ip = 0
+assert(#arg == 2, "Two arguments are required: ./snes-forth.lua [input] [output]")
 
-local input = Input:stdin()
+local input = Input:readAll(arg[1])
 
 local outputs = io.stderr
 local infos = io.stderr
 local errors = io.stderr
 
 local dataspace = Dataspace:new()
+
+local ip = 0
 
 function nextIp()
   local oldip = ip
@@ -44,7 +46,7 @@ function addColonWithLabel(name, label)
     asm = function() return "; DOCOL has no codeword.\n" end,
   }
   dataspace:add(native)
-  local dataaddr = here
+  local dataaddr = dataspace.here
   native.runtime = function()
     return docol(dataaddr)
   end
@@ -60,7 +62,7 @@ dataspace:addNative{name="DATASPACE", runtime=function()
 end}
 
 dataspace:addNative{name=".S", label="_DOT_S", runtime=function()
-  datastack:print(errors)
+  datastack:print(outputs)
   return nextIp()
 end}
 
@@ -78,34 +80,25 @@ dataspace:addNative{name="XT!", label="_XT_STORE", runtime=function()
 end}
 
 dataspace:addNative{name="COMPILE-DOCOL", label="_COMPILE_DOCOL", runtime=function()
-  local addr = here + DICTIONARY_HEADER_SIZE
-  dataspace[here] = {
+  local entry = Dataspace.native{
     name = "docol-fn",
-    type = "docol",
-    label = nil,
-    runtime = function()
-      docol(addr)
-    end,
-    -- No prev because this isn't a dictionary entry.
   }
-  here = here + DICTIONARY_HEADER_SIZE
+  dataspace:add(entry)
+  local addr = dataspace.here
+  function entry:runtime() docol(addr) end
   return nextIp()
 end}
 
 dataspace:addNative{name=",", label="_COMMA", runtime=function()
-  dataspace[here] = {
-    type = "number",
-    number = datastack:pop(),
-  }
-  here = here + 1
+  dataspace:addNumber(datastack:pop())
   return nextIp()
 end}
 
 dataspace:addNative{name="CREATE", runtime=function()
-  local addr = here
+  local addr = dataspace.here
   local name = input:word()
   dataspace:addNative{name=name}  -- Use a placeholder fn initially.
-  local dataaddr = here  -- HERE has been updated by calling native()
+  local dataaddr = dataspace.here  -- HERE has been updated by calling native()
   -- Now update the fn with the new HERE.
   dataspace[addr].runtime = function()
     datastack:push(dataaddr)
@@ -125,7 +118,7 @@ function makeVariable(name)
   dataspace:dictionaryAdd(name)
   local native = Dataspace.native{name=name}
   dataspace:add(native)
-  local dataaddr = here
+  local dataaddr = dataspace.here
   native.runtime = function()
     datastack:push(dataaddr)
     return nextIp()
@@ -136,8 +129,7 @@ end
 makeVariable("STATE")
 
 dataspace:addNative{name="ALLOT", runtime=function()
-  datastack:print(io.stderr)
-  here = here + datastack:pop()
+  dataspace.here = dataspace.here + datastack:pop()
   return nextIp()
 end}
 
@@ -281,6 +273,7 @@ end}
 -- Takes an address (3 bytes) off the stack and pushes a 2 byte word.
 dataspace:addNative{name="@", label="_FETCH", runtime=function()
   local addr = datastack:pop()
+  dataspace:print(io.stderr)
   assert(dataspace[addr].type == "number", "Expected word at " .. addr)
   datastack:push(dataspace[addr].number)
   return nextIp()
@@ -289,7 +282,7 @@ end}
 dataspace:addNative{name="!", label="_STORE", runtime=function()
   local addr = datastack:pop()
   local val = datastack:pop()
-  dataspace[addr] = Number(val)
+  dataspace[addr] = Dataspace.number(val)
   return nextIp()
 end}
 
@@ -475,7 +468,7 @@ end)
 
 dataspace:addNative{name="+", label="_PLUS", runtime=binaryOpRt(function(a,b)
   return a + b
-end), asm=function() return [[
+end), asm=function(self) return [[
   POP_A
   clc
   adc a:1, X ; Add stack value
@@ -532,7 +525,7 @@ end
 
 addColonWithLabel("DO.\"", "_DO_STRING")
 do
-  local loop = here
+  local loop = dataspace.here
   dataspace:addWords("A.R> A.DUP A.1+ A.>R @ DUP EMIT LIT")
   dataspace:addNumber(string.byte('"'))
   dataspace:addWords("= BRANCH0")
@@ -545,7 +538,7 @@ do
   dataspace:addWords("A.LIT")
   dataspace:addAddress(dataspace:dictionaryFind("DO.\""))
   dataspace:addWords("COMPILE,")
-  local loop = here
+  local loop = dataspace.here
   dataspace:addWords("KEY DUP COMPILE, LIT")
   dataspace:addNumber(string.byte('"'))
   dataspace:addWords("= BRANCH0")
@@ -556,9 +549,9 @@ dataspace[dataspace.latest].immediate = true
 
 do
   addColon("QUIT")
-  local loop = here
+  local loop = dataspace.here
   dataspace:addWords("WORD DUP COUNT BRANCH0")
-  local eofBranchAddr = here
+  local eofBranchAddr = dataspace.here
   dataspace:addAddress(2000)
 
   dataspace:addWords("FIND")
@@ -566,7 +559,7 @@ do
   dataspace:addWords("DUP LIT")
   dataspace:addNumber(0)
   dataspace:addWords("= BRANCH0")
-  local notNumberBranchAddr = here
+  local notNumberBranchAddr = dataspace.here
   dataspace:addAddress(2000) -- will be replaced later
     -- Not found, try and parse as a number.
     -- TODO: Handle parse failure here, currently just returns zero.
@@ -583,20 +576,19 @@ do
     dataspace:addNumber(0)
     dataspace:addWord("BRANCH0")
     dataspace:addAddress(loop)
-  dataspace:print(io.stderr)
-  dataspace[notNumberBranchAddr].addr = here
+  dataspace[notNumberBranchAddr].addr = dataspace.here
 
   dataspace:addWords("DUP LIT")
   dataspace:addNumber(0)
   dataspace:addWords("> STATE @ INVERT OR BRANCH0")
-  local branchAddrIfNotImmediate = here
+  local branchAddrIfNotImmediate = dataspace.here
   dataspace:addAddress(2000) -- will be replaced later
     -- Interpreting, just run the word.
     dataspace:addWords("DROP EXECUTE LIT")
     dataspace:addNumber(0)
     dataspace:addWord("BRANCH0")
     dataspace:addAddress(loop)
-  dataspace[branchAddrIfNotImmediate].addr = here
+  dataspace[branchAddrIfNotImmediate].addr = dataspace.here
 
   dataspace:addWords("DROP")  -- else, compiling
   dataspace:addWords("COMPILE, LIT")
@@ -604,16 +596,16 @@ do
   dataspace:addWord("BRANCH0")
   dataspace:addAddress(loop)
 
-  dataspace[eofBranchAddr].addr = here
+  dataspace[eofBranchAddr].addr = dataspace.here
   dataspace:addWord("EXIT")
 end
 
-ip = here -- start on creating STATE, below
+ip = dataspace.here -- start on creating STATE, below
 dataspace:addWord("QUIT")
 dataspace:addWord("BYE")
 
-infos:write("latest: "..dataspace.latest .. "\n")
-infos:write("here: "..here .. "\n")
+infos:write("latest: " .. dataspace.latest .. "\n")
+infos:write("here: " .. dataspace.here .. "\n")
 
 dataspace:print(io.stderr)
 
@@ -623,4 +615,5 @@ dataspace:print(io.stderr)
 
 datastack:print(io.stderr)
 
-snesAssembly(io.stdout)
+local output = assert(io.open(arg[2], "w"))
+dataspace:assembly(output)

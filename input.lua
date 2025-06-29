@@ -12,6 +12,18 @@ function Input:stdin()
   return input
 end
 
+function Input:readAll(filename)
+  local f = assert(io.open(filename, "r"))
+  local input = {
+    str = f:read("*all"),
+    i = 0,
+  }
+  f:close()
+  setmetatable(input, self)
+  self.__index = self
+  return input
+end
+
 function Input:word()
   local first, last = string.find(self.str, "%S+", self.i)
   if first == nil then
