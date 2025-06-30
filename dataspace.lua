@@ -92,7 +92,7 @@ function Dataspace.native(entry)
   end
   if not entry.asm then
     function entry:asm(dataspace)
-      return string.format("; TODO: Not implemented\n; TODO: abort?\n")
+      return string.format("rtl ; TODO: Not implemented\n; TODO: abort?\n")
     end
   end
   function entry:toString(dataspace)

@@ -1,13 +1,17 @@
-all: snes-forth.smc
+all: snes-forth.smc snes-forth.mlb
 
-snes-forth.smc: snes-forth.o lorom128.cfg
-	ld65 -C lorom128.cfg -o snes-forth.smc snes-forth.o
+snes-forth.smc snes-forth.labels: snes-forth.o lorom128.cfg
+	ld65 -C lorom128.cfg -Ln snes-forth.labels -o snes-forth.smc snes-forth.o
 
 snes-forth.o: snes-forth.s forth.s preamble.s
 	ca65 $< -g -o $@
+
+# A list of labels for use with Mesen.
+snes-forth.mlb: snes-forth.labels
+	< $< awk 'BEGIN {IFS=" "} {printf("SnesPrgRom:%x:%s\n", strtonum("0x" $$2) - 0x8000, substr($$3,2));}' > $@
 
 forth.s: forth.fth snes-forth.lua
 	./snes-forth.lua $< $@
 
 clean:
-	rm snes-forth.smc snes-forth.o forth.s
+	rm snes-forth.smc snes-forth.o forth.s snes-forth.mlb snes-forth.labels

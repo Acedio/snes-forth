@@ -298,24 +298,54 @@ dataspace:addNative{name="@", label="_FETCH", runtime=function()
   assert(dataspace[addr].type == "number", "Expected word at " .. addr)
   datastack:push(dataspace[addr].number)
   return nextIp()
-end}
+end,
+asm=function() return [[
+  inx ; Reduce stack size by one byte.
+  txa
+  tcd
+  lda [0]
+  sta z:1
+  lda #0
+  tcd
+  rtl
+]] end}
 
 dataspace:addNative{name="!", label="_STORE", runtime=function()
   local addr = datastack:pop()
   local val = datastack:pop()
   dataspace[addr] = Dataspace.number(val)
   return nextIp()
-end}
+end,
+asm=function() return [[
+  txa
+  tcd
+  adc #5
+  tax
+  lda z:4 ; Grab the argument.
+  sta [1]
+  lda #0
+  tcd
+  rtl
+]] end}
 
 dataspace:addNative{name="1+", label="_INCR", runtime=function()
   datastack:push(datastack:pop() + 1)
   return nextIp()
-end}
+end,
+asm=function() return [[
+  inc z:1, X
+  rtl
+]] end}
 
 dataspace:addNative{name="A.1+", label="_A_INCR", runtime=function()
   datastack:push(datastack:pop() + 1)
   return nextIp()
-end}
+end,
+-- TODO: Handle the carry (or don't allow cross-page address increments?)
+asm=function() return [[
+  inc z:1, X
+  rtl
+]] end}
 
 dataspace:addNative{name="LIT", runtime=function()
   -- return stack should be the next IP, where the literal is located
