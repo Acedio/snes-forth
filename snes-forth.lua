@@ -76,8 +76,8 @@ end}
 dataspace:addNative{name="XT!", label="_XT_STORE", runtime=function()
   -- TODO: datastack tags?
   local addr = datastack:pop()
-  local dataaddr = dataspace.latest + 1
-  dataspace[dataspace.latest].runtime = function()
+  local dataaddr = Dataspace.toCodeword(dataspace.latest) + 1
+  dataspace[Dataspace.toCodeword(dataspace.latest)].runtime = function()
     datastack:push(dataaddr)
     return dataspace[addr].runtime()
   end
@@ -100,12 +100,15 @@ dataspace:addNative{name=",", label="_COMMA", runtime=function()
 end}
 
 dataspace:addNative{name="CREATE", runtime=function()
-  local addr = dataspace.here
   local name = input:word()
-  dataspace:addNative{name=name}  -- Use a placeholder fn initially.
+  dataspace:dictionaryAdd(name)
+  local entry = Dataspace.native{
+    name = name,
+  }
+  dataspace:add(entry)  -- Use a placeholder fn initially.
   local dataaddr = dataspace.here  -- HERE has been updated by calling native()
   -- Now update the fn with the new HERE.
-  dataspace[addr].runtime = function()
+  entry.runtime = function()
     datastack:push(dataaddr)
     return nextIp()
   end
@@ -278,12 +281,12 @@ function toUnsigned(signed)
   return signed
 end
 
--- TODO: This should probably be relative and not an absolute branch point?
 dataspace:addNative{name="BRANCH0", runtime=function()
   if datastack:pop() == 0 then
     assert(dataspace[ip].type == "number", "Expected relative number to jump to at " .. ip)
     ip = dataspace:fromRelativeAddress(ip, toSigned(dataspace[ip].number))
   else
+    -- Skip past the relative address.
     ip = ip + 1
   end
   return nextIp()

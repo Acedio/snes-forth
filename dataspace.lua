@@ -150,7 +150,6 @@ end
 -- Returns: SNES delta
 function Dataspace:getRelativeAddr(current, to)
   if current > to then
-    print("relative: " .. -self:getRelativeAddr(to, current))
     return -self:getRelativeAddr(to, current)
   end
 
@@ -159,7 +158,6 @@ function Dataspace:getRelativeAddr(current, to)
     delta = delta + self[current]:size()
     current = current + 1
   end
-  print("relative: " .. delta)
   return delta
 end
 
