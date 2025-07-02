@@ -147,7 +147,7 @@ dataspace:addNative{name="ALLOT", runtime=function()
 end}
 
 -- TODO: For now we'll actually implement EXIT in ASM, but on the SNES it should
--- just be a `RSL` and not `JSL EXIT` like other Forth words.
+-- just be a `RTL` and not `JSL EXIT` like other Forth words.
 dataspace:addNative{name="EXIT", runtime=function()
   ip = returnstack:pop()
   return nextIp()
@@ -209,7 +209,7 @@ dataspace:addNative{name="FIND", runtime=function()
   return nextIp()
 end}
 
--- TODO: Non-standard. Returns TRUE or FALSE at the top of the stack.
+-- Non-standard. Returns TRUE or FALSE at the top of the stack.
 dataspace:addNative{name=">NUMBER", label="_TO_NUMBER", runtime=function()
   local number = tonumber(datastack:pop())
   if number == nil then
@@ -409,9 +409,16 @@ dataspace:addNative{name="A.1+", label="_A_INCR", runtime=function()
   datastack:push(datastack:pop() + 1)
   return nextIp()
 end,
--- TODO: Handle the carry (or don't allow cross-page address increments?)
 asm=function() return [[
   inc z:1, X
+  beq @carry
+  rtl
+@carry:
+  sep #$20
+  .a8
+  inc z:3, X
+  rep #$20
+  .a16
   rtl
 ]] end}
 
@@ -460,7 +467,7 @@ dataspace:addNative{name="A.LIT", label="_A_LIT", runtime=function()
   local litaddr = ip
   -- increment the return address to skip the literal
   ip = ip + 1
-  assert(dataspace[litaddr].type == "address", "Expected address for LIT at addr = " .. litaddr)
+  assert(dataspace[litaddr].type == "address" or dataspace[litaddr].type == "xt", "Expected address or xt for A.LIT at addr = " .. litaddr)
   datastack:push(dataspace[litaddr].addr)
   return nextIp()
 end,
@@ -481,10 +488,10 @@ asm=function() return [[
   tcd
   ldy #1
   lda [1], Y
-  sta z:1, X
+  sta f:1, X
   iny
   lda [1], Y
-  sta z:2, X
+  sta f:2, X
 
   lda z:1
   clc
@@ -531,7 +538,7 @@ addColon("DODOES")
 
 addColonWithLabel("DOES>", "_DOES")
   dataspace:addWords("A.LIT")
-  dataspace:addAddress(dataspace:codewordOf("DODOES"))
+  dataspace:addXt("DODOES")
   dataspace:addWords("COMPILE, COMPILE-DOCOL EXIT")
 dataspace[dataspace.latest].immediate = true
 
@@ -636,7 +643,7 @@ end
 do
   addColonWithLabel(";", "_SEMICOLON")
   dataspace:addWords("[ A.LIT")
-  dataspace:addAddress(dataspace:codewordOf("EXIT"))
+  dataspace:addXt("EXIT")
   -- Also need to make the word visible now.
   dataspace:addWords("COMPILE, EXIT")
   dataspace[dataspace.latest].immediate = true
@@ -655,7 +662,7 @@ end
 addColonWithLabel(".\"", "_STRING")
 do
   dataspace:addWords("A.LIT")
-  dataspace:addAddress(dataspace:codewordOf("DO.\""))
+  dataspace:addXt("DO.\"")
   dataspace:addWords("COMPILE,")
   local loop = dataspace.here
   dataspace:addWords("KEY DUP COMPILE, LIT")
@@ -691,7 +698,7 @@ do
     dataspace:addNumber(dataspace:getRelativeAddr(dataspace.here, loop))
     -- LIT the LIT so we can LIT while we LIT.
     dataspace:addWord("A.LIT")
-    dataspace:addAddress(dataspace:codewordOf("LIT"))
+    dataspace:addXt("LIT")
     -- Compile LIT and then the number.
     dataspace:addWords("COMPILE, ,")
     dataspace:addWord("LIT")
@@ -708,7 +715,7 @@ do
     dataspace:addNumber(dataspace:getRelativeAddr(dataspace.here, loop))
     -- A.LIT the A.LIT so we can A.LIT while we A.LIT.
     dataspace:addWord("A.LIT")
-    dataspace:addAddress(dataspace:codewordOf("A.LIT"))
+    dataspace:addXt("A.LIT")
     -- Compile A.LIT and then the number.
     dataspace:addWords("COMPILE, A.,")
     dataspace:addWord("LIT")

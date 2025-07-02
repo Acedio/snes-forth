@@ -131,19 +131,29 @@ function Dataspace.address(addr)
     addr = addr,
   }
   function entry:toString(dataspace)
-    assert(self.addr > 0, "Invalid address " .. self.addr )
+    assert(self.addr >= -0x800000 and self.addr <= 0x7FFFFF, "Invalid address " .. self.addr )
     return "Address: " .. tostring(self.addr)
   end
   function entry:asm(dataspace)
-    assert(self.addr > 0, "Invalid address " .. self.addr)
-    if self.addr < dataspace.here and dataspace[self.addr].label then
-      return string.format(".FARADDR %s\n", dataspace[self.addr].label)
-    else
-      -- TODO: This doesn't work, we need to calculate the address.
-      -- TODO: Also, addresses will definitely be used for working RAM
-      -- addresses, which won't have labels.
-      return string.format(".FARADDR %d\n", self.addr)
-    end
+    assert(self.addr >= -0x800000 and self.addr <= 0x7FFFFF, "Invalid address " .. self.addr )
+    return string.format(".FARADDR %d\n", self.addr)
+  end
+  return entry
+end
+
+function Dataspace.xt(addr)
+  local entry = {
+    type = "xt",
+    size = function() return 3 end,
+    addr = addr,
+  }
+  function entry:toString(dataspace)
+    assert(self.addr < dataspace.here and dataspace[self.addr].label, "Invalid xt " .. self.addr )
+    return string.format("XT: %d %s\n", self.addr, dataspace[self.addr].label)
+  end
+  function entry:asm(dataspace)
+    assert(self.addr < dataspace.here and dataspace[self.addr].label, "Invalid xt " .. self.addr )
+    return string.format(".FARADDR %s\n", dataspace[self.addr].label)
   end
   return entry
 end
@@ -204,6 +214,10 @@ end
 
 function Dataspace:addAddress(addr)
   self:add(Dataspace.address(addr))
+end
+
+function Dataspace:addXt(name)
+  self:add(Dataspace.xt(self:codewordOf(name)))
 end
 
 function Dataspace:addNumber(number)

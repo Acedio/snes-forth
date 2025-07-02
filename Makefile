@@ -1,7 +1,7 @@
 all: snes-forth.smc snes-forth.mlb
 
-snes-forth.smc snes-forth.labels: snes-forth.o lorom128.cfg
-	ld65 -C lorom128.cfg -Ln snes-forth.labels -o snes-forth.smc snes-forth.o
+snes-forth.smc snes-forth.labels snes-forth.dbg: snes-forth.o lorom128.cfg
+	ld65 -C lorom128.cfg -Ln snes-forth.labels --dbgfile snes-forth.dbg -o snes-forth.smc snes-forth.o
 
 snes-forth.o: snes-forth.s forth.s preamble.s
 	ca65 $< -g -o $@
@@ -14,4 +14,4 @@ forth.s: forth.fth snes-forth.lua
 	./snes-forth.lua $< $@
 
 clean:
-	rm snes-forth.smc snes-forth.o forth.s snes-forth.mlb snes-forth.labels
+	rm snes-forth.smc snes-forth.o forth.s snes-forth.mlb snes-forth.labels snes-forth.dbg
