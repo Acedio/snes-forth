@@ -283,6 +283,14 @@ asm=function() return [[
   inx
 ]] end}
 
+dataspace:addNative{name="SWAP", runtime=function()
+  local first = datastack:pop()
+  local second = datastack:pop()
+  datastack:push(first)
+  datastack:push(second)
+  return nextIp()
+end}
+
 dataspace:addNative{name="A.DROP", label="_A_DROP", runtime=function()
   datastack:pop()
   return nextIp()
@@ -675,12 +683,11 @@ do
   local notNumberBranchAddr = dataspace.here
   dataspace:addNumber(2000) -- will be replaced later
     -- Not found, try and parse as a number.
-    -- TODO: Handle parse failure here, currently just returns zero.
     dataspace:addWords("DROP DUP >NUMBER BRANCH0")
     local numberParseErrorAddr = dataspace.here
     dataspace:addNumber(2000)
     -- If we're compiling, compile TOS as a literal.
-    dataspace:addWords("DROP STATE @ BRANCH0")
+    dataspace:addWords("SWAP DROP STATE @ BRANCH0")
     dataspace:addNumber(dataspace:getRelativeAddr(dataspace.here, loop))
     -- LIT the LIT so we can LIT while we LIT.
     dataspace:addWord("A.LIT")
