@@ -136,10 +136,12 @@ function Dataspace.address(addr)
   end
   function entry:asm(dataspace)
     assert(self.addr > 0, "Invalid address " .. self.addr)
-    if dataspace[self.addr].label then
+    if self.addr < dataspace.here and dataspace[self.addr].label then
       return string.format(".FARADDR %s\n", dataspace[self.addr].label)
     else
       -- TODO: This doesn't work, we need to calculate the address.
+      -- TODO: Also, addresses will definitely be used for working RAM
+      -- addresses, which won't have labels.
       return string.format(".FARADDR %d\n", self.addr)
     end
   end

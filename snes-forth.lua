@@ -99,6 +99,11 @@ dataspace:addNative{name=",", label="_COMMA", runtime=function()
   return nextIp()
 end}
 
+dataspace:addNative{name="A.,", label="_A_COMMA", runtime=function()
+  dataspace:addAddress(datastack:pop())
+  return nextIp()
+end}
+
 dataspace:addNative{name="CREATE", runtime=function()
   local name = input:word()
   dataspace:dictionaryAdd(name)
@@ -204,9 +209,54 @@ dataspace:addNative{name="FIND", runtime=function()
   return nextIp()
 end}
 
--- TODO: Non-standard.
+-- TODO: Non-standard. Returns TRUE or FALSE at the top of the stack.
 dataspace:addNative{name=">NUMBER", label="_TO_NUMBER", runtime=function()
-  datastack:push(tonumber(datastack:pop()) or 0)
+  local number = tonumber(datastack:pop())
+  if number == nil then
+    datastack:push(0)
+    -- Failed.
+    datastack:push(0)
+    return nextIp()
+  end
+
+  if number > 0x7FFF or number < -0x8000 then
+    datastack:push(0)
+    -- Failed.
+    datastack:push(0)
+    return nextIp()
+  end
+
+  datastack:push(number)
+  datastack:push(0xFFFF)
+  return nextIp()
+end}
+
+dataspace:addNative{name=">ADDRESS", label="_TO_ADDRESS", runtime=function()
+  local maybeAddress = datastack:pop()
+  if string.sub(maybeAddress, 1, 1) ~= "$" then
+    datastack:push(0)
+    -- Failed.
+    datastack:push(0)
+    return nextIp()
+  end
+
+  local address = tonumber(string.sub(maybeAddress, 2), 16)
+  if address == nil then
+    datastack:push(0)
+    -- Failed.
+    datastack:push(0)
+    return nextIp()
+  end
+
+  if address > 0x7FFFFF or address < -0x800000 then
+    datastack:push(0)
+    -- Failed.
+    datastack:push(0)
+    return nextIp()
+  end
+
+  datastack:push(address)
+  datastack:push(0xFFFF)
   return nextIp()
 end}
 
@@ -229,6 +279,16 @@ dataspace:addNative{name="DROP", runtime=function()
   return nextIp()
 end,
 asm=function() return [[
+  inx
+  inx
+]] end}
+
+dataspace:addNative{name="A.DROP", label="_A_DROP", runtime=function()
+  datastack:pop()
+  return nextIp()
+end,
+asm=function() return [[
+  inx
   inx
   inx
 ]] end}
@@ -599,6 +659,8 @@ end
 dataspace[dataspace.latest].immediate = true
 
 do
+  -- TODO: Can we define a simpler QUIT here and then define the real QUIT in
+  -- Forth?
   addColon("QUIT")
   local loop = dataspace.here
   dataspace:addWords("WORD DUP COUNT BRANCH0")
@@ -614,15 +676,34 @@ do
   dataspace:addNumber(2000) -- will be replaced later
     -- Not found, try and parse as a number.
     -- TODO: Handle parse failure here, currently just returns zero.
-    dataspace:addWords("DROP >NUMBER")
+    dataspace:addWords("DROP DUP >NUMBER BRANCH0")
+    local numberParseErrorAddr = dataspace.here
+    dataspace:addNumber(2000)
     -- If we're compiling, compile TOS as a literal.
-    dataspace:addWords("STATE @ BRANCH0")
+    dataspace:addWords("DROP STATE @ BRANCH0")
     dataspace:addNumber(dataspace:getRelativeAddr(dataspace.here, loop))
     -- LIT the LIT so we can LIT while we LIT.
     dataspace:addWord("A.LIT")
     dataspace:addAddress(dataspace:codewordOf("LIT"))
     -- Compile LIT and then the number.
     dataspace:addWords("COMPILE, ,")
+    dataspace:addWord("LIT")
+    dataspace:addNumber(0)
+    dataspace:addWord("BRANCH0")
+    dataspace:addNumber(dataspace:getRelativeAddr(dataspace.here, loop))
+
+    dataspace[numberParseErrorAddr].number = dataspace:getRelativeAddr(numberParseErrorAddr, dataspace.here)
+    dataspace:addWords("DROP >ADDRESS BRANCH0")
+    local addressParseErrorAddr = dataspace.here
+    dataspace:addNumber(2000)
+    -- If we're compiling, compile TOS as a literal.
+    dataspace:addWords("STATE @ BRANCH0")
+    dataspace:addNumber(dataspace:getRelativeAddr(dataspace.here, loop))
+    -- A.LIT the A.LIT so we can A.LIT while we A.LIT.
+    dataspace:addWord("A.LIT")
+    dataspace:addAddress(dataspace:codewordOf("A.LIT"))
+    -- Compile A.LIT and then the number.
+    dataspace:addWords("COMPILE, A.,")
     dataspace:addWord("LIT")
     dataspace:addNumber(0)
     dataspace:addWord("BRANCH0")
@@ -647,6 +728,7 @@ do
   dataspace:addWord("BRANCH0")
   dataspace:addNumber(dataspace:getRelativeAddr(dataspace.here, loop))
 
+  dataspace[addressParseErrorAddr].number = dataspace:getRelativeAddr(addressParseErrorAddr, dataspace.here)
   dataspace[eofBranchAddr].number = dataspace:getRelativeAddr(eofBranchAddr, dataspace.here)
   dataspace:addWord("EXIT")
 end

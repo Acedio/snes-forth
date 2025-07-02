@@ -23,7 +23,7 @@ end
 
 function Stack:print(file)
   for k,v in ipairs(self) do
-    file:write(k .. ": " .. v .. "\n")
+    file:write(k .. ": (" .. type(v) .. ") " .. v .. "\n")
   end
 end
 
