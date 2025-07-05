@@ -104,6 +104,11 @@ dataspace:addNative{name="A.,", label="_A_COMMA", runtime=function()
   return nextIp()
 end}
 
+dataspace:addNative{name="XT,", label="_XT_COMMA", runtime=function()
+  dataspace:addXt(datastack:pop())
+  return nextIp()
+end}
+
 dataspace:addNative{name="CREATE", runtime=function()
   local name = input:word()
   dataspace:dictionaryAdd(name)
@@ -153,12 +158,12 @@ dataspace:addNative{name="EXIT", runtime=function()
   return nextIp()
 end,
 asm=function() return [[
-  ; Remove the caller's return address (3 bytes, hence the sep) and return.
+  ; Remove the caller's return address (3 bytes) and return.
   tsa
   clc
   adc #3
   tas
-  rts
+  rtl
 ]] end}
 
 dataspace:addNative{name=".", label="_DOT", runtime=function()
