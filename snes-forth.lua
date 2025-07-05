@@ -236,6 +236,8 @@ dataspace:addNative{name=">NUMBER", label="_TO_NUMBER", runtime=function()
   return nextIp()
 end}
 
+-- Returns TRUE or FALSE at the top of the stack, and the parsed address below
+-- that.
 dataspace:addNative{name=">ADDRESS", label="_TO_ADDRESS", runtime=function()
   local maybeAddress = datastack:pop()
   if string.sub(maybeAddress, 1, 1) ~= "$" then
@@ -272,12 +274,23 @@ end,
 asm=function() return [[
   lda 1,X
   PUSH_A
+  rtl
 ]] end}
 
 dataspace:addNative{name="A.DUP", label="_A_DUP", runtime=function()
   datastack:push(datastack:top())
   return nextIp()
-end}
+end,
+asm=function() return [[
+  dex
+  dex
+  dex
+  lda 4, X
+  sta 1, X
+  lda 5, X
+  sta 2, X
+  rtl
+]] end}
 
 dataspace:addNative{name="DROP", runtime=function()
   datastack:pop()
@@ -286,6 +299,7 @@ end,
 asm=function() return [[
   inx
   inx
+  rtl
 ]] end}
 
 dataspace:addNative{name="A.DROP", label="_A_DROP", runtime=function()
@@ -296,6 +310,7 @@ asm=function() return [[
   inx
   inx
   inx
+  rtl
 ]] end}
 
 dataspace:addNative{name="SWAP", runtime=function()
