@@ -288,14 +288,6 @@ asm=function() return [[
   inx
 ]] end}
 
-dataspace:addNative{name="SWAP", runtime=function()
-  local first = datastack:pop()
-  local second = datastack:pop()
-  datastack:push(first)
-  datastack:push(second)
-  return nextIp()
-end}
-
 dataspace:addNative{name="A.DROP", label="_A_DROP", runtime=function()
   datastack:pop()
   return nextIp()
@@ -305,6 +297,14 @@ asm=function() return [[
   inx
   inx
 ]] end}
+
+dataspace:addNative{name="SWAP", runtime=function()
+  local first = datastack:pop()
+  local second = datastack:pop()
+  datastack:push(first)
+  datastack:push(second)
+  return nextIp()
+end}
 
 dataspace:addNative{name="COMPILE,", label="_COMPILE_COMMA", runtime=function()
   dataspace:addCall(datastack:pop())
@@ -322,23 +322,92 @@ end}
 dataspace:addNative{name=">R", label="_TO_R", runtime=function()
   returnstack:push(datastack:pop())
   return nextIp()
-end}
+end,
+asm=function() return [[
+  ; First, move the return address two bytes back.
+  lda 1, S
+  pha
+  lda 4, S ; Recopying the second byte again.
+  sta 2, S
+
+  POP_A
+  sta 4, S
+  rtl
+]] end}
 
 -- Move a 3-byte address from from data stack to the R stack.
 dataspace:addNative{name="A.>R", label="_A_TO_R", runtime=function()
   returnstack:push(datastack:pop())
   return nextIp()
-end}
+end,
+asm=function() return [[
+  ; First move the return address three bytes back, two MSBs first.
+  lda 2, S
+  pha
+  sep #$20
+  .a8
+  ; Move the LSB.
+  lda 3, S
+  pha
+
+  ; Now move the address off the data stack, LSB first.
+  lda 1, X
+  sta 4, S
+  rep #$20
+  .a16
+
+  lda 2, X
+  sta 5, S
+  inx
+  inx
+  inx
+
+  rtl
+]] end}
 
 dataspace:addNative{name="R>", label="_FROM_R", runtime=function()
   datastack:push(returnstack:pop())
   return nextIp()
-end}
+end,
+asm=function() return [[
+  lda 4, S
+  PUSH_A
+
+  ; Shift the return address
+  lda 2, S
+  sta 4, S
+  pla
+  sta 1, S
+  rtl
+]] end}
 
 dataspace:addNative{name="A.R>", label="_A_FROM_R", runtime=function()
   datastack:push(returnstack:pop())
   return nextIp()
-end}
+end,
+asm=function() return [[
+  dex
+  dex
+  dex
+  lda 4, S
+  sta 1, X
+
+  sep #$20
+  .a8
+  lda 6, S
+  sta 3, X
+
+  ; Now shift the return address, first moving the LSB.
+  pla
+  sta 3, S
+  rep #$20
+  .a16
+
+  ; Now the two MSBs
+  pla
+  sta 2, S
+  rtl
+]] end}
 
 function toSigned(unsigned)
   if unsigned > 0x7FFF then
@@ -539,7 +608,7 @@ addColonWithLabel("]", "_RBRACK")
 dataspace[dataspace.latest].immediate = true
 
 addColon("DODOES")
-  dataspace:addWords("R> XT! EXIT")  -- Ends the calling word (CREATEing) early.
+  dataspace:addWords("A.R> XT! EXIT")  -- Ends the calling word (CREATEing) early.
 
 addColonWithLabel("DOES>", "_DOES")
   dataspace:addWords("A.LIT")
@@ -701,7 +770,7 @@ do
     -- If we're compiling, compile TOS as a literal.
     dataspace:addWords("SWAP DROP STATE @ BRANCH0")
     dataspace:addNumber(dataspace:getRelativeAddr(dataspace.here, loop))
-    -- LIT the LIT so we can LIT while we LIT.
+    -- A.LIT the LIT so we can LIT while we A.LIT.
     dataspace:addWord("A.LIT")
     dataspace:addXt("LIT")
     -- Compile LIT and then the number.
