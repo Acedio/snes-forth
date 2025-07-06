@@ -622,6 +622,10 @@ addColonWithLabel("]", "_RBRACK")
   dataspace:addWords("TRUE STATE ! EXIT")
 dataspace[dataspace.latest].immediate = true
 
+dataspace:addNative{name="IMMEDIATE", runtime=function()
+  dataspace[dataspace.latest].immediate = true
+end}
+
 addColon("DODOES")
   dataspace:addWords("A.R> XT! EXIT")  -- Ends the calling word (CREATEing) early.
 
