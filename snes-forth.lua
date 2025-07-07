@@ -857,3 +857,7 @@ datastack:print(io.stderr)
 
 local output = assert(io.open(arg[2], "w"))
 dataspace:assembly(output)
+
+-- : IF ['] BRANCH0 COMPILE, HERE A.>R 0 , ; IMMEDIATE
+-- : THEN A.R> A.DUP HERE A.SWAP A.- REMOVE-MSB AW.SWAP ! ; IMMEDIATE
+-- : ELSE ['] LIT COMPILE, 0 , ' BRANCH0 COMPILE, 0 , A.R> HERE A.>R A.>R POSTPONE THEN ; IMMEDIATE
