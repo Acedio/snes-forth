@@ -88,6 +88,8 @@ function Dataspace.native(entry)
     entry.size = function() assert(false, "Tried to get size of native entry.") end
   end
   if not entry.label then
+    -- TODO: Add default logic here to convert name to label by replacing
+    -- non-alphas with underscores.
     entry.label = entry.name
   end
   if not entry.asm then
@@ -149,7 +151,7 @@ function Dataspace.xt(addr)
   }
   function entry:toString(dataspace)
     assert(self.addr < dataspace.here and dataspace[self.addr].label, "Invalid xt " .. self.addr )
-    return string.format("XT: %d %s\n", self.addr, dataspace[self.addr].label)
+    return string.format("XT: %d %s", self.addr, dataspace[self.addr].label)
   end
   function entry:asm(dataspace)
     assert(self.addr < dataspace.here and dataspace[self.addr].label, "Invalid xt " .. self.addr )

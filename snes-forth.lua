@@ -105,7 +105,7 @@ dataspace:addNative{name="A.,", label="_A_COMMA", runtime=function()
 end}
 
 dataspace:addNative{name="XT,", label="_XT_COMMA", runtime=function()
-  dataspace:addXt(datastack:pop())
+  dataspace:add(Dataspace.xt(datastack:pop()))
   return nextIp()
 end}
 
@@ -322,7 +322,9 @@ dataspace:addNative{name="SWAP", runtime=function()
 end}
 
 dataspace:addNative{name="COMPILE,", label="_COMPILE_COMMA", runtime=function()
-  dataspace:addCall(datastack:pop())
+  local xt = datastack:pop()
+  dataspace:addCall(xt)
+  infos:write("Compiling " .. dataspace[xt].name .. "\n")
   return nextIp()
 end}
 
@@ -617,13 +619,20 @@ addColon("CR")
 
 addColonWithLabel("[", "_LBRACK")
   dataspace:addWords("FALSE STATE ! EXIT")
+dataspace[dataspace.latest].immediate = true
 
 addColonWithLabel("]", "_RBRACK")
   dataspace:addWords("TRUE STATE ! EXIT")
-dataspace[dataspace.latest].immediate = true
 
 dataspace:addNative{name="IMMEDIATE", runtime=function()
   dataspace[dataspace.latest].immediate = true
+  return nextIp()
+end}
+
+dataspace:addNative{name="LABEL", runtime=function()
+  local label = input:word()
+  dataspace[Dataspace.toCodeword(dataspace.latest)].label = label
+  return nextIp()
 end}
 
 addColon("DODOES")
