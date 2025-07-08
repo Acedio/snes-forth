@@ -61,6 +61,11 @@ function addColon(name)
   addColonWithLabel(name, name)
 end
 
+dataspace:addNative{name="HERE", runtime=function()
+  datastack:push(dataspace.here)
+  return nextIp()
+end}
+
 dataspace:addNative{name="DATASPACE", runtime=function()
   dataspace:print(io.stderr)
   return nextIp()
@@ -321,6 +326,14 @@ dataspace:addNative{name="SWAP", runtime=function()
   return nextIp()
 end}
 
+dataspace:addNative{name="A.SWAP", label="_A_SWAP", runtime=function()
+  local first = datastack:pop()
+  local second = datastack:pop()
+  datastack:push(first)
+  datastack:push(second)
+  return nextIp()
+end}
+
 dataspace:addNative{name="COMPILE,", label="_COMPILE_COMMA", runtime=function()
   local xt = datastack:pop()
   dataspace:addCall(xt)
@@ -443,11 +456,52 @@ end
 dataspace:addNative{name="BRANCH0", runtime=function()
   if datastack:pop() == 0 then
     assert(dataspace[ip].type == "number", "Expected relative number to jump to at " .. ip)
+    -- TODO: toSigned is probably not actually what we want to do here. I think
+    -- the way that branches should work is to operate on the same data page
+    -- (not across page boundaries).
     ip = dataspace:fromRelativeAddress(ip, toSigned(dataspace[ip].number))
   else
     -- Skip past the relative address.
     ip = ip + 1
   end
+  return nextIp()
+end,
+asm=function() return [[
+  lda 1, X
+  bne @notzero
+  ; Equals zero, we branch!
+  inx
+  inx
+
+  tsc
+  tcd ; set the DP to the return stack
+  lda [1] ; Grab the relative branch pointer
+  adc z:1
+  sta z:1
+  bcc @nocarry
+  inc z:3
+@nocarry:
+  lda #0 ; reset the data stack
+  tcd
+  rtl ; "return" to the branch point
+
+@notzero:
+  inx
+  inx
+  lda #2
+  clc
+  adc 1, S
+  sta 1, S
+  ; TODO: Handle carry.
+  rtl
+]] end}
+
+dataspace:addNative{name="BRANCH-DIST", label="_BRANCH_DIST", runtime=function()
+  local from = datastack:pop()
+  local to = datastack:pop()
+  local delta = dataspace:toRelativeAddress(from, to)
+  assert(delta >= -0x8000 and delta <= 0x7FFF, "Delta out of range: " .. delta)
+  datastack:push(delta)
   return nextIp()
 end}
 

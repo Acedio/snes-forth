@@ -175,7 +175,7 @@ function Dataspace:getRelativeAddr(current, to)
   return delta
 end
 
--- Input: Lua address and SNES delta
+-- Input: Lua address and SNES address space delta
 -- Returns: Lua address
 function Dataspace:fromRelativeAddress(current, delta)
   local original = current
@@ -192,6 +192,25 @@ function Dataspace:fromRelativeAddress(current, delta)
   end
   assert(delta == 0, "Delta was not zero from: " .. original)
   return current
+end
+
+-- Input: Two lua adddresses
+-- Returns: SNES address-space delta
+function Dataspace:toRelativeAddress(from, to)
+  local current = from
+  local delta = 0
+  if current <= to then
+    while current < to do
+      delta = delta + self[current]:size()
+      current = current + 1
+    end
+  else
+    while current > to do
+      current = current - 1
+      delta = delta - self[current]:size()
+    end
+  end
+  return delta
 end
 
 function Dataspace.number(number)
