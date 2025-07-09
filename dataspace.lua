@@ -82,6 +82,10 @@ function Dataspace:codewordOf(name)
   end
 end
 
+function Dataspace.defaultLabel(name)
+  return "_" .. string.gsub(name, "%W", "_")
+end
+
 function Dataspace.native(entry)
   entry.type = "native"
   if not entry.size then
@@ -90,7 +94,7 @@ function Dataspace.native(entry)
   if not entry.label then
     -- TODO: Add default logic here to convert name to label by replacing
     -- non-alphas with underscores.
-    entry.label = entry.name
+    entry.label = Dataspace.defaultLabel(entry.name)
   end
   if not entry.asm then
     function entry:asm(dataspace)
@@ -121,7 +125,7 @@ function Dataspace.call(addr)
   function entry:asm(dataspace)
     assert(self.addr > 0 and self.addr < dataspace.here, "Invalid address " .. self.addr)
     assert(dataspace[self.addr].type == "native", "Expected fn at " .. self.addr)
-    return string.format("JSL %s\n", dataspace[self.addr].label)
+    return string.format("JSL %s", dataspace[self.addr].label)
   end
   return entry
 end

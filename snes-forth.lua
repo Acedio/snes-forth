@@ -58,7 +58,7 @@ function addColonWithLabel(name, label)
 end
 
 function addColon(name)
-  addColonWithLabel(name, name)
+  addColonWithLabel(name, Dataspace.defaultLabel(name))
 end
 
 dataspace:addNative{name="HERE", runtime=function()
@@ -89,7 +89,7 @@ dataspace:addNative{name="XT!", label="_XT_STORE", runtime=function()
   return nextIp()
 end}
 
-dataspace:addNative{name="COMPILE-DOCOL", label="_COMPILE_DOCOL", runtime=function()
+dataspace:addNative{name="COMPILE-DOCOL", runtime=function()
   local entry = Dataspace.native{
     name = "docol-fn",
   }
@@ -282,7 +282,7 @@ asm=function() return [[
   rtl
 ]] end}
 
-dataspace:addNative{name="A.DUP", label="_A_DUP", runtime=function()
+dataspace:addNative{name="A.DUP", runtime=function()
   datastack:push(datastack:top())
   return nextIp()
 end,
@@ -307,7 +307,7 @@ asm=function() return [[
   rtl
 ]] end}
 
-dataspace:addNative{name="A.DROP", label="_A_DROP", runtime=function()
+dataspace:addNative{name="A.DROP", runtime=function()
   datastack:pop()
   return nextIp()
 end,
@@ -326,7 +326,7 @@ dataspace:addNative{name="SWAP", runtime=function()
   return nextIp()
 end}
 
-dataspace:addNative{name="A.SWAP", label="_A_SWAP", runtime=function()
+dataspace:addNative{name="A.SWAP", runtime=function()
   local first = datastack:pop()
   local second = datastack:pop()
   datastack:push(first)
@@ -502,7 +502,7 @@ asm=function() return [[
   rtl
 ]] end}
 
-dataspace:addNative{name="BRANCH-DIST", label="_BRANCH_DIST", runtime=function()
+dataspace:addNative{name="BRANCH-DIST", runtime=function()
   local from = datastack:pop()
   local to = datastack:pop()
   local delta = dataspace:toRelativeAddress(from, to)
@@ -613,7 +613,7 @@ asm=function() return [[
   rtl
 ]] end}
 
-dataspace:addNative{name="A.LIT", label="_A_LIT", runtime=function()
+dataspace:addNative{name="A.LIT", runtime=function()
   -- return stack should be the next IP, where the literal is located
   local litaddr = ip
   -- increment the return address to skip the literal
@@ -735,7 +735,7 @@ function binaryOpWithLabel(name, label, op)
 end
 
 function binaryOp(name, op)
-  binaryOpWithLabel(name, name, op)
+  binaryOpWithLabel(name, Dataspace.defaultLabel(name), op)
 end
 
 binaryOpWithLabel("AND", "_AND", function(a,b)

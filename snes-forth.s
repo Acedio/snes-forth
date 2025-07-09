@@ -51,7 +51,7 @@ reset:
   txs
   ldx #$02FF
 
-  jsl MAIN
+  jsl _MAIN
 
 forever:
   jmp forever
