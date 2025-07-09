@@ -475,7 +475,8 @@ asm=function() return [[
 
   tsc
   tcd ; set the DP to the return stack
-  lda [1] ; Grab the relative branch pointer
+  ldy #1
+  lda [1],Y ; Grab the relative branch pointer
   clc
   adc z:1
   sta z:1
