@@ -476,6 +476,7 @@ asm=function() return [[
   tsc
   tcd ; set the DP to the return stack
   lda [1] ; Grab the relative branch pointer
+  clc
   adc z:1
   sta z:1
   bcc @nocarry
@@ -492,7 +493,11 @@ asm=function() return [[
   clc
   adc 1, S
   sta 1, S
-  ; TODO: Handle carry.
+  bcc @nocarry2
+  lda #0
+  adc 3, S
+  sta 3, S
+@nocarry2:
   rtl
 ]] end}
 
@@ -900,7 +905,7 @@ do
 
   dataspace[addressParseErrorAddr].number = dataspace:getRelativeAddr(addressParseErrorAddr, dataspace.here)
   dataspace[eofBranchAddr].number = dataspace:getRelativeAddr(eofBranchAddr, dataspace.here)
-  dataspace:addWord("EXIT")
+  dataspace:addWords("DROP EXIT")
 end
 
 ip = dataspace.here -- start on creating STATE, below
