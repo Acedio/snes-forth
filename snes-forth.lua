@@ -196,7 +196,7 @@ for i=1,wordBufferSize do
   dataspace:addNumber(0)
 end
 
-local function setWordBuffer(str)
+function setWordBuffer(str)
   local length = string.len(str)
   assert(length < wordBufferSize, "Strings length too large: " .. str)
   dataspace[wordBufferAddr] = Dataspace.number(length)
@@ -205,7 +205,7 @@ local function setWordBuffer(str)
   end
 end
 
-local function getCountedWord(addr)
+function getCountedWord(addr)
   -- TODO: Something is wrong here. Why is dataspace[34] nil??
   assert(dataspace[addr].type == "number")
   local length = dataspace[addr].number
@@ -254,7 +254,7 @@ end}
 -- Non-standard. Returns TRUE or FALSE at the top of the stack.
 dataspace:addNative{name=">NUMBER", label="_TO_NUMBER", runtime=function()
   local strAddress = datastack:popAddress()
-  local str = getCountedWord(str)
+  local str = getCountedWord(strAddress)
   local number = tonumber(str)
   if number == nil then
     datastack:pushWord(0)
@@ -279,7 +279,7 @@ end}
 -- that.
 dataspace:addNative{name=">ADDRESS", label="_TO_ADDRESS", runtime=function()
   local strAddress = datastack:popAddress()
-  local maybeAddress = getCountedWord(str)
+  local maybeAddress = getCountedWord(strAddress)
   if string.sub(maybeAddress, 1, 1) ~= "$" then
     datastack:pushAddress(0)
     -- Failed.
@@ -362,10 +362,10 @@ dataspace:addNative{name="SWAP", runtime=function()
 end}
 
 dataspace:addNative{name="A.SWAP", runtime=function()
-  local first = datastack:popWord()
-  local second = datastack:popWord()
-  datastack:pushWord(first)
-  datastack:pushWord(second)
+  local first = datastack:popAddress()
+  local second = datastack:popAddress()
+  datastack:pushAddress(first)
+  datastack:pushAddress(second)
   return nextIp()
 end}
 
@@ -948,6 +948,7 @@ do
   dataspace:addNumber(dataspace:getRelativeAddr(dataspace.here, loop))
 
   dataspace[addressParseErrorAddr].number = dataspace:getRelativeAddr(addressParseErrorAddr, dataspace.here)
+  -- TODO: Put a parse error output here.
   dataspace[eofBranchAddr].number = dataspace:getRelativeAddr(eofBranchAddr, dataspace.here)
   dataspace:addWords("A.DROP EXIT")
 end
