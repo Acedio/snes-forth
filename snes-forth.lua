@@ -19,7 +19,7 @@ for i=1,#arg do
     assert(string.sub(arg[i],1,1) ~= "-", "Unrecognized flag: " .. arg[i])
   end
 end
-for i=1,#toRemove do
+for _, i in ipairs(toRemove) do
   table.remove(arg, i)
 end
 
