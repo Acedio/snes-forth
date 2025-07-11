@@ -7,6 +7,22 @@ local Dataspace = require("dataspace")
 local datastack = Stack:new()
 local returnstack = Stack:new()
 
+toRemove = {}
+flags = {}
+for i=1,#arg do
+  if arg[i] == "-v" then
+    flags[arg[i]] = true
+    table.insert(toRemove, i)
+  elseif arg[i] == "-" then
+    -- "-" is parsed as reading from stdin
+  else
+    assert(string.sub(arg[i],1,1) ~= "-", "Unrecognized flag: " .. arg[i])
+  end
+end
+for i=1,#toRemove do
+  table.remove(arg, i)
+end
+
 assert(#arg == 2, "Two arguments are required: ./snes-forth.lua [input] [output]")
 
 local input = nil
@@ -24,6 +40,15 @@ local dataspace = Dataspace:new()
 
 local ip = 0
 
+local debugEntry = Dataspace.number(0)
+if flags["-v"] then
+  debugEntry = Dataspace.number(0xFFFF)
+end
+
+function debugging()
+  return debugEntry.number ~= 0
+end
+
 function nextIp()
   local oldip = ip
   ip = ip + 1
@@ -31,8 +56,10 @@ function nextIp()
   assert(call.type == "call", "Expected call at addr " .. oldip)
 
   local callee = dataspace[call.addr]
-  infos:write("oldIp: " .. oldip .. " (" .. callee:toString() .. ") newIp: " .. ip .. "\n")
-  datastack:print(infos)
+  if debugging() then
+    infos:write("oldIp: " .. oldip .. " (" .. callee:toString() .. ") newIp: " .. ip .. "\n")
+    datastack:print(infos)
+  end
   assert(callee.type == "native", "Uncallable address " .. call.addr .. " at address " .. oldip)
   return callee.runtime()
 end
@@ -112,7 +139,9 @@ end}
 dataspace:addNative{name="XT,", label="_XT_COMMA", runtime=function()
   local xt = datastack:popAddress()
   dataspace:add(Dataspace.xt(xt))
-  infos:write("Compiling XT " .. dataspace[xt].name .. "\n")
+  if debugging() then
+    infos:write("Compiling XT " .. dataspace[xt].name .. "\n")
+  end
   return nextIp()
 end}
 
@@ -139,7 +168,7 @@ dataspace:addNative{name="CREATEDOCOL", runtime=function()
 end}
 
 -- TODO: Currently only for words, need another for addresses.
-function makeVariable(name)
+function makeVariable(name, entry)
   dataspace:dictionaryAdd(name)
   local native = Dataspace.native{name=name}
   dataspace:add(native)
@@ -148,10 +177,14 @@ function makeVariable(name)
     datastack:pushAddress(dataaddr)
     return nextIp()
   end
-  dataspace:addNumber(0)
+  if not entry then
+    entry = Dataspace.number(0)
+  end
+  dataspace:add(entry)
 end
 
 makeVariable("STATE")
+makeVariable("DEBUG", debugEntry)
 
 dataspace:addNative{name="ALLOT", runtime=function()
   dataspace.here = dataspace.here + datastack:popWord()
@@ -372,7 +405,9 @@ end}
 dataspace:addNative{name="COMPILE,", label="_COMPILE_COMMA", runtime=function()
   local xt = datastack:popAddress()
   dataspace:addCall(xt)
-  infos:write("Compiling " .. dataspace[xt].name .. "\n")
+  if debugging() then
+    infos:write("Compiling " .. dataspace[xt].name .. "\n")
+  end
   return nextIp()
 end}
 
@@ -705,7 +740,9 @@ asm=function() return [[
 
 dataspace:addNative{name="EXECUTE", runtime=function()
   local addr = datastack:popAddress()
-  infos:write("Executing " .. dataspace[addr].name .. "\n")
+  if debugging() then
+    infos:write("Executing " .. dataspace[addr].name .. "\n")
+  end
   return dataspace[addr].runtime()
   -- No nextIp() is needed because the runtime() should call it.
 end}
@@ -955,16 +992,20 @@ ip = dataspace.here -- start on creating STATE, below
 dataspace:addWord("QUIT")
 dataspace:addWord("BYE")
 
-infos:write("latest: " .. dataspace.latest .. "\n")
-infos:write("here: " .. dataspace.here .. "\n")
+if debugging() then
+  infos:write("latest: " .. dataspace.latest .. "\n")
+  infos:write("here: " .. dataspace.here .. "\n")
 
-dataspace:print(io.stderr)
+  dataspace:print(io.stderr)
+end
 
 nextIp()
 
-dataspace:print(io.stderr)
+if debugging() then
+  dataspace:print(io.stderr)
 
-datastack:print(io.stderr)
+  datastack:print(io.stderr)
+end
 
 local output = assert(io.open(arg[2], "w"))
 dataspace:assembly(output)
