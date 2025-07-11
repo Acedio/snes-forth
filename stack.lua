@@ -63,12 +63,14 @@ function Stack:popAddress()
 end
 
 function Stack:topByte()
+  assert(#self > 0, "Tried to top an empty stack.")
   local byte = self[#self]
   assertByte(byte)
   return byte
 end
 
 function Stack:topWord()
+  assert(#self > 0, "Tried to top an empty stack.")
   local lsb = self[#self]
   assertByte(lsb)
   local msb = self[#self - 1]
@@ -77,6 +79,7 @@ function Stack:topWord()
 end
 
 function Stack:topAddress()
+  assert(#self > 0, "Tried to top an empty stack.")
   local lsb = self[#self]
   assertByte(lsb)
   local kindaSignificantByte = self[#self - 1]
