@@ -68,7 +68,7 @@ dataspace:addNative{name="HERE", runtime=function()
 end}
 
 dataspace:addNative{name="DATASPACE", runtime=function()
-  dataspace:print(io.stderr)
+  dataspace:print(outputs)
   return nextIp()
 end}
 
@@ -484,19 +484,18 @@ function toSigned(unsigned)
 end
 
 function toUnsigned(signed)
-  if unsigned < 0 then
-    return (signed + 0x10000) & 0xFFFF
-  end
-  return signed
+  return signed & 0xFFFF
+end
+
+-- Branch based on the relative offset stored at `ip`.
+function branch()
+  assert(dataspace[ip].type == "number", "Expected relative number to jump to at " .. ip)
+  ip = dataspace:fromRelativeAddress(ip, toSigned(dataspace[ip].number))
 end
 
 dataspace:addNative{name="BRANCH0", runtime=function()
   if datastack:popWord() == 0 then
-    assert(dataspace[ip].type == "number", "Expected relative number to jump to at " .. ip)
-    -- TODO: toSigned is probably not actually what we want to do here. I think
-    -- the way that branches should work is to operate on the same data page
-    -- (not across page boundaries).
-    ip = dataspace:fromRelativeAddress(ip, toSigned(dataspace[ip].number))
+    branch()
   else
     -- Skip past the relative address.
     ip = ip + 1
@@ -510,19 +509,7 @@ asm=function() return [[
   inx
   inx
 
-  tsc
-  tcd ; set the DP to the return stack
-  ldy #1
-  lda [1],Y ; Grab the relative branch pointer
-  clc
-  adc z:1
-  sta z:1
-  bcc @nocarry
-  inc z:3
-@nocarry:
-  lda #0 ; reset the data stack
-  tcd
-  rtl ; "return" to the branch point
+  jml _BRANCH
 
 @notzero:
   inx
@@ -539,16 +526,37 @@ asm=function() return [[
   rtl
 ]] end}
 
-dataspace:addNative{name="BRANCH-DIST", runtime=function()
+dataspace:addNative{name="ADDRESS-OFFSET", runtime=function()
   local from = datastack:popAddress()
   local to = datastack:popAddress()
   local delta = dataspace:toRelativeAddress(from, to)
   assert(delta >= -0x8000 and delta <= 0x7FFF, "Delta out of range: " .. delta)
-  datastack:pushWord(delta)
+  datastack:pushWord(toUnsigned(delta))
   return nextIp()
 end,
 asm=function() return [[
   rtl  ; TODO
+]] end}
+
+-- Can we do this in Forth based on BRANCH0?
+dataspace:addNative{name="BRANCH", runtime=function()
+  branch()
+  return nextIp()
+end,
+asm=function() return [[
+  tsc
+  tcd ; set the DP to the return stack
+  ldy #1
+  lda [1],Y ; Grab the relative branch pointer
+  clc
+  adc z:1
+  sta z:1
+  bcc @nocarry
+  inc z:3
+@nocarry:
+  lda #0 ; reset the data stack
+  tcd
+  rtl ; "return" to the branch point
 ]] end}
 
 -- Takes an address (3 bytes) off the stack and pushes a 2 byte word.
@@ -572,7 +580,7 @@ asm=function() return [[
 dataspace:addNative{name="!", label="_STORE", runtime=function()
   local addr = datastack:popAddress()
   local val = datastack:popWord()
-  assert(dataspace[addr].type == "number", "Address must be word-sized: " .. addr)
+  assert(dataspace[addr].type == "number", "Address value must be word-sized: " .. addr)
   dataspace[addr] = Dataspace.number(val)
   return nextIp()
 end,
@@ -904,13 +912,10 @@ do
     dataspace:addWord("A.LIT")
     dataspace:addXt("LIT")
     -- Compile LIT and then the number.
-    dataspace:addWords("COMPILE, ,")
-    dataspace:addWord("LIT")
-    dataspace:addNumber(0)
-    dataspace:addWord("BRANCH0")
+    dataspace:addWords("COMPILE, , BRANCH")
     dataspace:addNumber(dataspace:getRelativeAddr(dataspace.here, loop))
 
-    dataspace[numberParseErrorAddr].number = dataspace:getRelativeAddr(numberParseErrorAddr, dataspace.here)
+    dataspace[numberParseErrorAddr].number = toUnsigned(dataspace:getRelativeAddr(numberParseErrorAddr, dataspace.here))
     dataspace:addWords("DROP >ADDRESS BRANCH0")
     local addressParseErrorAddr = dataspace.here
     dataspace:addNumber(2000)
@@ -921,12 +926,9 @@ do
     dataspace:addWord("A.LIT")
     dataspace:addXt("A.LIT")
     -- Compile A.LIT and then the number.
-    dataspace:addWords("COMPILE, A.,")
-    dataspace:addWord("LIT")
-    dataspace:addNumber(0)
-    dataspace:addWord("BRANCH0")
+    dataspace:addWords("COMPILE, A., BRANCH")
     dataspace:addNumber(dataspace:getRelativeAddr(dataspace.here, loop))
-  dataspace[wordFoundBranchAddr].number = dataspace:getRelativeAddr(wordFoundBranchAddr, dataspace.here)
+  dataspace[wordFoundBranchAddr].number = toUnsigned(dataspace:getRelativeAddr(wordFoundBranchAddr, dataspace.here))
 
   -- Word found, see if we're compiling or interpreting.
   dataspace:addWords("LIT")
@@ -935,21 +937,17 @@ do
   local branchAddrIfNotImmediate = dataspace.here
   dataspace:addNumber(2000) -- will be replaced later
     -- Interpreting, just run the word.
-    dataspace:addWords("EXECUTE LIT")
-    dataspace:addNumber(0)
-    dataspace:addWord("BRANCH0")
+    dataspace:addWords("EXECUTE BRANCH")
     dataspace:addNumber(dataspace:getRelativeAddr(dataspace.here, loop))
-  dataspace[branchAddrIfNotImmediate].number = dataspace:getRelativeAddr(branchAddrIfNotImmediate, dataspace.here)
+  dataspace[branchAddrIfNotImmediate].number = toUnsigned(dataspace:getRelativeAddr(branchAddrIfNotImmediate, dataspace.here))
 
   -- else, compiling
-  dataspace:addWords("COMPILE, LIT")
-  dataspace:addNumber(0)
-  dataspace:addWord("BRANCH0")
+  dataspace:addWords("COMPILE, BRANCH")
   dataspace:addNumber(dataspace:getRelativeAddr(dataspace.here, loop))
 
-  dataspace[addressParseErrorAddr].number = dataspace:getRelativeAddr(addressParseErrorAddr, dataspace.here)
+  dataspace[addressParseErrorAddr].number = toUnsigned(dataspace:getRelativeAddr(addressParseErrorAddr, dataspace.here))
   -- TODO: Put a parse error output here.
-  dataspace[eofBranchAddr].number = dataspace:getRelativeAddr(eofBranchAddr, dataspace.here)
+  dataspace[eofBranchAddr].number = toUnsigned(dataspace:getRelativeAddr(eofBranchAddr, dataspace.here))
   dataspace:addWords("A.DROP EXIT")
 end
 

@@ -98,7 +98,7 @@ function Dataspace.native(entry)
   end
   if not entry.asm then
     function entry:asm(dataspace)
-      return string.format("rtl ; TODO: Not implemented\n; TODO: abort?\n")
+      return string.format("rtl ; TODO: Not implemented\n; TODO: abort?")
     end
   end
   function entry:toString(dataspace)
@@ -142,7 +142,7 @@ function Dataspace.address(addr)
   end
   function entry:asm(dataspace)
     assert(self.addr >= -0x800000 and self.addr <= 0x7FFFFF, "Invalid address " .. self.addr )
-    return string.format(".FARADDR %d\n", self.addr)
+    return string.format(".FARADDR %d", self.addr)
   end
   return entry
 end
@@ -159,7 +159,7 @@ function Dataspace.xt(addr)
   end
   function entry:asm(dataspace)
     assert(self.addr < dataspace.here and dataspace[self.addr].label, "Invalid xt " .. self.addr )
-    return string.format(".FARADDR %s\n", dataspace[self.addr].label)
+    return string.format(".FARADDR %s", dataspace[self.addr].label)
   end
   return entry
 end
@@ -221,13 +221,15 @@ function Dataspace.number(number)
   local entry = {
     type = "number",
     size = function() return 2 end,
-    number = number,
+    -- TODO: Signed vs Unsigned? Or maybe always store unsigned but rely on
+    -- caller?
+    number = number & 0xFFFF,
   }
   function entry:toString(dataspace)
     return "Number: " .. tostring(self.number)
   end
   function entry:asm(dataspace)
-    return string.format(".WORD %d\n", self.number & 0xFFFF)
+    return string.format(".WORD %d", self.number & 0xFFFF)
   end
   return entry
 end

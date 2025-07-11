@@ -36,12 +36,14 @@ function Stack:pushAddress(val)
 end
 
 function Stack:popByte()
+  assert(#self > 0, "Tried to pop an empty stack.")
   local byte = table.remove(self)
   assertByte(byte)
   return byte
 end
 
 function Stack:popWord()
+  assert(#self > 0, "Tried to pop an empty stack.")
   local lsb = table.remove(self)
   assertByte(lsb)
   local msb = table.remove(self)
@@ -50,6 +52,7 @@ function Stack:popWord()
 end
 
 function Stack:popAddress()
+  assert(#self > 0, "Tried to pop an empty stack.")
   local lsb = table.remove(self)
   assertByte(lsb)
   local kindaSignificantByte = table.remove(self)
@@ -87,9 +90,11 @@ function Stack:print(file)
   -- TODO: Add pretty output for multi-byte (e.g. output multiple possible
   -- interpretations, like 0xFF (WORD: 0xFFEE ADDRESS: 0xFFEEDD)) and character
   -- values.
+  file:write("#bottom#\n")
   for k,v in ipairs(self) do
     file:write(k .. ": (" .. type(v) .. ") " .. v .. "\n")
   end
+  file:write("#top#\n")
 end
 
 return Stack
