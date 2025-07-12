@@ -38,7 +38,7 @@ function Input:peek()
 end
 
 function Input:key()
-  local c = Input:peek()
+  local c = self:peek()
   self.i = self.i + 1
   return c
 end

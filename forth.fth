@@ -19,6 +19,22 @@
 
 : TEST-WHILE 0 BEGIN 1+ DUP 5 <= WHILE DUP . REPEAT ;
 
-: MAIN TEST-WHILE ;
+: CR ." 
+" ; LABEL _CARRIAGE
+
+: CHAR KEY DROP KEY ['] LIT COMPILE, , ; IMMEDIATE
+
+: ( BEGIN KEY CHAR ) = UNTIL ; LABEL _R_PAREN
+
+( Do comments work now? )
+
+( Seems like it!
+  Woohoo! We can finally comment our Forth code! )
+
+( I feel like the way I'm grabbing a CR char here probably isn't portable. )
+: \ BEGIN KEY CHAR 
+= UNTIL ; LABEL _BACKSLASH
+
+: MAIN TEST-WHILE ." DONE!" CR ;
 
 MAIN

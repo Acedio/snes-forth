@@ -239,7 +239,6 @@ function setWordBuffer(str)
 end
 
 function getCountedWord(addr)
-  -- TODO: Something is wrong here. Why is dataspace[34] nil??
   assert(dataspace[addr].type == "number")
   local length = dataspace[addr].number
   local str = ""
@@ -257,12 +256,18 @@ dataspace:addNative{name="WORD", runtime=function()
 end}
 
 dataspace:addNative{name="PEEK", runtime=function()
-  datastack:pushByte(input:peek())
+  datastack:pushWord(input:peek())
   return nextIp()
 end}
 
 dataspace:addNative{name="KEY", runtime=function()
-  datastack:pushByte(input:key())
+  datastack:pushWord(input:key())
+  return nextIp()
+end}
+
+dataspace:addNative{name="TYPE", runtime=function()
+  local str = getCountedWord(datastack:popAddress())
+  outputs:write(str)
   return nextIp()
 end}
 
@@ -900,7 +905,7 @@ addColonWithLabel("DO.\"", "_DO_STRING")
 do
   local loop = dataspace.here
   dataspace:addWords("A.R> A.DUP A.1+ A.>R @ DUP EMIT LIT")
-  dataspace:addNumber(string.byte('"'))
+  dataspace:addNumber(0)
   dataspace:addWords("= BRANCH0")
   dataspace:addNumber(dataspace:getRelativeAddr(dataspace.here, loop))
   dataspace:addWords("EXIT")
@@ -911,12 +916,19 @@ do
   dataspace:addWords("A.LIT")
   dataspace:addXt("DO.\"")
   dataspace:addWords("COMPILE,")
+  dataspace:addWords("KEY DROP") -- Discard the first whitespace.
   local loop = dataspace.here
-  dataspace:addWords("KEY DUP COMPILE, LIT")
+  dataspace:addWords("KEY DUP LIT")
   dataspace:addNumber(string.byte('"'))
-  dataspace:addWords("= BRANCH0")
+  dataspace:addWords("<> BRANCH0")
+  local exitBranchAddr = dataspace.here
+  dataspace:addNumber(2000)
+  dataspace:addWords(", BRANCH")
   dataspace:addNumber(dataspace:getRelativeAddr(dataspace.here, loop))
-  dataspace:addWords("EXIT")
+  dataspace[exitBranchAddr].number = toUnsigned(dataspace:getRelativeAddr(exitBranchAddr, dataspace.here))
+  dataspace:addWords("LIT")
+  dataspace:addNumber(0) -- Null terminate.
+  dataspace:addWords(", EXIT")
 end
 dataspace[dataspace.latest].immediate = true
 
@@ -953,7 +965,7 @@ do
     dataspace:addNumber(dataspace:getRelativeAddr(dataspace.here, loop))
 
     dataspace[numberParseErrorAddr].number = toUnsigned(dataspace:getRelativeAddr(numberParseErrorAddr, dataspace.here))
-    dataspace:addWords("DROP >ADDRESS BRANCH0")
+    dataspace:addWords("DROP A.DUP >ADDRESS BRANCH0")
     local addressParseErrorAddr = dataspace.here
     dataspace:addNumber(2000)
     -- If we're compiling, compile TOS as a literal.
@@ -983,7 +995,11 @@ do
   dataspace:addNumber(dataspace:getRelativeAddr(dataspace.here, loop))
 
   dataspace[addressParseErrorAddr].number = toUnsigned(dataspace:getRelativeAddr(addressParseErrorAddr, dataspace.here))
-  -- TODO: Put a parse error output here.
+  dataspace:addWords("A.DROP A.DUP TYPE")
+  dataspace:addWords("DO.\"")
+  dataspace:addNumber(string.byte("?"))
+  dataspace:addNumber(string.byte("\n"))
+  dataspace:addNumber(0)
   dataspace[eofBranchAddr].number = toUnsigned(dataspace:getRelativeAddr(eofBranchAddr, dataspace.here))
   dataspace:addWords("A.DROP EXIT")
 end
