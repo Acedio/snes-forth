@@ -831,22 +831,33 @@ addColonWithLabel("DOES>", "_DOES")
   dataspace:addWords("COMPILE, COMPILE-DOCOL EXIT")
 dataspace[dataspace.latest].immediate = true
 
-function unaryOp(name, label, op)
+-- TODO: Maybe pull these out into a mathops.lua file?
+function unaryOp(name, label, op, asm)
   dataspace:addNative{name=name, label=label, runtime=function()
     local a = datastack:popWord()
     datastack:pushWord(op(a) & 0xFFFF)
     return nextIp()
-  end}
+  end, asm=function() return asm end}
 end
 
--- TODO: Maybe pull these out into a mathops.lua file?
 unaryOp("NEGATE", "NEGATE", function(a)
   return -a
-end)
+end, [[
+  lda #0
+  sec
+  sbc 1, X
+  sta 1, X
+  rtl
+]])
 
 unaryOp("INVERT", "INVERT", function(a)
   return ~a
-end)
+end, [[
+  lda #$FFFF
+  eor 1, X
+  sta 1, X
+  rtl
+]])
 
 function binaryOpRt(op)
   return function()
