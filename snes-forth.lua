@@ -301,14 +301,14 @@ dataspace:addNative{name=">NUMBER", label="_TO_NUMBER", runtime=function()
     return nextIp()
   end
 
-  if number > 0x7FFF or number < -0x8000 then
+  if number > 0xFFFF or number < -0x8000 then
     datastack:pushWord(0)
     -- Failed.
     datastack:pushWord(0)
     return nextIp()
   end
 
-  datastack:pushWord(number)
+  datastack:pushWord(toUnsigned(number))
   datastack:pushWord(0xFFFF)
   return nextIp()
 end}
@@ -333,14 +333,14 @@ dataspace:addNative{name=">ADDRESS", label="_TO_ADDRESS", runtime=function()
     return nextIp()
   end
 
-  if address > 0x7FFFFF or address < -0x800000 then
+  if address > 0xFFFFFF or address < -0x800000 then
     datastack:pushAddress(0)
     -- Failed.
     datastack:pushWord(0)
     return nextIp()
   end
 
-  datastack:pushAddress(address)
+  datastack:pushAddress(address & 0xFFFFFF)
   datastack:pushWord(0xFFFF)
   return nextIp()
 end}
@@ -585,11 +585,11 @@ asm=function() return [[
   clc
   adc 1, S
   sta 1, S
-  bcc @nocarry2
+  bcc @nocarry
   lda #0
   adc 3, S
   sta 3, S
-@nocarry2:
+@nocarry:
   rtl
 ]] end}
 
@@ -612,12 +612,30 @@ asm=function() return [[
   tcd ; set the DP to the return stack
   ldy #1
   lda [1],Y ; Grab the relative branch pointer
+  bmi @negative
+
   clc
   adc z:1
   sta z:1
   bcc @nocarry
   inc z:3
 @nocarry:
+  lda #0 ; reset the data stack
+  tcd
+  rtl ; "return" to the branch point
+
+  ; Negative branch case needs different handling for carry logic, because we
+  ; expect the carry flag to be set when we stay on the same page.
+  ; e.g. if we're at $010001 and we branch by -1 (0xFFFF) then carry will be
+  ; set and no decrement should occur ($010000). If we branch by -2 (0xFFFE),
+  ; carry won't be set and so we should decrement to $00FFFF.
+@negative:
+  clc
+  adc z:1
+  sta z:1
+  bcs @carry
+  dec z:3
+@carry:
   lda #0 ; reset the data stack
   tcd
   rtl ; "return" to the branch point
@@ -839,72 +857,82 @@ function binaryOpRt(op)
   end
 end
 
-function binaryOpWithLabel(name, label, op)
-  dataspace:addNative{name=name, label=label, runtime=binaryOpRt(op)}
-end
-
-function binaryOp(name, op)
-  binaryOpWithLabel(name, Dataspace.defaultLabel(name), op)
+function binaryOpWithLabel(name, label, op, asmOp)
+  dataspace:addNative{name=name, label=label, runtime=binaryOpRt(op), asm=function() return string.format([[
+    lda z:3, X
+    %s z:1, X ; Perform computation
+    sta z:3, X
+    inx
+    inx
+    rtl
+  ]], asmOp) end}
 end
 
 binaryOpWithLabel("AND", "_AND", function(a,b)
   return a & b
-end)
+end, "and")
 
-binaryOp("OR", function(a,b)
+binaryOpWithLabel("OR", "_OR", function(a,b)
   return a | b
-end)
+end, "ora")
 
-binaryOp("XOR", function(a,b)
+binaryOpWithLabel("XOR", "_XOR", function(a,b)
   return a ~ b
-end)
+end, "eor")
 
 binaryOpWithLabel("-", "_MINUS", function(a,b)
   return a - b
-end)
+end, "sec\n  sbc")
 
-dataspace:addNative{name="+", label="_PLUS", runtime=binaryOpRt(function(a,b)
+binaryOpWithLabel("+", "_PLUS", function(a,b)
   return a + b
-end), asm=function(self) return [[
-  POP_A
-  clc
-  adc a:1, X ; Add stack value
-  sta a:1, X
-  rtl
-]] end}
+end, "clc\n  adc")
 
-function binaryCmpOp(name, label, op)
+function binaryCmpOp(name, label, op, asmOp)
   dataspace:addNative{name=name, label=label, runtime=function()
     local b = datastack:popWord()
     local a = datastack:popWord()
     datastack:pushWord(op(a,b) and 0xFFFF or 0)
     return nextIp()
-  end}
+  end,
+  asm=function() return string.format([[
+    ldy #$FFFF
+    lda z:3, X
+    sec
+    sbc z:1, X
+    %s @true
+    ldy #$0000
+  @true:
+    sty z:3, X
+    inx
+    inx
+    rtl
+  ]], asmOp) end}
 end
 
 binaryCmpOp("=", "_EQ", function(a, b)
   return a == b
-end)
-
-binaryCmpOp("<", "_LT", function(a, b)
-  return toSigned(a) < toSigned(b)
-end)
-
-binaryCmpOp(">", "_GT", function(a, b)
-  return toSigned(a) > toSigned(b)
-end)
-
-binaryCmpOp("<=", "_LTE", function(a, b)
-  return toSigned(a) <= toSigned(b)
-end)
-
-binaryCmpOp(">=", "_GTE", function(a, b)
-  return toSigned(a) >= toSigned(b)
-end)
+end, "beq")
 
 binaryCmpOp("<>", "_NE", function(a, b)
   return a ~= b
-end)
+end, "bne")
+
+binaryCmpOp("<", "_LT", function(a, b)
+  return toSigned(a) < toSigned(b)
+end, "bmi")
+
+binaryCmpOp(">", "_GT", function(a, b)
+  return toSigned(a) > toSigned(b)
+end, "bpl")
+
+binaryCmpOp("U<", "_UNSIGNED_LT", function(a, b)
+  return toUnsigned(a) < toUnsigned(b)
+end, "bcs")
+
+binaryCmpOp("U>", "_UNSIGNED_GT", function(a, b)
+  return toUnsigned(a) > toUnsigned(b)
+end, "bcc")
 
 do
   addColonWithLabel(":", "_COLON")
@@ -945,8 +973,8 @@ do
   dataspace:addWords(", BRANCH")
   dataspace:addNumber(dataspace:getRelativeAddr(dataspace.here, loop))
   dataspace[exitBranchAddr].number = toUnsigned(dataspace:getRelativeAddr(exitBranchAddr, dataspace.here))
-  dataspace:addWords("LIT")
-  dataspace:addNumber(0) -- Null terminate.
+  dataspace:addWords("DROP LIT") -- Drop the " and null terminate.
+  dataspace:addNumber(0)
   dataspace:addWords(", EXIT")
 end
 dataspace[dataspace.latest].immediate = true
@@ -987,6 +1015,8 @@ do
     dataspace:addWords("DROP A.DUP >ADDRESS BRANCH0")
     local addressParseErrorAddr = dataspace.here
     dataspace:addNumber(2000)
+    -- String is no longer needed, drop it.
+    dataspace:addWords("A.>R A.DROP A.R>")
     -- If we're compiling, compile TOS as a literal.
     dataspace:addWords("STATE @ BRANCH0")
     dataspace:addNumber(dataspace:getRelativeAddr(dataspace.here, loop))
