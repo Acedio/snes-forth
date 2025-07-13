@@ -98,7 +98,7 @@ function Dataspace.native(entry)
   end
   if not entry.asm then
     function entry:asm(dataspace)
-      return string.format("rtl ; TODO: Not implemented\n; TODO: abort?")
+      return string.format("jsl not_implemented ; TODO: Not implemented")
     end
   end
   function entry:toString(dataspace)

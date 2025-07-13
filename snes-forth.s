@@ -55,3 +55,6 @@ reset:
 
 forever:
   jmp forever
+
+not_implemented:
+  jmp not_implemented

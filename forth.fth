@@ -3,7 +3,10 @@
 
 : ['] A.LIT [ ' A.LIT XT, ] COMPILE, ' XT, ; IMMEDIATE LABEL _BRACKET_TICK
 
-: REMOVE-MSB >R $0 DROP DROP R> ;
+: 0= 0 = ; LABEL _0_EQ
+: 0<> 0 <> ; LABEL _0_NE
+: 0< 0 < ; LABEL _0_GT
+: 0> 0 > ; LABEL _0_LT
 
 : IF ['] BRANCH0 COMPILE, HERE 0 , ; IMMEDIATE
 : THEN A.DUP A.>R HERE A.SWAP ADDRESS-OFFSET A.R> ! ; IMMEDIATE
@@ -20,11 +23,11 @@
 : TEST-WHILE 0 BEGIN 1+ DUP 5 <= WHILE DUP . REPEAT ;
 
 : CR ." 
-" ; LABEL _CARRIAGE
+" ;
 
-: CHAR KEY DROP KEY ['] LIT COMPILE, , ; IMMEDIATE
+: [CHAR] KEY DROP KEY ['] LIT COMPILE, , ; IMMEDIATE
 
-: ( BEGIN KEY CHAR ) = UNTIL ; LABEL _R_PAREN
+: ( BEGIN KEY [CHAR] ) = UNTIL ; IMMEDIATE LABEL _L_PAREN
 
 ( Do comments work now? )
 
@@ -32,8 +35,8 @@
   Woohoo! We can finally comment our Forth code! )
 
 ( I feel like the way I'm grabbing a CR char here probably isn't portable. )
-: \ BEGIN KEY CHAR 
-= UNTIL ; LABEL _BACKSLASH
+: \ BEGIN KEY [CHAR] 
+= UNTIL ; IMMEDIATE LABEL _BACKSLASH
 
 : MAIN TEST-WHILE ." DONE!" CR ;
 

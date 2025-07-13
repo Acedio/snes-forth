@@ -397,7 +397,14 @@ dataspace:addNative{name="SWAP", runtime=function()
   datastack:pushWord(first)
   datastack:pushWord(second)
   return nextIp()
-end}
+end,
+asm=function() return [[
+  ldy z:1, X
+  lda z:3, X
+  sta z:1, X
+  sty z:3, X
+  rtl
+]] end}
 
 dataspace:addNative{name="A.SWAP", runtime=function()
   local first = datastack:popAddress()
@@ -405,7 +412,27 @@ dataspace:addNative{name="A.SWAP", runtime=function()
   datastack:pushAddress(first)
   datastack:pushAddress(second)
   return nextIp()
-end}
+end,
+asm=function() return [[
+  ; G = garbage
+  ; G 1 2 3 4 5 6
+  ldy z:2, X
+  lda z:5, X
+  sta z:2, X
+  sty z:5, X
+  ; G 1 5 6 4 2 3
+  lda z:0, X
+  ldy z:3, X
+  sty z:0, X
+  ; 6 4 5 6 4 2 3
+  ldy z:2, X
+  sta z:3, X
+  ; 6 4 5 G 1 2 3
+  sty z:2, X
+  ; 6 4 5 6 1 2 3
+  
+  rtl
+]] end}
 
 dataspace:addNative{name="COMPILE,", label="_COMPILE_COMMA", runtime=function()
   local xt = datastack:popAddress()
@@ -573,10 +600,7 @@ dataspace:addNative{name="ADDRESS-OFFSET", runtime=function()
   assert(delta >= -0x8000 and delta <= 0x7FFF, "Delta out of range: " .. delta)
   datastack:pushWord(toUnsigned(delta))
   return nextIp()
-end,
-asm=function() return [[
-  rtl  ; TODO
-]] end}
+end}
 
 -- Can we do this in Forth based on BRANCH0?
 dataspace:addNative{name="BRANCH", runtime=function()
@@ -761,11 +785,6 @@ addColon("FALSE")
   dataspace:addWord("LIT")
   dataspace:addNumber(0)
   dataspace:addWord("EXIT")
-
-addColon("CR")
-  dataspace:addWord("LIT")
-  dataspace:addNumber(string.byte("\n"))
-  dataspace:addWords("EMIT EXIT")
 
 addColonWithLabel("[", "_LBRACK")
   dataspace:addWords("FALSE STATE ! EXIT")
