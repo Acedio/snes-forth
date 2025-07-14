@@ -168,7 +168,7 @@ dataspace:addNative{name="CREATEDOCOL", runtime=function()
 end}
 
 -- TODO: Currently only for words, need another for addresses.
-function makeVariable(name, entry)
+function makeLowRamVariable(name, entry)
   dataspace:dictionaryAdd(name)
   local native = Dataspace.native{name=name}
   dataspace:add(native)
@@ -177,14 +177,28 @@ function makeVariable(name, entry)
     datastack:pushAddress(dataaddr)
     return nextIp()
   end
+  native.asm = function() return string.format([[
+    dex
+    dex
+    dex
+    lda #.HIWORD(_%s_DATA)
+    sta 2, X
+    lda #.LOWORD(_%s_DATA)
+    sta 1, X
+    rtl
+  .BSS
+  _%s_DATA:
+    .WORD $0000
+  .CODE
+  ]], name, name, name) end
   if not entry then
     entry = Dataspace.number(0)
   end
   dataspace:add(entry)
 end
 
-makeVariable("STATE")
-makeVariable("DEBUG", debugEntry)
+makeLowRamVariable("STATE")
+makeLowRamVariable("DEBUG", debugEntry)
 
 dataspace:addNative{name="ALLOT", runtime=function()
   dataspace.here = dataspace.here + datastack:popWord()
@@ -443,11 +457,13 @@ dataspace:addNative{name="COMPILE,", label="_COMPILE_COMMA", runtime=function()
   return nextIp()
 end}
 
--- TODO: Not standard.
+-- Pushes the address of the first character of the string, then the size of the
+-- string in bytes.
 dataspace:addNative{name="COUNT", runtime=function()
   local addr = datastack:popAddress()
   assert(dataspace[addr].type == "number")
   local length = dataspace[addr].number
+  datastack:pushAddress(addr + 1)
   datastack:pushWord(length)
   return nextIp()
 end}
@@ -995,7 +1011,10 @@ do
   -- Forth?
   addColon("QUIT")
   local loop = dataspace.here
-  dataspace:addWords("WORD A.DUP COUNT BRANCH0")
+  -- TODO: Rather than COUNT we can use C@ to get the length of a counted string
+  -- (if we decide to use byte-addressing instead of cell-addressing for
+  -- characters).
+  dataspace:addWords("WORD A.DUP COUNT >R A.DROP R> BRANCH0")
   local eofBranchAddr = dataspace.here
   dataspace:addNumber(2000)
 
