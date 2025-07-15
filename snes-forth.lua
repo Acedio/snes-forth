@@ -76,7 +76,7 @@ function addColonWithLabel(name, label)
     name = name,
     size = function() assert(false, "Tried to get the size of a colon def.") end,
     label = label,
-    asm = function() return "; DOCOL has no codeword.\n" end,
+    asm = function() return "; Colon definition." end,
   }
   dataspace:add(native)
   local dataaddr = dataspace.here
