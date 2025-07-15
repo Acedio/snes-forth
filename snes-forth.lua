@@ -36,6 +36,12 @@ local outputs = io.stderr
 local infos = io.stdout
 local errors = io.stderr
 
+-- TODO: Maybe this should be "codespace"? Or maybe Dataspace should be
+-- Codespace since currently mainly code is written there? I think the address
+-- space of the two has to be shared, though, so that @ and ! can be used in
+-- both. Maybe we keep both in the same dataspace, but mark specifically the
+-- areas that need to be mutable on the SNES? Which are maybe just things
+-- created with , A., ALLOT etc
 local dataspace = Dataspace:new()
 
 local ip = 0
@@ -126,6 +132,9 @@ dataspace:addNative{name="COMPILE-DOCOL", runtime=function()
   return nextIp()
 end}
 
+-- TODO: We need variants of these for mutable dataspace as well. Actually, the
+-- mutable versions should probably use these names since the constant versions
+-- are mostly used by the compiler itself.
 dataspace:addNative{name=",", label="_COMMA", runtime=function()
   dataspace:addNumber(datastack:popWord())
   return nextIp()
@@ -200,6 +209,8 @@ end
 makeLowRamVariable("STATE")
 makeLowRamVariable("DEBUG", debugEntry)
 
+-- TODO: We need to make this allocate in _mutable_ dataspace. Potentially a new
+-- datatype?
 dataspace:addNative{name="ALLOT", runtime=function()
   dataspace.here = dataspace.here + datastack:popWord()
   return nextIp()
