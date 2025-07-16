@@ -9,6 +9,10 @@ function Stack:new()
   return stack
 end
 
+function Stack:entries()
+  return #self
+end
+
 local function assertByte(byte)
   assert(type(byte) == "number", "Stack value wasn't number: " .. tostring(byte))
   assert(byte >= 0 and byte <= 0xFF, "Stack value was out of byte range: " .. byte)

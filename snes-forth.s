@@ -18,6 +18,9 @@
 
 .segment "CODE"
 
+RETURN_STACK_ADDR := $01FF
+DATA_STACK_ADDR := $02FF
+
 .include "preamble.s"
 .include "forth.s"
 
@@ -47,9 +50,9 @@ reset:
   rep #$20
   .a16
 
-  ldx #$01FF
+  ldx #RETURN_STACK_ADDR
   txs
-  ldx #$02FF
+  ldx #DATA_STACK_ADDR
 
   jsl _MAIN
 

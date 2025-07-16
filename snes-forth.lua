@@ -99,6 +99,20 @@ dataspace:addNative{name="DATASPACE", runtime=function()
   return nextIp()
 end}
 
+dataspace:addNative{name="DEPTH", runtime=function()
+  datastack:pushWord(datastack:entries())
+  return nextIp()
+end,
+asm=function() return [[
+  txa
+  eor #$FFFF
+  inc A
+  clc
+  adc #DATA_STACK_ADDR
+  PUSH_A
+  rtl
+]] end}
+
 dataspace:addNative{name=".S", label="_DOT_S", runtime=function()
   datastack:print(outputs)
   return nextIp()
