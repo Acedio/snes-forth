@@ -89,6 +89,8 @@ function addColon(name)
   addColonWithLabel(name, Dataspace.defaultLabel(name))
 end
 
+-- TODO: Should this be a 2 byte or 4 byte address if we switch to 1-word
+-- addressing?
 dataspace:addNative{name="HERE", runtime=function()
   datastack:pushAddress(dataspace.here)
   return nextIp()
@@ -196,9 +198,9 @@ function makeLowRamVariable(name, entry)
     dex
     dex
     lda #.HIWORD(_%s_DATA)
-    sta 2, X
+    sta z:2, X
     lda #.LOWORD(_%s_DATA)
-    sta 1, X
+    sta z:1, X
     rtl
   .BSS
   _%s_DATA:
@@ -378,7 +380,7 @@ dataspace:addNative{name="DUP", runtime=function()
   return nextIp()
 end,
 asm=function() return [[
-  lda 1,X
+  lda z:1,X
   PUSH_A
   rtl
 ]] end}
@@ -391,10 +393,10 @@ asm=function() return [[
   dex
   dex
   dex
-  lda 4, X
-  sta 1, X
-  lda 5, X
-  sta 2, X
+  lda z:4, X
+  sta z:1, X
+  lda z:5, X
+  sta z:2, X
   rtl
 ]] end}
 
@@ -515,12 +517,12 @@ asm=function() return [[
   pha
 
   ; Now move the address off the data stack, LSB first.
-  lda 1, X
+  lda z:1, X
   sta 4, S
   rep #$20
   .a16
 
-  lda 2, X
+  lda z:2, X
   sta 5, S
   inx
   inx
@@ -554,12 +556,12 @@ asm=function() return [[
   dex
   dex
   lda 4, S
-  sta 1, X
+  sta z:1, X
 
   sep #$20
   .a8
   lda 6, S
-  sta 3, X
+  sta z:3, X
 
   ; Now shift the return address, first moving the LSB.
   pla
@@ -600,7 +602,7 @@ dataspace:addNative{name="BRANCH0", runtime=function()
   return nextIp()
 end,
 asm=function() return [[
-  lda 1, X
+  lda z:1, X
   bne @notzero
   ; Equals zero, we branch!
   inx
@@ -875,8 +877,8 @@ unaryOp("NEGATE", "NEGATE", function(a)
 end, [[
   lda #0
   sec
-  sbc 1, X
-  sta 1, X
+  sbc z:1, X
+  sta z:1, X
   rtl
 ]])
 
@@ -884,8 +886,8 @@ unaryOp("INVERT", "INVERT", function(a)
   return ~a
 end, [[
   lda #$FFFF
-  eor 1, X
-  sta 1, X
+  eor z:1, X
+  sta z:1, X
   rtl
 ]])
 
