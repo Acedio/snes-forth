@@ -110,7 +110,7 @@ end
 function Dataspace.call(addr)
   local entry = {
     type = "call",
-    size = function() return 4 end,
+    size = function() return 3 end,
     addr = addr,
   }
   function entry:toString(dataspace)
@@ -125,7 +125,7 @@ function Dataspace.call(addr)
   function entry:asm(dataspace)
     assert(self.addr > 0 and self.addr < dataspace.here, "Invalid address " .. self.addr)
     assert(dataspace[self.addr].type == "native", "Expected fn at " .. self.addr)
-    return string.format("JSL %s", dataspace[self.addr].label)
+    return string.format("JSR %s", dataspace[self.addr].label)
   end
   return entry
 end
@@ -159,7 +159,7 @@ function Dataspace.xt(addr)
   end
   function entry:asm(dataspace)
     assert(self.addr < dataspace.here and dataspace[self.addr].label, "Invalid xt " .. self.addr )
-    return string.format(".FARADDR %s", dataspace[self.addr].label)
+    return string.format(".WORD %s", dataspace[self.addr].label)
   end
   return entry
 end

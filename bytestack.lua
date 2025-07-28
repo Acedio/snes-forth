@@ -1,15 +1,15 @@
 #!/usr/bin/lua
 
-local Stack = {}
+local ByteStack = {}
 
-function Stack:new()
+function ByteStack:new()
   local stack = {}
   setmetatable(stack, self)
   self.__index = self
   return stack
 end
 
-function Stack:entries()
+function ByteStack:entries()
   return #self
 end
 
@@ -18,20 +18,20 @@ local function assertByte(byte)
   assert(byte >= 0 and byte <= 0xFF, "Stack value was out of byte range: " .. byte)
 end
 
-function Stack:pushByte(val)
+function ByteStack:pushByte(val)
   assert(type(val) == "number", "Value pushed was not number: " .. tostring(val))
   assert(val >= 0 and val <= 0xFF, "Value pushed was out of byte range: " .. val)
   table.insert(self, val & 0xFF)
 end
 
-function Stack:pushWord(val)
+function ByteStack:pushWord(val)
   assert(type(val) == "number", "Value pushed was not number: " .. tostring(val))
   assert(val >= 0 and val <= 0xFFFF, "Value pushed was out of word range: " .. val)
   table.insert(self, (val >> 8) & 0xFF)
   table.insert(self, val & 0xFF)
 end
 
-function Stack:pushAddress(val)
+function ByteStack:pushAddress(val)
   assert(type(val) == "number", "Value pushed was not number: " .. tostring(val))
   assert(val >= 0 and val <= 0xFFFFFF, "Value pushed was out of address range: " .. val)
   table.insert(self, (val >> 16) & 0xFF)
@@ -39,14 +39,14 @@ function Stack:pushAddress(val)
   table.insert(self, val & 0xFF)
 end
 
-function Stack:popByte()
+function ByteStack:popByte()
   assert(#self > 0, "Tried to pop an empty stack.")
   local byte = table.remove(self)
   assertByte(byte)
   return byte
 end
 
-function Stack:popWord()
+function ByteStack:popWord()
   assert(#self > 0, "Tried to pop an empty stack.")
   local lsb = table.remove(self)
   assertByte(lsb)
@@ -55,7 +55,7 @@ function Stack:popWord()
   return (msb << 8) | lsb
 end
 
-function Stack:popAddress()
+function ByteStack:popAddress()
   assert(#self > 0, "Tried to pop an empty stack.")
   local lsb = table.remove(self)
   assertByte(lsb)
@@ -66,14 +66,14 @@ function Stack:popAddress()
   return (msb << 16) | (kindaSignificantByte << 8) | lsb
 end
 
-function Stack:topByte()
+function ByteStack:topByte()
   assert(#self > 0, "Tried to top an empty stack.")
   local byte = self[#self]
   assertByte(byte)
   return byte
 end
 
-function Stack:topWord()
+function ByteStack:topWord()
   assert(#self > 0, "Tried to top an empty stack.")
   local lsb = self[#self]
   assertByte(lsb)
@@ -82,7 +82,7 @@ function Stack:topWord()
   return (msb << 8) | lsb
 end
 
-function Stack:topAddress()
+function ByteStack:topAddress()
   assert(#self > 0, "Tried to top an empty stack.")
   local lsb = self[#self]
   assertByte(lsb)
@@ -93,7 +93,7 @@ function Stack:topAddress()
   return (msb << 16) | (kindaSignificantByte << 8) | lsb
 end
 
-function Stack:print(file)
+function ByteStack:print(file)
   -- TODO: Add pretty output for multi-byte (e.g. output multiple possible
   -- interpretations, like 0xFF (WORD: 0xFFEE ADDRESS: 0xFFEEDD)) and character
   -- values.
@@ -104,4 +104,4 @@ function Stack:print(file)
   file:write("#top#\n")
 end
 
-return Stack
+return ByteStack

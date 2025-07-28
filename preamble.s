@@ -21,3 +21,13 @@
   dex
   sty z:1, X
 .endmacro
+
+.macro A8
+  sep #$20
+  .a8
+.endmacro
+
+.macro A16
+  rep #$20
+  .a16
+.endmacro
