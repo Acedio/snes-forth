@@ -39,6 +39,11 @@ function Stack:pushAddress(val)
   table.insert(self, val & 0xFF)
 end
 
+function Stack:pushQuaddress(val)
+  self:pushByte(val >> 24)
+  self:pushAddress(val & 0xFFFFFF)
+end
+
 function Stack:popByte()
   assert(#self > 0, "Tried to pop an empty stack.")
   local byte = table.remove(self)
@@ -64,6 +69,10 @@ function Stack:popAddress()
   local msb = table.remove(self)
   assertByte(msb)
   return (msb << 16) | (kindaSignificantByte << 8) | lsb
+end
+
+function Stack:popQuaddress()
+  return self:popAddress() & self:popByte() << 24
 end
 
 function Stack:topByte()
