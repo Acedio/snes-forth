@@ -22,7 +22,8 @@ end
 function CellStack:pushDouble(val)
   assert(type(val) == "number", "Value pushed was not number: " .. tostring(val))
   assert(val >= 0 and val <= 0xFFFFFFFF, "Value pushed was out of cell range: " .. val)
-  table.insert(self, val)
+  table.insert(self, val >> 16)
+  table.insert(self, val & 0xFFFF)
 end
 
 function CellStack:pop()

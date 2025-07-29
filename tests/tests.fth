@@ -1,30 +1,46 @@
-: TEST-UNTIL 1 BEGIN DUP 1+ DUP 5 = UNTIL ;
+: TEST-UNTIL
+  1 BEGIN DUP 1+ DUP 3 = UNTIL
+  3 =
+  SWAP 2 = AND
+  SWAP 1 = AND
+;
 
-: TEST-WHILE 1 BEGIN DUP 5 < WHILE DUP 1+ REPEAT ;
+: TEST-WHILE
+  1 BEGIN DUP 3 < WHILE DUP 1+ REPEAT
+  3 =
+  SWAP 2 = AND
+  SWAP 1 = AND
+;
 
 : TEST-MATH-OP
-  0 1 +
-  -1 -2 -
-  0x00 0x01 OR
-  0x05 0x03 AND
-  0x03 0x02 XOR
-  0xFFFE INVERT
-  0xFFFF NEGATE
+  0 1 + 1 =
+  -1 -2 - 1 =
+  0x00 0x01 OR 1 =
+  0x05 0x03 AND 1 =
+  0x03 0x02 XOR 1 =
+  0xFFFE INVERT 1 =
+  0xFFFF NEGATE 1 =
 ;
 
 : TEST-COMPARISON
-  1 2 <
-  2 1 <
-  2 1 >
-  1 2 >
-  1 1 =
-  0 1 =
-  0 1 <>
-  1 1 <>
-  0xFFFE 0xFFFF U<
-  0xFFFF 0xFFFE U<
-  0xFFFF 0xFFFE U>
-  0xFFFE 0xFFFF U>
+  1 2 < TRUE =
+  2 1 < FALSE =
+  2 1 > TRUE =
+  1 2 > FALSE =
+  1 1 = TRUE =
+  0 1 = FALSE =
+  0 1 <> TRUE =
+  1 1 <> FALSE =
+  0xFFFE 0xFFFF U< TRUE =
+  0xFFFF 0xFFFE U< FALSE =
+  0xFFFF 0xFFFE U> TRUE =
+  0xFFFE 0xFFFF U> FALSE =
+;
+
+: TEST-DOUBLES
+  $123456
+  0x3456 =
+  SWAP 0x0012 = AND
 ;
 
 (
@@ -38,6 +54,7 @@ TODO: Implement the T{ ... -> ... }T notation.
   TEST-WHILE
   TEST-MATH-OP
   TEST-COMPARISON
-  ;
+  TEST-DOUBLES
+;
 
 MAIN

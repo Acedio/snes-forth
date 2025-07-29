@@ -1,4 +1,4 @@
-: MAIN STATE DEBUG ;
+: MAIN 1 IF $2 ELSE $3 THEN . . ;
 
 MAIN
 

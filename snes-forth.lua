@@ -346,7 +346,7 @@ end}
 -- Returns TRUE or FALSE at the top of the stack, and the parsed address below
 -- that.
 dataspace:addNative{name=">ADDRESS", label="_TO_ADDRESS", runtime=function()
-  local strAddress = datastack:push()
+  local strAddress = datastack:pop()
   local maybeAddress = getCountedWord(strAddress)
   if string.sub(maybeAddress, 1, 1) ~= "$" then
     datastack:pushDouble(0)
@@ -1074,7 +1074,7 @@ do
     local addressParseErrorAddr = dataspace.here
     dataspace:addNumber(2000)
     -- String is no longer needed, drop it.
-    dataspace:addWords(">R DROP R>")
+    dataspace:addWords(">R >R DROP R> R>")
     -- If we're compiling, compile TOS as a literal.
     dataspace:addWords("STATE @ BRANCH0")
     dataspace:addNumber(dataspace:getRelativeAddr(dataspace.here, loop))
@@ -1102,7 +1102,7 @@ do
   dataspace:addNumber(dataspace:getRelativeAddr(dataspace.here, loop))
 
   dataspace[addressParseErrorAddr].number = toUnsigned(dataspace:getRelativeAddr(addressParseErrorAddr, dataspace.here))
-  dataspace:addWords("DROP DUP TYPE")
+  dataspace:addWords("2DROP DUP TYPE")
   dataspace:addWords("DO.\"")
   dataspace:addNumber(string.byte("?"))
   dataspace:addNumber(string.byte("\n"))
