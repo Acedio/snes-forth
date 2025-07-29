@@ -245,6 +245,12 @@ dataspace:addNative{name="BYE", runtime=function()
   -- BYE ends the program by not calling nextIp
 end}
 
+dataspace:addNative{name="ABORT", runtime=function()
+  infos:write("ABORTED!" .. "\n")
+  assert(nil)
+  -- Abort ends the program by not calling nextIp
+end}
+
 dataspace:addNative{name="EMIT", runtime=function()
   outputs:write(string.char(datastack:pop()))
   return nextIp()
@@ -267,15 +273,19 @@ function setWordBuffer(str)
   end
 end
 
-function getCountedWord(addr)
-  assert(dataspace[addr].type == "number")
-  local length = dataspace[addr].number
+function getWordWithCount(addr, count)
   local str = ""
-  for i=1,length do
+  for i=1,count do
     assert(dataspace[wordBufferAddr + i].type == "number")
     str = str .. string.char(dataspace[wordBufferAddr + i].number)
   end
   return str
+end
+
+function getCountedWord(addr)
+  assert(dataspace[addr].type == "number")
+  local count = dataspace[addr].number
+  return getWordWithCount(addr + 1, count)
 end
 
 dataspace:addNative{name="WORD", runtime=function()
@@ -295,8 +305,9 @@ dataspace:addNative{name="KEY", runtime=function()
 end}
 
 dataspace:addNative{name="TYPE", runtime=function()
-  local str = getCountedWord(datastack:pop())
-  outputs:write(str)
+  local count = datastack:pop()
+  local addr = datastack:pop()
+  outputs:write(getWordWithCount(addr, count))
   return nextIp()
 end}
 
@@ -363,7 +374,7 @@ dataspace:addNative{name=">ADDRESS", label="_TO_ADDRESS", runtime=function()
     return nextIp()
   end
 
-  if address > 0xFFFFFF or address < -0x800000 then
+  if address > 0xFFFFFF or address < 0 then
     datastack:pushDouble(0)
     -- Failed.
     datastack:push(0)
@@ -1102,11 +1113,12 @@ do
   dataspace:addNumber(dataspace:getRelativeAddr(dataspace.here, loop))
 
   dataspace[addressParseErrorAddr].number = toUnsigned(dataspace:getRelativeAddr(addressParseErrorAddr, dataspace.here))
-  dataspace:addWords("2DROP DUP TYPE")
+  dataspace:addWords("2DROP DUP COUNT TYPE")
   dataspace:addWords("DO.\"")
   dataspace:addNumber(string.byte("?"))
   dataspace:addNumber(string.byte("\n"))
   dataspace:addNumber(0)
+  dataspace:addWords("ABORT")
   dataspace[eofBranchAddr].number = toUnsigned(dataspace:getRelativeAddr(eofBranchAddr, dataspace.here))
   dataspace:addWords("DROP EXIT")
 end
