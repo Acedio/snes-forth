@@ -275,9 +275,9 @@ end
 
 function getWordWithCount(addr, count)
   local str = ""
-  for i=1,count do
-    assert(dataspace[wordBufferAddr + i].type == "number")
-    str = str .. string.char(dataspace[wordBufferAddr + i].number)
+  for i=0,count-1 do
+    assert(dataspace[addr + i].type == "number")
+    str = str .. string.char(dataspace[addr + i].number)
   end
   return str
 end
@@ -580,6 +580,16 @@ asm=function() return [[
   ; Now the two MSBs
   pla
   sta 2, S
+  rts
+]] end}
+
+dataspace:addNative{name="R@", label="_FETCH_R", runtime=function()
+  datastack:push(returnstack:topWord())
+  return nextIp()
+end,
+asm=function() return [[
+  lda 4, S
+  PUSH_A
   rts
 ]] end}
 
@@ -1014,21 +1024,20 @@ do
   dataspace[dataspace.latest].immediate = true
 end
 
-addColonWithLabel("DO.\"", "_DO_STRING")
+addColonWithLabel("DOS\"", "_DO_SLIT")
 do
-  local loop = dataspace.here
-  dataspace:addWords("R> DUP 1+ >R @ DUP EMIT LIT")
-  dataspace:addNumber(0)
-  dataspace:addWords("= BRANCH0")
-  dataspace:addNumber(dataspace:getRelativeAddr(dataspace.here, loop))
-  dataspace:addWords("EXIT")
+  dataspace:addWords("R@ 1+ R@ @ R> DUP @ + 1+ >R EXIT")
 end
 
-addColonWithLabel(".\"", "_STRING")
+addColonWithLabel("S\"", "_SLIT")
 do
   dataspace:addWords("LIT")
-  dataspace:addXt("DO.\"")
+  dataspace:addXt("DOS\"")
   dataspace:addWords("COMPILE,")
+  -- Make space for the length and save its addr.
+  dataspace:addWords("HERE LIT")
+  dataspace:addNumber(0)
+  dataspace:addWords("DUP ,") -- Also grab a zero to track the length.
   dataspace:addWords("KEY DROP") -- Discard the first whitespace.
   local loop = dataspace.here
   dataspace:addWords("KEY DUP LIT")
@@ -1036,12 +1045,11 @@ do
   dataspace:addWords("<> BRANCH0")
   local exitBranchAddr = dataspace.here
   dataspace:addNumber(2000)
-  dataspace:addWords(", BRANCH")
+  dataspace:addWords(", 1+ BRANCH")
   dataspace:addNumber(dataspace:getRelativeAddr(dataspace.here, loop))
   dataspace[exitBranchAddr].number = toUnsigned(dataspace:getRelativeAddr(exitBranchAddr, dataspace.here))
-  dataspace:addWords("DROP LIT") -- Drop the " and null terminate.
-  dataspace:addNumber(0)
-  dataspace:addWords(", EXIT")
+  dataspace:addWords("DROP SWAP !") -- Drop the " and fill in the length
+  dataspace:addWords("EXIT")
 end
 dataspace[dataspace.latest].immediate = true
 
@@ -1114,11 +1122,11 @@ do
 
   dataspace[addressParseErrorAddr].number = toUnsigned(dataspace:getRelativeAddr(addressParseErrorAddr, dataspace.here))
   dataspace:addWords("2DROP DUP COUNT TYPE")
-  dataspace:addWords("DO.\"")
+  dataspace:addWords("DOS\"")
+  dataspace:addNumber(2)
   dataspace:addNumber(string.byte("?"))
   dataspace:addNumber(string.byte("\n"))
-  dataspace:addNumber(0)
-  dataspace:addWords("ABORT")
+  dataspace:addWords("TYPE ABORT")
   dataspace[eofBranchAddr].number = toUnsigned(dataspace:getRelativeAddr(eofBranchAddr, dataspace.here))
   dataspace:addWords("DROP EXIT")
 end
