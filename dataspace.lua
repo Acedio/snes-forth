@@ -234,6 +234,21 @@ function Dataspace.number(number)
   return entry
 end
 
+function Dataspace.byte(byte)
+  local entry = {
+    type = "byte",
+    size = function() return 1 end,
+    byte = byte & 0xFF,
+  }
+  function entry:toString(dataspace)
+    return "Byte: " .. tostring(self.byte)
+  end
+  function entry:asm(dataspace)
+    return string.format(".BYTE %d", self.byte & 0xFF)
+  end
+  return entry
+end
+
 -- Convenience methods.
 function Dataspace:addCall(addr)
   self:add(Dataspace.call(addr))
@@ -249,6 +264,10 @@ end
 
 function Dataspace:addNumber(number)
   self:add(Dataspace.number(number))
+end
+
+function Dataspace:addByte(byte)
+  self:add(Dataspace.byte(byte))
 end
 
 -- Table should have at least name and runtime specified.

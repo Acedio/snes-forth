@@ -143,6 +143,11 @@ dataspace:addNative{name="COMPILE-DOCOL", runtime=function()
   return nextIp()
 end}
 
+dataspace:addNative{name="C,", label="_C_COMMA", runtime=function()
+  dataspace:addByte(datastack:pop() & 0xFF)
+  return nextIp()
+end}
+
 dataspace:addNative{name=",", label="_COMMA", runtime=function()
   dataspace:addNumber(datastack:pop())
   return nextIp()
@@ -260,8 +265,7 @@ local wordBufferAddr = dataspace.here
 local wordBufferSize = 32
 dataspace:addNumber(0)
 for i=1,wordBufferSize do
-  -- TODO: Bytes?
-  dataspace:addNumber(0)
+  dataspace:addByte(0)
 end
 
 function setWordBuffer(str)
@@ -269,15 +273,15 @@ function setWordBuffer(str)
   assert(length < wordBufferSize, "Strings length too large: " .. str)
   dataspace[wordBufferAddr] = Dataspace.number(length)
   for i=1,length do
-    dataspace[wordBufferAddr + i] = Dataspace.number(string.byte(string.sub(str, i, i)))
+    dataspace[wordBufferAddr + i] = Dataspace.byte(string.byte(string.sub(str, i, i)))
   end
 end
 
 function getWordWithCount(addr, count)
   local str = ""
   for i=0,count-1 do
-    assert(dataspace[addr + i].type == "number")
-    str = str .. string.char(dataspace[addr + i].number)
+    assert(dataspace[addr + i].type == "byte", "Expected byte at addr = " .. addr + i)
+    str = str .. string.char(dataspace[addr + i].byte)
   end
   return str
 end
@@ -673,7 +677,6 @@ dataspace:addNative{name="@", label="_FETCH", runtime=function()
   datastack:push(dataspace[addr].number)
   return nextIp()
 end,
--- TODO
 asm=function() return [[
   lda (1, X)
   sta 1, X
@@ -687,10 +690,45 @@ dataspace:addNative{name="!", label="_STORE", runtime=function()
   dataspace[addr] = Dataspace.number(val)
   return nextIp()
 end,
--- TODO
 asm=function() return [[
   lda 3, X
   sta (1, X)
+  inx
+  inx
+  inx
+  inx
+  rts
+]] end}
+
+-- Takes a local address (2 bytes) off the stack and pushes 1 byte extended into
+-- a word.
+dataspace:addNative{name="C@", label="_C_FETCH", runtime=function()
+  local addr = datastack:pop()
+  assert(dataspace[addr].type == "number", "Expected word at " .. addr)
+  datastack:push(dataspace[addr].number)
+  return nextIp()
+end,
+asm=function() return [[
+  A8
+  lda (1, X)
+  A16
+  and #$FF
+  sta 1, X
+  rts
+]] end}
+
+dataspace:addNative{name="C!", label="_C_STORE", runtime=function()
+  local addr = datastack:pop()
+  local val = datastack:pop()
+  assert(dataspace[addr].type == "byte", "Address value must be word-sized: " .. addr)
+  dataspace[addr] = Dataspace.byte(val & 0xFF)
+  return nextIp()
+end,
+asm=function() return [[
+  lda 3, X
+  A8
+  sta (1, X)
+  A16
   inx
   inx
   inx
@@ -905,7 +943,7 @@ function unaryOp(name, label, op, asm)
   end, asm=function() return asm end}
 end
 
-unaryOp("NEGATE", "NEGATE", function(a)
+unaryOp("NEGATE", "_NEGATE", function(a)
   return -a
 end, [[
   lda #0
@@ -915,12 +953,28 @@ end, [[
   rts
 ]])
 
-unaryOp("INVERT", "INVERT", function(a)
+unaryOp("INVERT", "_INVERT", function(a)
   return ~a
 end, [[
   lda #$FFFF
   eor z:1, X
   sta z:1, X
+  rts
+]])
+
+unaryOp("2*", "_MUL2", function(a)
+  return a << 1
+end, [[
+  asl z:1, X
+  rts
+]])
+
+-- TODO: This currently right shifts rather than dividing. Can use // in Lua,
+-- but need to figure out what to do in ASM.
+unaryOp("2/", "_DIV2", function(a)
+  return a >> 1
+end, [[
+  lsr z:1, X
   rts
 ]])
 
@@ -1045,7 +1099,7 @@ do
   dataspace:addWords("<> BRANCH0")
   local exitBranchAddr = dataspace.here
   dataspace:addNumber(2000)
-  dataspace:addWords(", 1+ BRANCH")
+  dataspace:addWords("C, 1+ BRANCH")
   dataspace:addNumber(dataspace:getRelativeAddr(dataspace.here, loop))
   dataspace[exitBranchAddr].number = toUnsigned(dataspace:getRelativeAddr(exitBranchAddr, dataspace.here))
   dataspace:addWords("DROP SWAP !") -- Drop the " and fill in the length
@@ -1058,10 +1112,8 @@ do
   -- Forth?
   addColon("QUIT")
   local loop = dataspace.here
-  -- TODO: Rather than COUNT we can use C@ to get the length of a counted string
-  -- (if we decide to use byte-addressing instead of cell-addressing for
-  -- characters).
-  dataspace:addWords("WORD DUP COUNT >R DROP R> BRANCH0")
+  -- Grab the length of the counted string with @.
+  dataspace:addWords("WORD DUP @ BRANCH0")
   local eofBranchAddr = dataspace.here
   dataspace:addNumber(2000)
 

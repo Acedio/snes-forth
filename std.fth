@@ -1,6 +1,12 @@
 : ' WORD FIND DROP ; LABEL _TICK
 : POSTPONE ' COMPILE, ; IMMEDIATE
 
+: NIP SWAP DROP ;
+: OVER >R DUP R> SWAP ;
+: TUCK SWAP OVER ;
+: ROT >R SWAP R> SWAP ;
+: -ROT ROT ROT ; LABEL _NROT
+
 : ['] LIT [ ' LIT XT, ] COMPILE, ' XT, ; IMMEDIATE LABEL _BRACKET_TICK
 
 : 0= 0 = ; LABEL _0_EQ
@@ -41,4 +47,13 @@
          ['] TYPE COMPILE,
          ['] ABORT COMPILE,
          POSTPONE THEN ; IMMEDIATE LABEL _ABORT_S
+
+( These should actually be defined in Lua so we can always use 1-width
+  chars/cells/addrs )
+: CHARS ;
+: CHAR+ 1 + ;
+: CELLS 2* ;
+: CELL+ 2 + ;
+: ADDRS DUP 2* + ;
+: ADDR+ 3 + ;
 

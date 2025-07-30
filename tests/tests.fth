@@ -1,3 +1,44 @@
+: TEST-STACK-OPS
+  DEPTH 0 =
+  1 2 NIP 2 = AND
+  DEPTH 1 = AND
+
+  1 2 OVER
+    1 = SWAP
+    2 = AND SWAP
+    1 = AND
+    AND
+    DEPTH 1 = AND
+
+  1 2 TUCK
+    2 = SWAP
+    1 = AND SWAP
+    2 = AND
+    AND
+    DEPTH 1 = AND
+
+  1 2 3 ROT
+    1 = SWAP
+    3 = AND SWAP
+    2 = AND
+    AND
+    DEPTH 1 = AND
+
+  1 2 3 -ROT
+    2 = SWAP
+    1 = AND SWAP
+    3 = AND
+    AND
+    DEPTH 1 = AND
+;
+
+: TEST-RETURN-STACK
+  $123456 A.>R
+  R@ 0x3456 =
+  R> DUP >R 0x3456 = AND
+  A.R> 0x3456 = SWAP 0x0012 = AND AND
+;
+
 : TEST-UNTIL
   1 BEGIN DUP 1+ DUP 3 = UNTIL
   3 =
@@ -28,6 +69,8 @@
   0x03 0x02 XOR 1 = AND
   0xFFFE INVERT 1 = AND
   0xFFFF NEGATE 1 = AND
+  0xFF00 2/ 0x7F80 = AND
+  0x7F80 2* 0xFF00 = AND
 ;
 
 : TEST-COMPARISON
@@ -65,6 +108,7 @@ TODO: Implement the T{ ... -> ... }T notation.
 )
 
 : MAIN
+  TEST-STACK-OPS
   TEST-UNTIL
   TEST-WHILE
   TEST-IF
