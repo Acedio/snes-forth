@@ -42,3 +42,32 @@
          ['] ABORT COMPILE,
          POSTPONE THEN ; IMMEDIATE LABEL _ABORT_S
 
+( TODO: add a '0' LIT word so we can compile these without literals in QUIT )
+( word - success )
+: TRY-WORD
+  FIND DUP 0= IF
+    ( drop the word before exiting, but keep the success flag )
+    SWAP DROP EXIT
+  THEN
+  0 > STATE @ INVERT OR
+  IF EXECUTE ELSE COMPILE, THEN
+;
+
+: TRY-NUMBER ;
+: TRY-ADDRESS ;
+  
+
+: INTERPRET
+  DUP TRY-WORD IF EXIT THEN
+  DUP TRY-NUMBER IF EXIT THEN
+  TRY-ADDRESS
+;
+
+: MYQUIT
+  BEGIN
+    WORD DUP COUNT >R DROP R>
+  WHILE
+    INTERPRET
+  REPEAT
+  BYE ;
+
