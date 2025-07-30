@@ -1,3 +1,10 @@
+: TEST-RETURN-STACK
+  $123456 A.>R
+  R@ 0x3456 =
+  R> DUP >R 0x3456 = AND
+  A.R> 0x3456 = SWAP 0x0012 = AND AND
+;
+
 : TEST-UNTIL
   1 BEGIN DUP 1+ DUP 3 = UNTIL
   3 =
@@ -51,13 +58,6 @@
   SWAP 0x0012 = AND
 ;
 
-: TEST-ADDRESS-DOUBLES
-  $123456
-  A.>R A.R>
-  0x3456 =
-  SWAP 0x0012 = AND
-;
-
 (
 TODO: Implement the T{ ... -> ... }T notation.
 : T{
@@ -71,7 +71,7 @@ TODO: Implement the T{ ... -> ... }T notation.
   TEST-MATH-OP
   TEST-COMPARISON
   TEST-LITERALS
-  TEST-ADDRESS-DOUBLES
+  TEST-RETURN-STACK
 ;
 
 MAIN
