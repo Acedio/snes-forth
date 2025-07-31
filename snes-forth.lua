@@ -67,7 +67,7 @@ end
 
 function docol(dataaddr)
   returnstack:pushAddress(ip)
-  ip = dataaddr -- TODO: Also, alignment?
+  ip = dataaddr
   return nextIp()
 end
 
@@ -511,30 +511,29 @@ asm=function() return [[
   rts
 ]] end}
 
--- Move a 3-byte address from from data stack to the R stack.
+-- Move a 2-cell address from from data stack to 3-bytes on the R stack.
 dataspace:addNative{name="A.>R", label="_A_TO_R", runtime=function()
   returnstack:pushAddress(datastack:popDouble())
   return nextIp()
 end,
--- TODO
 asm=function() return [[
   ; First move the return address three bytes back, two MSBs first.
   lda 2, S
   pha
-  sep #$20
-  .a8
+  ; Need to go to a8 because it's awkward to push three bytes onto the stack.
+  A8
   ; Move the LSB.
   lda 3, S
   pha
 
-  ; Now move the address off the data stack, LSB first.
-  lda z:1, X
-  sta 4, S
-  rep #$20
-  .a16
-
+  ; Now move the address off the data stack, LSB first while we're still in .a8
   lda z:2, X
+  sta 4, S
+  A16
+
+  lda z:3, X
   sta 5, S
+  inx
   inx
   inx
   inx
@@ -562,24 +561,24 @@ dataspace:addNative{name="A.R>", label="_A_FROM_R", runtime=function()
   datastack:pushDouble(returnstack:popAddress())
   return nextIp()
 end,
--- TODO
 asm=function() return [[
   dex
   dex
   dex
+  dex
+  ; LSBs
   lda 4, S
   sta z:1, X
-
-  sep #$20
-  .a8
+  ; MSB
   lda 6, S
+  and #$FF
   sta z:3, X
 
   ; Now shift the return address, first moving the LSB.
+  A8
   pla
   sta 3, S
-  rep #$20
-  .a16
+  A16
 
   ; Now the two MSBs
   pla
@@ -594,6 +593,26 @@ end,
 asm=function() return [[
   lda 4, S
   PUSH_A
+  rts
+]] end}
+
+dataspace:addNative{name="A.R@", label="_A_FETCH_R", runtime=function()
+  datastack:pushDouble(returnstack:topAddress())
+  return nextIp()
+end,
+asm=function() return [[
+  dex
+  dex
+  dex
+  dex
+  ; LSBs
+  lda 4, S
+  sta z:1, X
+  ; MSB
+  lda 6, S
+  and #$FF
+  sta z:3, X
+
   rts
 ]] end}
 
@@ -736,7 +755,7 @@ asm=function() return [[
   rts
 ]] end}
 
--- TODO: Takes a far address (3 bytes) off the stack and pushes a 2 byte word.
+-- TODO: Takes a far address (2 cells) off the stack and pushes a 1 cell word.
 dataspace:addNative{name="F@", label="_FAR_FETCH", runtime=function()
   local addr = datastack:pop()
   assert(dataspace[addr].type == "number", "Expected word at " .. addr)
@@ -793,11 +812,9 @@ asm=function() return [[
   beq @carry
   rts
 @carry:
-  sep #$20
-  .a8
+  A8
   inc z:3, X
-  rep #$20
-  .a16
+  A16
   rts
 ]] end}
 
@@ -969,9 +986,7 @@ end, [[
   rts
 ]])
 
--- TODO: This currently right shifts rather than dividing. Can use // in Lua,
--- but need to figure out what to do in ASM.
-unaryOp("2/", "_DIV2", function(a)
+unaryOp("LSR", "_LSR", function(a)
   return a >> 1
 end, [[
   lsr z:1, X

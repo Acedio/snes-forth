@@ -1,35 +1,37 @@
 : TEST-STACK-OPS
-  DEPTH 0 =
-  1 2 NIP 2 = AND
-  DEPTH 1 = AND
+  DEPTH >R \ Save depth for checking the relative number of items on the stack.
+  1 2 NIP 2 =
+  DEPTH R@ 1+ = AND
 
   1 2 OVER
     1 = SWAP
     2 = AND SWAP
     1 = AND
     AND
-    DEPTH 1 = AND
+    DEPTH R@ 1+ = AND
 
   1 2 TUCK
     2 = SWAP
     1 = AND SWAP
     2 = AND
     AND
-    DEPTH 1 = AND
+    DEPTH R@ 1+ = AND
 
   1 2 3 ROT
     1 = SWAP
     3 = AND SWAP
     2 = AND
     AND
-    DEPTH 1 = AND
+    DEPTH R@ 1+ = AND
 
   1 2 3 -ROT
     2 = SWAP
     1 = AND SWAP
     3 = AND
     AND
-    DEPTH 1 = AND
+    DEPTH R@ 1+ = AND
+
+  R> DROP
 ;
 
 : TEST-RETURN-STACK
@@ -61,6 +63,18 @@
   1 FALSE IF 2 + THEN 1 = AND
 ;
 
+: USE-CASE
+  CASE
+  1 OF 111 ENDOF
+  2 OF 222 ENDOF
+  >R 333 R>
+  ENDCASE ;
+
+: TEST-CASE
+  1 USE-CASE 111 =
+  2 USE-CASE 222 = AND
+  4 USE-CASE 333 = AND ;
+
 : TEST-MATH-OP
   0 1 + 1 =
   -1 -2 - 1 = AND
@@ -69,7 +83,8 @@
   0x03 0x02 XOR 1 = AND
   0xFFFE INVERT 1 = AND
   0xFFFF NEGATE 1 = AND
-  0xFF00 2/ 0x7F80 = AND
+  0xFF00 LSR 0x7F80 = AND
+  0xFF00 2/ 0xFF80 = AND
   0x7F80 2* 0xFF00 = AND
 ;
 
@@ -112,6 +127,7 @@ TODO: Implement the T{ ... -> ... }T notation.
   TEST-UNTIL
   TEST-WHILE
   TEST-IF
+  TEST-CASE
   TEST-MATH-OP
   TEST-COMPARISON
   TEST-LITERALS
