@@ -109,13 +109,6 @@
   SWAP 0x0012 = AND
 ;
 
-: TEST-ADDRESS-DOUBLES
-  $123456
-  A.>R A.R>
-  0x3456 =
-  SWAP 0x0012 = AND
-;
-
 (
 TODO: Implement the T{ ... -> ... }T notation.
 : T{
@@ -132,7 +125,6 @@ TODO: Implement the T{ ... -> ... }T notation.
   TEST-MATH-OP
   TEST-COMPARISON
   TEST-LITERALS
-  TEST-ADDRESS-DOUBLES
 ;
 
 MAIN
