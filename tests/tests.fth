@@ -124,6 +124,7 @@ TODO: Implement the T{ ... -> ... }T notation.
 
 : MAIN
   TEST-STACK-OPS
+  TEST-RETURN-STACK
   TEST-UNTIL
   TEST-WHILE
   TEST-IF
