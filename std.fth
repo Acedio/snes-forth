@@ -67,12 +67,7 @@
     SWAP POSTPONE THEN 1- \ Perform a THEN for every ELSE that we pushed.
   REPEAT DROP ; IMMEDIATE
 
-( These should actually be defined in Lua so we can always use 1-width
-  chars/cells/addrs )
-: CHARS ;
-: CHAR+ 1 + ;
-: CELLS 2* ;
-: CELL+ 2 + ;
-: ADDRS DUP 2* + ;
-: ADDR+ 3 + ;
+: CHAR+ 1 CHARS + ;
+: CELL+ 1 CELLS + ;
+: ADDR+ 1 ADDRS + ;
 

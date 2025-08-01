@@ -18,11 +18,7 @@
 
 .segment "CODE"
 
-RETURN_STACK_ADDR := $01FF
-DATA_STACK_ADDR := $02FF
-
 .include "preamble.s"
-.include "forth.s"
 
 reset:
   clc  ; native mode
@@ -54,10 +50,12 @@ reset:
   txs
   ldx #DATA_STACK_ADDR
 
-  jsl _MAIN
+.import _MAIN
+  jsr _MAIN
 
 forever:
   jmp forever
 
+.export not_implemented
 not_implemented:
   jmp not_implemented

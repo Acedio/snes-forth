@@ -31,3 +31,6 @@
   rep #$20
   .a16
 .endmacro
+
+RETURN_STACK_ADDR := $01FF
+DATA_STACK_ADDR := $02FF

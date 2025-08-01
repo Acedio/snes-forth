@@ -1,26 +1,26 @@
 all: snes-forth.smc snes-forth.mlb
 
-snes-forth.smc snes-forth.labels snes-forth.dbg: snes-forth.o lorom128.cfg
-	ld65 -C lorom128.cfg -Ln snes-forth.labels --dbgfile snes-forth.dbg -o snes-forth.smc snes-forth.o
+%.smc %.labels %.dbg: %.o init.o lorom128.cfg
+	ld65 -C lorom128.cfg -Ln $*.labels --dbgfile $*.dbg -o $*.smc $*.o init.o
 
-snes-forth.o: snes-forth.s forth.s preamble.s
+%.o: %.s preamble.s
 	ca65 $< -g -o $@
 
 # A list of labels for use with Mesen.
-snes-forth.mlb: snes-forth.labels
+%.mlb: %.labels
 	< $< awk 'BEGIN {IFS=" "} {printf("SnesPrgRom:%x:%s\n", strtonum("0x" $$2) - 0x8000, substr($$3,2));}' > $@
 
-forth.fth: std.fth main.fth 
+%.s: %.fth snes-forth.lua
+	./snes-forth.lua $*.fth $@
+
+snes-forth.fth: std.fth main.fth 
 	# Does $^ preserve order?
 	cat $^ > $@
-
-forth.s: forth.fth snes-forth.lua
-	./snes-forth.lua forth.fth $@
 
 all-tests.fth: std.fth tests/tests.fth
 	cat $^ > $@
 
-tests: all-tests.fth snes-forth.lua
+tests: all-tests.smc all-tests.mlb
 	./snes-forth.lua -v all-tests.fth all-tests.s
 
 clean:

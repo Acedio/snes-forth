@@ -97,6 +97,34 @@ dataspace:addNative{name="HERE", runtime=function()
   return nextIp()
 end}
 
+; All datatypes are one cell in Lua, but varying sizes on the SNES.
+dataspace:addNative{name="CHARS", runtime=function()
+  return nextIp()
+end,
+asm=function() return [[
+  rts
+]] end}
+
+dataspace:addNative{name="CELLS", runtime=function()
+  return nextIp()
+end,
+asm=function() return [[
+  asl z:1, X
+  rts
+]] end}
+
+dataspace:addNative{name="ADDRS", runtime=function()
+  return nextIp()
+end,
+asm=function() return [[
+  clc
+  lda z:1, X
+  asl A
+  adc z:1, X
+  sta z:1, X
+  rts
+]] end}
+
 dataspace:addNative{name="DATASPACE", runtime=function()
   dataspace:print(outputs)
   return nextIp()
@@ -116,7 +144,7 @@ asm=function() return [[
   rts
 ]] end}
 
-dataspace:addNative{name=".S", label="_DOT_S", runtime=function()
+dataspace:addNative{name=".s", LABEL="_dot_S", runtime=function()
   datastack:print(outputs)
   return nextIp()
 end}
@@ -503,36 +531,31 @@ asm=function() return [[
   ; First, move the return address two bytes back.
   lda 1, S
   pha
-  lda 4, S ; Recopying the second byte again.
-  sta 2, S
 
   POP_A
-  sta 4, S
+  sta 3, S
   rts
 ]] end}
 
 -- Move a 2-cell address from from data stack to 3-bytes on the R stack.
+-- 2 cell addresses store the LSB in the lowest position (so it's pushed onto
+-- the stack MSB first)
 dataspace:addNative{name="A.>R", label="_A_TO_R", runtime=function()
   returnstack:pushAddress(datastack:popDouble())
   return nextIp()
 end,
 asm=function() return [[
-  ; First move the return address three bytes back, two MSBs first.
+  ; First transfer the LSB of the address
+  A8
+  lda 1, X
+  pha
+  A16
+  ; Shift the return address three bytes back.
   lda 2, S
   pha
-  ; Need to go to a8 because it's awkward to push three bytes onto the stack.
-  A8
-  ; Move the LSB.
-  lda 3, S
-  pha
-
-  ; Now move the address off the data stack, LSB first while we're still in .a8
-  lda z:2, X
-  sta 4, S
-  A16
-
-  lda z:3, X
-  sta 5, S
+  ; Now fill in the two MSBs of the address
+  lda 2, X
+  sta 4, X
   inx
   inx
   inx
@@ -546,14 +569,14 @@ dataspace:addNative{name="R>", label="_FROM_R", runtime=function()
   return nextIp()
 end,
 asm=function() return [[
-  lda 4, S
+  ; Move the cell from the return stack
+  lda 3, S
   PUSH_A
 
-  ; Shift the return address
-  lda 2, S
-  sta 4, S
+  ; Now shift the return address
   pla
   sta 1, S
+
   rts
 ]] end}
 
@@ -566,23 +589,21 @@ asm=function() return [[
   dex
   dex
   dex
-  ; LSBs
+
+  ; Copy the 2 MSBs
   lda 4, S
-  sta z:1, X
-  ; MSB
-  lda 6, S
-  and #$FF
-  sta z:3, X
-
-  ; Now shift the return address, first moving the LSB.
-  A8
-  pla
-  sta 3, S
-  A16
-
-  ; Now the two MSBs
+  sta 2, X
+  ; Move the return word
   pla
   sta 2, S
+  ; Copy the LSB
+  A8
+  pla
+  sta 1, X
+  ; Zero the garbage byte at the end
+  stz 4, X
+  A16
+
   rts
 ]] end}
 
@@ -591,7 +612,7 @@ dataspace:addNative{name="R@", label="_FETCH_R", runtime=function()
   return nextIp()
 end,
 asm=function() return [[
-  lda 4, S
+  lda 3, S
   PUSH_A
   rts
 ]] end}
@@ -606,7 +627,7 @@ asm=function() return [[
   dex
   dex
   ; LSBs
-  lda 4, S
+  lda 3, S
   sta z:1, X
   ; MSB
   lda 6, S
@@ -676,16 +697,13 @@ dataspace:addNative{name="BRANCH", runtime=function()
   return nextIp()
 end,
 asm=function() return [[
-  tsc
-  tcd ; set the DP to the return stack
   ldy #1
-  lda [1],Y ; Grab the relative branch pointer
+  lda (1,S),Y ; Grab the relative branch pointer
 
   clc
-  adc z:1
-  sta z:1
-  lda #0 ; reset the data stack
-  tcd
+  adc 1, S
+  sta 1, S
+
   rts ; "return" to the branch point
 ]] end}
 
@@ -834,31 +852,13 @@ dataspace:addNative{name="LIT", runtime=function()
 end,
 -- TODO: calls to LIT should probably just be inlined :P
 asm=function() return [[
-  ; We have the 24 bit return address on the stack, need to grab that value to a
-  ; DP location (it's already in the DP because it's on the stack, but we need
-  ; to pull it to a static location because that's the only indirect long
-  ; addressing that exists) and increment it, then do a LDA indirect long
-  ; addressing to grab the actual literal value.
-  ;
-  ; Can we do something silly like treating the return stack like the DP?
-  dex ; make room for the literal word
-  dex
-  tsc
-  tcd ; set the DP to the return stack
-
   ldy #1
-  lda [1],Y ; indirect long read the address on the top of the stack + 1
-  sta f:1,X ; TODO: Could save a byte here if we can use data page addressing.
-
-  lda #0
-  tcd ; reset DP before we PUSH
-
-  ; Increment return address past the literal word
-  lda #2
-  clc
-  adc 1, S
+  lda (1, S), Y
+  PUSH_A
+  lda 1, S
+  inc A
+  inc A
   sta 1, S
-  ; TODO: handle the carry here
 
   rts
 ]] end}
@@ -873,35 +873,22 @@ dataspace:addNative{name="A.LIT", runtime=function()
   return nextIp()
 end,
 -- TODO: calls to A.LIT should probably just be inlined :P
--- TODO: Fix for CellStack
 asm=function() return [[
-  ; We have the 24 bit return address on the stack, need to grab that value to a
-  ; DP location (it's already in the DP because it's on the stack, but we need
-  ; to pull it to a static location because that's the only indirect long
-  ; addressing that exists) and increment it, then do a LDA indirect long
-  ; addressing to grab the actual literal value.
-  ;
-  ; Can we do something silly like treating the return stack like the DP?
-  dex ; make room for the literal address
-  dex
-  dex
-  tsc
-  tcd
+  ; Copy the MSB and garbage
+  ldy #3
+  lda (1, S), Y
+  and #$FF
+  PUSH_A
+  ; Copy the LSBs
   ldy #1
-  lda [1], Y
-  sta f:1, X
-  iny
-  lda [1], Y
-  sta f:2, X
+  lda (1, S), Y
+  PUSH_A
+  lda 1, S
+  inc A
+  inc A
+  inc A
+  sta 1, S
 
-  lda z:1
-  clc
-  adc #3
-  ; TODO: Need to check for carry
-  sta z:1
-
-  lda #0
-  tcd
   rts
 ]] end}
 
@@ -1093,9 +1080,25 @@ do
   dataspace[dataspace.latest].immediate = true
 end
 
+-- Given a return stack entry, push where the inline data for this word is.
+dataspace:addNative{name="INLINE-DATA", runtime=function()
+  -- The return stack in Lua already points at the inline data.
+  return nextIp()
+end,
+asm=function() return [[
+  ; We're one byte behind the inline data.
+  inc 1, X
+  rts
+]] end}
+
+-- Push the inline string address and the length.
 addColonWithLabel("DOS\"", "_DO_SLIT")
 do
-  dataspace:addWords("R@ 1+ R@ @ R> DUP @ + 1+ >R EXIT")
+  dataspace:addWords("R@ INLINE-DATA DUP LIT")
+  dataspace:addNumber(1)
+  dataspace:addWords("CELLS + SWAP @ DUP CHARS LIT")
+  dataspace:addNumber(1)
+  dataspace:addWords("CELLS + R> + >R EXIT")
 end
 
 addColonWithLabel("S\"", "_SLIT")
@@ -1218,5 +1221,19 @@ if debugging() then
 end
 
 local output = assert(io.open(arg[2], "w"))
+output:write([[
+.p816
+.i16
+.a16
+.import not_implemented
+
+.segment "CODE"
+
+.include "preamble.s"
+
+.export _MAIN
+
+]])
+
 dataspace:assembly(output)
 
