@@ -97,7 +97,7 @@ dataspace:addNative{name="HERE", runtime=function()
   return nextIp()
 end}
 
-; All datatypes are one cell in Lua, but varying sizes on the SNES.
+-- All datatypes are one cell in Lua, but varying sizes on the SNES.
 dataspace:addNative{name="CHARS", runtime=function()
   return nextIp()
 end,
@@ -140,6 +140,7 @@ asm=function() return [[
   inc A
   clc
   adc #DATA_STACK_ADDR
+  lsr ; 2 bytes per cell
   PUSH_A
   rts
 ]] end}
@@ -555,7 +556,7 @@ asm=function() return [[
   pha
   ; Now fill in the two MSBs of the address
   lda 2, X
-  sta 4, X
+  sta 4, S
   inx
   inx
   inx
@@ -1060,11 +1061,11 @@ end, "bpl")
 
 binaryCmpOp("U<", "_UNSIGNED_LT", function(a, b)
   return toUnsigned(a) < toUnsigned(b)
-end, "bcs")
+end, "bcc")
 
 binaryCmpOp("U>", "_UNSIGNED_GT", function(a, b)
   return toUnsigned(a) > toUnsigned(b)
-end, "bcc")
+end, "bcs")
 
 do
   addColonWithLabel(":", "_COLON")
