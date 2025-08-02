@@ -24,4 +24,4 @@ tests: all-tests.smc all-tests.mlb
 	./snes-forth.lua -v all-tests.fth all-tests.s
 
 clean:
-	rm snes-forth.smc snes-forth.o forth.fth forth.s all-tests.fth all-tests.s snes-forth.mlb snes-forth.labels snes-forth.dbg
+	rm snes-forth.smc snes-forth.fth *.o forth.fth forth.s all-tests.fth all-tests.s *.mlb *.labels *.dbg
