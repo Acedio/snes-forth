@@ -109,6 +109,13 @@
   SWAP 0x0012 = AND
 ;
 
+VARIABLE TEST-VAR
+
+( TODO: Broken on the SNES )
+: TEST-MEMORY
+  21 TEST-VAR !
+  TEST-VAR @ 21 = ;
+
 (
 TODO: Implement the T{ ... -> ... }T notation.
 : T{
@@ -125,6 +132,7 @@ TODO: Implement the T{ ... -> ... }T notation.
   TEST-MATH-OP
   TEST-COMPARISON
   TEST-LITERALS
+  TEST-MEMORY
 ;
 
 MAIN

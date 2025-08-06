@@ -30,6 +30,7 @@ end
 function Dataspace:add(entry)
   self[self.here] = entry
   self.here = self.here + 1
+  return entry
 end
 
 function Dataspace.dictionaryEntry(name, prev)
@@ -217,12 +218,11 @@ function Dataspace:toRelativeAddress(from, to)
   return delta
 end
 
+-- Always unsigned.
 function Dataspace.number(number)
   local entry = {
     type = "number",
     size = function() return 2 end,
-    -- TODO: Signed vs Unsigned? Or maybe always store unsigned but rely on
-    -- caller?
     number = number & 0xFFFF,
   }
   function entry:toString(dataspace)
@@ -251,23 +251,23 @@ end
 
 -- Convenience methods.
 function Dataspace:addCall(addr)
-  self:add(Dataspace.call(addr))
+  return self:add(Dataspace.call(addr))
 end
 
 function Dataspace:addAddress(addr)
-  self:add(Dataspace.address(addr))
+  return self:add(Dataspace.address(addr))
 end
 
 function Dataspace:addXt(name)
-  self:add(Dataspace.xt(self:codewordOf(name)))
+  return self:add(Dataspace.xt(self:codewordOf(name)))
 end
 
 function Dataspace:addNumber(number)
-  self:add(Dataspace.number(number))
+  return self:add(Dataspace.number(number))
 end
 
 function Dataspace:addByte(byte)
-  self:add(Dataspace.byte(byte))
+  return self:add(Dataspace.byte(byte))
 end
 
 -- Table should have at least name and runtime specified.

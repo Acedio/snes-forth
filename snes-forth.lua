@@ -41,9 +41,38 @@ local dataspace = Dataspace:new()
 
 local ip = 0
 
-local debugEntry = Dataspace.number(0)
+-- Make a variable that is easily accessible to Lua and the SNES.
+function makeSystemVariable(name)
+  dataspace:dictionaryAdd(name)
+  local native = Dataspace.native{name=name}
+  dataspace:add(native)
+  local dataaddr = dataspace.here
+  native.runtime = function()
+    datastack:push(dataaddr)
+    return nextIp()
+  end
+  native.asm = function() return string.format([[
+    dex
+    dex
+    ; Load address.
+    lda #_%s_DATA
+    sta z:1, X
+    rts
+  .ZEROPAGE
+  _%s_DATA:
+    .WORD $0000
+  .CODE
+  ]], name, name, name) end
+  return dataspace:addNumber(0)
+end
+
+local stateEntry = makeSystemVariable("STATE")
+local debugEntry = makeSystemVariable("DEBUG")
+
 if flags["-v"] then
-  debugEntry = Dataspace.number(0xFFFF)
+  debugEntry.number = 0xFFFF
+else
+  debugEntry.number = 0x0
 end
 
 function debugging()
@@ -218,36 +247,6 @@ dataspace:addNative{name="CREATEDOCOL", runtime=function()
   addColon(name)
   return nextIp()
 end}
-
--- TODO: Currently only for words, need another for addresses.
-function makeLowRamVariable(name, entry)
-  dataspace:dictionaryAdd(name)
-  local native = Dataspace.native{name=name}
-  dataspace:add(native)
-  local dataaddr = dataspace.here
-  native.runtime = function()
-    datastack:push(dataaddr)
-    return nextIp()
-  end
-  native.asm = function() return string.format([[
-    dex
-    dex
-    lda #_%s_DATA
-    sta z:1, X
-    rts
-  .BSS
-  _%s_DATA:
-    .WORD $0000
-  .CODE
-  ]], name, name, name) end
-  if not entry then
-    entry = Dataspace.number(0)
-  end
-  dataspace:add(entry)
-end
-
-makeLowRamVariable("STATE")
-makeLowRamVariable("DEBUG", debugEntry)
 
 dataspace:addNative{name="ALLOT", runtime=function()
   dataspace.here = dataspace.here + datastack:pop()
@@ -725,7 +724,7 @@ dataspace:addNative{name="!", label="_STORE", runtime=function()
   local addr = datastack:pop()
   local val = datastack:pop()
   assert(dataspace[addr].type == "number", "Address value must be word-sized: " .. addr)
-  dataspace[addr] = Dataspace.number(val)
+  dataspace[addr].number = val
   return nextIp()
 end,
 asm=function() return [[
