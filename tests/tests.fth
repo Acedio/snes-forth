@@ -1,3 +1,5 @@
+TRUE DEBUG !
+
 : TEST-STACK-OPS
   DEPTH >R \ Save depth for checking the relative number of items on the stack.
   1 2 NIP 2 =

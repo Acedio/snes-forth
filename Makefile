@@ -3,6 +3,9 @@ all: snes-forth.smc snes-forth.mlb
 %.smc %.labels %.dbg: %.o init.o lorom128.cfg
 	ld65 -C lorom128.cfg -Ln $*.labels --dbgfile $*.dbg -o $*.smc $*.o init.o
 
+%.o: %.out.s preamble.s
+	ca65 $< -g -o $@
+
 %.o: %.s preamble.s
 	ca65 $< -g -o $@
 
@@ -10,18 +13,18 @@ all: snes-forth.smc snes-forth.mlb
 %.mlb: %.labels
 	< $< awk 'BEGIN {IFS=" "} {printf("SnesPrgRom:%x:%s\n", strtonum("0x" $$2) - 0x8000, substr($$3,2));}' > $@
 
-%.s: %.fth snes-forth.lua
-	./snes-forth.lua $*.fth $@
+%.out.s: %.out.fth snes-forth.lua
+	./snes-forth.lua $< $@
 
-snes-forth.fth: std.fth main.fth 
+tests.out.fth: std.fth tests/tests.fth
+	cat $^ > $@
+
+%.out.fth: std.fth %.fth 
 	# Does $^ preserve order?
 	cat $^ > $@
 
-all-tests.fth: std.fth tests/tests.fth
-	cat $^ > $@
-
-tests: all-tests.smc all-tests.mlb
-	./snes-forth.lua -v all-tests.fth all-tests.s
+tests: tests.smc tests.mlb
+	echo tests
 
 clean:
-	rm snes-forth.smc snes-forth.fth *.o forth.fth forth.s all-tests.fth all-tests.s *.mlb *.labels *.dbg
+	rm *.smc *.labels *.dbg *.o *.mlb *.out.s *.out.fth
