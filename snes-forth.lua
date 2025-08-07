@@ -43,9 +43,8 @@ local ip = 0
 
 -- Make a variable that is easily accessible to Lua and the SNES.
 function makeSystemVariable(name)
-  dataspace:dictionaryAdd(name)
   local native = Dataspace.native{name=name}
-  dataspace:add(native)
+  dataspace:addNative(native)
   local dataaddr = dataspace.here
   native.runtime = function()
     datastack:push(dataaddr)
@@ -101,14 +100,21 @@ function docol(dataaddr)
 end
 
 function addColonWithLabel(name, label)
-  dataspace:dictionaryAdd(name)
   local native = Dataspace.native{
     name = name,
-    size = function() assert(false, "Tried to get the size of a colon def.") end,
+    -- Colon defs have no size because their codeword is a noop.
+    -- TODO: It's kind of weird to have a zero-sized entry because it shares its
+    -- (Lua dataspace) address with whatever else comes next. I think I split
+    -- off the dictionary entry so that I could put a label at the beginning of
+    -- each word (native or DOCOL), but maybe we should instead put the label at
+    -- the end of each dict entry? Maybe docol isn't really needed? Does that
+    -- fix our problem?
+    size = function() return 0 end,
     label = label,
     asm = function() return "; Colon definition." end,
   }
-  dataspace:add(native)
+  -- This naturally adds a dictionary entry, which does have a size.
+  dataspace:addNative(native)
   local dataaddr = dataspace.here
   native.runtime = function()
     return docol(dataaddr)
@@ -192,12 +198,13 @@ dataspace:addNative{name="XT!", label="_XT_STORE", runtime=function()
 end}
 
 dataspace:addNative{name="COMPILE-DOCOL", runtime=function()
-  local entry = Dataspace.native{
+  local native = Dataspace.native{
     name = "docol-fn",
   }
-  dataspace:add(entry)
+  -- Don't use addNative because we don't want a dictionary entry.
+  dataspace:add(native)
   local addr = dataspace.here
-  function entry:runtime() docol(addr) end
+  function native:runtime() docol(addr) end
   return nextIp()
 end}
 
@@ -228,14 +235,13 @@ end}
 
 dataspace:addNative{name="CREATE", runtime=function()
   local name = input:word()
-  dataspace:dictionaryAdd(name)
-  local entry = Dataspace.native{
+  local native = Dataspace.native{
     name = name,
   }
-  dataspace:add(entry)  -- Use a placeholder fn initially.
+  dataspace:addNative(native)  -- Use a placeholder fn initially.
   local dataaddr = dataspace.here  -- HERE has been updated by calling native()
   -- Now update the fn with the new HERE.
-  entry.runtime = function()
+  native.runtime = function()
     datastack:push(dataaddr)
     return nextIp()
   end

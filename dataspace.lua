@@ -27,6 +27,7 @@ function Dataspace:assembly(file)
   end
 end
 
+-- TODO: Maybe addSized and addUnsized
 function Dataspace:add(entry)
   self[self.here] = entry
   self.here = self.here + 1
@@ -37,7 +38,8 @@ function Dataspace.dictionaryEntry(name, prev)
   local entry = {
     type = "dictionary-entry",
     name = name,
-    size = function() assert(false, "Tried to get size of dictionary entry.") end,
+    -- TODO: These should be sizeable.
+    size = function() return nil end,
     prev = prev,
   }
   function entry:toString(dataspace)
@@ -87,10 +89,11 @@ function Dataspace.defaultLabel(name)
   return "_" .. string.gsub(name, "%W", "_")
 end
 
+-- Takes a (potentially partially initiated) native definition.
 function Dataspace.native(entry)
   entry.type = "native"
   if not entry.size then
-    entry.size = function() assert(false, "Tried to get size of native entry.") end
+    entry.size = function() return nil end
   end
   if not entry.label then
     -- TODO: Add default logic here to convert name to label by replacing
@@ -174,7 +177,9 @@ function Dataspace:getRelativeAddr(current, to)
 
   local delta = 0
   while current < to do
-    delta = delta + self[current]:size()
+    local size = self[current]:size()
+    assert(size, "Couldn't get size of " .. self[current]:toString(self))
+    delta = delta + size
     current = current + 1
   end
   return delta
@@ -186,13 +191,17 @@ function Dataspace:fromRelativeAddress(current, delta)
   local original = current
   if delta >= 0 then
     while delta > 0 do
-      delta = delta - self[current]:size()
+      local size = self[current]:size()
+      assert(size, "Couldn't get size of " .. self[current]:toString(self))
+      delta = delta - size
       current = current + 1
     end
   else
     while delta < 0 do
       current = current - 1
-      delta = delta + self[current]:size()
+      local size = self[current]:size()
+      assert(size, "Couldn't get size of " .. self[current]:toString(self))
+      delta = delta + size
     end
   end
   assert(delta == 0, "Delta was not zero from: " .. original)
@@ -206,13 +215,17 @@ function Dataspace:toRelativeAddress(from, to)
   local delta = 0
   if current <= to then
     while current < to do
-      delta = delta + self[current]:size()
+      local size = self[current]:size()
+      assert(size, "Couldn't get size of " .. self[current]:toString(self))
+      delta = delta + size
       current = current + 1
     end
   else
     while current > to do
       current = current - 1
-      delta = delta - self[current]:size()
+      local size = self[current]:size()
+      assert(size, "Couldn't get size of " .. self[current]:toString(self))
+      delta = delta - size
     end
   end
   return delta
