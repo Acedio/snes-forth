@@ -77,13 +77,17 @@ function Dataspace.toCodeword(dictAddr)
   return dictAddr + 1
 end
 
-function Dataspace:getCodewordDictionaryEntry(codewordAddr)
-  assert(self[codewordAddr - 1].type == "dictionary-entry")
-  return self[codewordAddr - 1]
+function Dataspace:addrDict(xt)
+  assert(self[xt - 1].type == "dictionary-entry")
+  return self[xt - 1]
 end
 
 function Dataspace:addrName(addr)
-  return self:getCodewordDictionaryEntry(addr).name
+  return self:addrDict(addr).name
+end
+
+function Dataspace:addrLabel(addr)
+  return self:addrDict(addr).label
 end
 
 function Dataspace:codewordOf(name)
@@ -125,17 +129,13 @@ function Dataspace.call(addr)
   function entry:toString(dataspace)
     assert(self.addr > 0 and self.addr < dataspace.here, "Invalid address " .. self.addr )
     assert(dataspace[self.addr].type == "native" or dataspace[self.addr].type == "call", "Expected fn or call at " .. self.addr)
-    if dataspace[self.addr - 1].type == "dictionary-entry" then
-      return "Call " .. dataspace[self.addr - 1].name .. " (" .. self.addr .. ")"
-    else
-      return "Unnamed fn at: " .. tostring(self.addr)
-    end
+    return "Call " .. dataspace:addrName(self.addr)
   end
   function entry:asm(dataspace)
     assert(self.addr > 0 and self.addr < dataspace.here, "Invalid address " .. self.addr)
     assert(dataspace[self.addr].type == "native" or dataspace[self.addr].type == "call", "Expected fn or call at " .. self.addr)
     -- TODO: I think this might be broken for code after DODOES.
-    return string.format("JSR %s", dataspace[self.addr - 1].label)
+    return string.format("JSR %s", dataspace:addrDict(self.addr).label)
   end
   return entry
 end
@@ -164,12 +164,12 @@ function Dataspace.xt(addr)
     addr = addr,
   }
   function entry:toString(dataspace)
-    assert(self.addr < dataspace.here and dataspace[self.addr - 1].label, "Invalid xt " .. self.addr )
-    return string.format("XT: %d %s", self.addr, dataspace[self.addr - 1].label)
+    assert(self.addr < dataspace.here and dataspace:addrName(self.addr), "Invalid xt " .. self.addr )
+    return string.format("XT: %d %s", self.addr, dataspace:addrName(self.addr))
   end
   function entry:asm(dataspace)
-    assert(self.addr < dataspace.here and dataspace[self.addr - 1].label, "Invalid xt " .. self.addr )
-    return string.format(".WORD %s", dataspace[self.addr - 1].label)
+    assert(self.addr < dataspace.here and dataspace:addrDict(self.addr).label, "Invalid xt " .. self.addr )
+    return string.format(".WORD %s", dataspace:addrDict(self.addr).label)
   end
   return entry
 end
