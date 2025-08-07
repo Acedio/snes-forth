@@ -37,7 +37,7 @@ function Dataspace.dictionaryEntry(name, label, prev)
     name = name,
     label = label,
     -- TODO: These should be sizable.
-    size = function() return 1 end,
+    size = function() return nil end,
     prev = prev,
   }
   function entry:toString(dataspace)
@@ -80,6 +80,10 @@ end
 function Dataspace:getCodewordDictionaryEntry(codewordAddr)
   assert(self[codewordAddr - 1].type == "dictionary-entry")
   return self[codewordAddr - 1]
+end
+
+function Dataspace:addrName(addr)
+  return self:getCodewordDictionaryEntry(addr).name
 end
 
 function Dataspace:codewordOf(name)

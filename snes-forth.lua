@@ -100,12 +100,12 @@ end
 function execute(xt)
   local instruction = dataspace[xt]
   if instruction.type == "call" then
-    returnstack:pushAddress(ip)
+    returnstack:pushWord(ip)
     ip = instruction.addr
     return nextIp()
   elseif instruction.type == "native" then
     instruction.runtime()
-    ip = returnstack:popAddress()
+    ip = returnstack:popWord()
     return nextIp()
   end
 end
@@ -197,7 +197,7 @@ dataspace:addNative{name="XT,", label="_XT_COMMA", runtime=function()
   local xt = datastack:pop()
   dataspace:add(Dataspace.xt(xt))
   if debugging() then
-    infos:write("Compiling XT " .. dataspace[xt].name .. "\n")
+    infos:write("Compiling XT " .. dataspace:addrName(addr) .. "\n")
   end
 end}
 
@@ -237,7 +237,7 @@ end}
 -- TODO: For now we'll actually implement EXIT in ASM, but on the SNES it should
 -- just be a `RTS` and not `JSR EXIT` like other Forth words.
 dataspace:addNative{name="EXIT", runtime=function()
-  returnstack:popAddress()
+  returnstack:popWord()
 end,
 asm=function() return [[
   ; Remove the caller's return address (2 bytes) and return.
@@ -470,7 +470,7 @@ dataspace:addNative{name="COMPILE,", label="_COMPILE_COMMA", runtime=function()
   local xt = datastack:pop()
   dataspace:addCall(xt)
   if debugging() then
-    infos:write("Compiling " .. dataspace[xt].name .. "\n")
+    infos:write("Compiling " .. dataspace:addrName(xt) .. "\n")
   end
 end}
 
@@ -486,7 +486,9 @@ end}
 
 -- Move a 2-byte word from from data stack to the R stack.
 dataspace:addNative{name=">R", label="_TO_R", runtime=function()
+  local holdReturn = returnstack:popWord()
   returnstack:pushWord(datastack:pop())
+  returnstack:pushWord(holdReturn)
 end,
 asm=function() return [[
   ; First, move the return address two bytes back.
@@ -502,7 +504,9 @@ asm=function() return [[
 -- 2 cell addresses store the LSB in the lowest position (so it's pushed onto
 -- the stack MSB first)
 dataspace:addNative{name="A.>R", label="_A_TO_R", runtime=function()
+  local holdReturn = returnstack:popWord()
   returnstack:pushAddress(datastack:popDouble())
+  returnstack:pushWord(holdReturn)
 end,
 asm=function() return [[
   ; First transfer the LSB of the address
@@ -525,7 +529,9 @@ asm=function() return [[
 ]] end}
 
 dataspace:addNative{name="R>", label="_FROM_R", runtime=function()
+  local holdReturn = returnstack:popWord()
   datastack:push(returnstack:popWord())
+  returnstack:pushWord(holdReturn)
 end,
 asm=function() return [[
   ; Move the cell from the return stack
@@ -540,7 +546,9 @@ asm=function() return [[
 ]] end}
 
 dataspace:addNative{name="A.R>", label="_A_FROM_R", runtime=function()
+  local holdReturn = returnstack:popWord()
   datastack:pushDouble(returnstack:popAddress())
+  returnstack:pushWord(holdReturn)
 end,
 asm=function() return [[
   dex
@@ -606,10 +614,10 @@ end
 
 -- Branch based on the relative offset stored in front of the called branch fn.
 function branch()
-  local retAddr = returnstack:popAddress()
+  local retAddr = returnstack:popWord()
   assert(dataspace[retAddr].type == "number", "Expected relative number to jump to at " .. retAddr)
   local newRet = dataspace:fromRelativeAddress(retAddr, toSigned(dataspace[retAddr].number))
-  returnstack:pushAddress(newRet)
+  returnstack:pushWord(newRet)
 end
 
 dataspace:addNative{name="BRANCH0", runtime=function()
@@ -617,7 +625,7 @@ dataspace:addNative{name="BRANCH0", runtime=function()
     branch()
   else
     -- Skip past the relative address.
-    returnstack:pushAddress(returnstack:popAddress() + 1)
+    returnstack:pushWord(returnstack:popWord() + 1)
   end
 end,
 asm=function() return [[
@@ -785,9 +793,9 @@ asm=function() return [[
 
 dataspace:addNative{name="LIT", runtime=function()
   -- return stack should be the next IP, where the literal is located
-  local litAddr = returnstack:popAddress()
+  local litAddr = returnstack:popWord()
   -- increment the return address to skip the literal
-  returnstack:pushAddress(litAddr + 1)
+  returnstack:pushWord(litAddr + 1)
   if dataspace[litAddr].type == "number" then
     datastack:push(dataspace[litAddr].number)
   elseif dataspace[litAddr].type == "xt" then
@@ -811,9 +819,9 @@ asm=function() return [[
 
 dataspace:addNative{name="A.LIT", runtime=function()
   -- return stack should be the next IP, where the literal is located
-  local litAddr = returnstack:popAddress()
+  local litAddr = returnstack:popWord()
   -- increment the return address to skip the literal
-  returnstack:pushAddress(litAddr + 1)
+  returnstack:pushWord(litAddr + 1)
   assert(dataspace[litAddr].type == "address", "Expected address for A.LIT at addr = " .. litAddr)
   datastack:pushDouble(dataspace[litAddr].addr)
 end,
@@ -840,9 +848,11 @@ asm=function() return [[
 dataspace:addNative{name="EXECUTE", runtime=function()
   local addr = datastack:pop()
   if debugging() then
-    infos:write("Executing " .. dataspace[addr].name .. "\n")
+    infos:write("Executing " .. dataspace:addrName(addr) .. "\n")
   end
-  return execute(addr)
+  returnstack:pushWord(ip)
+  ip = addr
+  return nextIp()
 end}
 
 addColon("TRUE")
