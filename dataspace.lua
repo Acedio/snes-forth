@@ -20,9 +20,6 @@ end
 
 function Dataspace:assembly(file)
   for k,v in ipairs(self) do
-    if v.label then
-      file:write(v.label .. ":\n")
-    end
     file:write(v:asm(self) .. "\n")
   end
 end
@@ -34,12 +31,13 @@ function Dataspace:add(entry)
   return entry
 end
 
-function Dataspace.dictionaryEntry(name, prev)
+function Dataspace.dictionaryEntry(name, label, prev)
   local entry = {
     type = "dictionary-entry",
     name = name,
-    -- TODO: These should be sizeable.
-    size = function() return nil end,
+    label = label,
+    -- TODO: These should be sizable.
+    size = function() return 1 end,
     prev = prev,
   }
   function entry:toString(dataspace)
@@ -47,15 +45,18 @@ function Dataspace.dictionaryEntry(name, prev)
   end
   function entry:asm(dataspace)
     -- TODO: Implement.
-    return "; Dictionary entry for " .. name
+    return string.format([[
+    ; Dictionary entry for %s
+    %s:
+    ]], self.name, self.label)
   end
   return entry
 end
 
-function Dataspace:dictionaryAdd(name)
-  local entry = Dataspace.dictionaryEntry(name, self.latest)
+function Dataspace:dictionaryAdd(name, label)
+  local entry = Dataspace.dictionaryEntry(name, label, self.latest)
   self.latest = self.here
-  self:add(entry)
+  return self:add(entry)
 end
 
 -- Returns address or nil if missing
@@ -74,6 +75,11 @@ end
 
 function Dataspace.toCodeword(dictAddr)
   return dictAddr + 1
+end
+
+function Dataspace:getCodewordDictionaryEntry(codewordAddr)
+  assert(self[codewordAddr - 1].type == "dictionary-entry")
+  return self[codewordAddr - 1]
 end
 
 function Dataspace:codewordOf(name)
@@ -95,11 +101,6 @@ function Dataspace.native(entry)
   if not entry.size then
     entry.size = function() return nil end
   end
-  if not entry.label then
-    -- TODO: Add default logic here to convert name to label by replacing
-    -- non-alphas with underscores.
-    entry.label = Dataspace.defaultLabel(entry.name)
-  end
   if not entry.asm then
     function entry:asm(dataspace)
       return string.format("jsl not_implemented ; TODO: Not implemented")
@@ -119,17 +120,18 @@ function Dataspace.call(addr)
   }
   function entry:toString(dataspace)
     assert(self.addr > 0 and self.addr < dataspace.here, "Invalid address " .. self.addr )
-    assert(dataspace[self.addr].type == "native", "Expected fn at " .. self.addr)
-    if dataspace[self.addr].name ~= nil then
-      return "Call " .. dataspace[self.addr].name .. " (" .. self.addr .. ")"
+    assert(dataspace[self.addr].type == "native" or dataspace[self.addr].type == "call", "Expected fn or call at " .. self.addr)
+    if dataspace[self.addr - 1].type == "dictionary-entry" then
+      return "Call " .. dataspace[self.addr - 1].name .. " (" .. self.addr .. ")"
     else
       return "Unnamed fn at: " .. tostring(self.addr)
     end
   end
   function entry:asm(dataspace)
     assert(self.addr > 0 and self.addr < dataspace.here, "Invalid address " .. self.addr)
-    assert(dataspace[self.addr].type == "native", "Expected fn at " .. self.addr)
-    return string.format("JSR %s", dataspace[self.addr].label)
+    assert(dataspace[self.addr].type == "native" or dataspace[self.addr].type == "call", "Expected fn or call at " .. self.addr)
+    -- TODO: I think this might be broken for code after DODOES.
+    return string.format("JSR %s", dataspace[self.addr - 1].label)
   end
   return entry
 end
@@ -154,16 +156,16 @@ end
 function Dataspace.xt(addr)
   local entry = {
     type = "xt",
-    size = function() return 3 end,
+    size = function() return 2 end,
     addr = addr,
   }
   function entry:toString(dataspace)
-    assert(self.addr < dataspace.here and dataspace[self.addr].label, "Invalid xt " .. self.addr )
-    return string.format("XT: %d %s", self.addr, dataspace[self.addr].label)
+    assert(self.addr < dataspace.here and dataspace[self.addr - 1].label, "Invalid xt " .. self.addr )
+    return string.format("XT: %d %s", self.addr, dataspace[self.addr - 1].label)
   end
   function entry:asm(dataspace)
-    assert(self.addr < dataspace.here and dataspace[self.addr].label, "Invalid xt " .. self.addr )
-    return string.format(".WORD %s", dataspace[self.addr].label)
+    assert(self.addr < dataspace.here and dataspace[self.addr - 1].label, "Invalid xt " .. self.addr )
+    return string.format(".WORD %s", dataspace[self.addr - 1].label)
   end
   return entry
 end
@@ -294,7 +296,7 @@ end
 --   .WORD LITERNAL_NUM
 -- which is a lot slower.
 function Dataspace:addNative(entry)
-  self:dictionaryAdd(entry.name)
+  self:dictionaryAdd(entry.name, entry.label or Dataspace.defaultLabel(entry.name))
   self:add(Dataspace.native(entry))
 end
 

@@ -48,7 +48,6 @@ function makeSystemVariable(name)
   local dataaddr = dataspace.here
   native.runtime = function()
     datastack:push(dataaddr)
-    return nextIp()
   end
   native.asm = function() return string.format([[
     dex
@@ -75,50 +74,50 @@ else
 end
 
 function debugging()
-  return debugEntry.number ~= 0
+  return true
+  --return debugEntry.number ~= 0
 end
 
+-- TODO: This should probably just be a while loop rather than this recursive
+-- deal :P
 function nextIp()
   local oldip = ip
   ip = ip + 1
-  local call = dataspace[oldip]
-  assert(call.type == "call", "Expected call at addr " .. oldip)
-
-  local callee = dataspace[call.addr]
   if debugging() then
-    infos:write("oldIp: " .. oldip .. " (" .. callee:toString() .. ") newIp: " .. ip .. "\n")
+    if dataspace[oldip].type == "call" then
+      local name = dataspace[dataspace[oldip].addr - 1].name or "missing name"
+      infos:write("IP = " .. oldip .. " (call " .. name .. ")\n")
+    elseif dataspace[oldip].type == "native" then
+      local name = dataspace[oldip - 1].name or "missing name"
+      infos:write("IP = " .. oldip .. " (native " .. name .. ")\n")
+    end
     datastack:print(infos)
   end
-  assert(callee.type == "native", "Uncallable address " .. call.addr .. " at address " .. oldip)
-  return callee.runtime()
+
+  return execute(oldip)
 end
 
-function docol(dataaddr)
-  returnstack:pushAddress(ip)
-  ip = dataaddr
-  return nextIp()
+function execute(xt)
+  local instruction = dataspace[xt]
+  if instruction.type == "call" then
+    returnstack:pushAddress(ip)
+    ip = instruction.addr
+    return nextIp()
+  elseif instruction.type == "native" then
+    instruction.runtime()
+    ip = returnstack:popAddress()
+    return nextIp()
+  end
 end
 
 function addColonWithLabel(name, label)
-  local native = Dataspace.native{
-    name = name,
-    -- Colon defs have no size because their codeword is a noop.
-    -- TODO: It's kind of weird to have a zero-sized entry because it shares its
-    -- (Lua dataspace) address with whatever else comes next. I think I split
-    -- off the dictionary entry so that I could put a label at the beginning of
-    -- each word (native or DOCOL), but maybe we should instead put the label at
-    -- the end of each dict entry? Maybe docol isn't really needed? Does that
-    -- fix our problem?
-    size = function() return 0 end,
-    label = label,
-    asm = function() return "; Colon definition." end,
-  }
-  -- This naturally adds a dictionary entry, which does have a size.
-  dataspace:addNative(native)
-  local dataaddr = dataspace.here
-  native.runtime = function()
-    return docol(dataaddr)
-  end
+  local entry = dataspace:dictionaryAdd(name, label)
+  -- TODO: It's kind of weird to have a zero-sized entry because it shares its
+  -- (Lua dataspace) address with whatever else comes next. I think I split
+  -- off the dictionary entry so that I could put a label at the beginning of
+  -- each word (native or DOCOL), but maybe we should instead put the label at
+  -- the end of each dict entry? Maybe docol isn't really needed? Does that
+  -- fix our problem?
 end
 
 function addColon(name)
@@ -129,19 +128,18 @@ end
 -- addressing?
 dataspace:addNative{name="HERE", runtime=function()
   datastack:push(dataspace.here)
-  return nextIp()
 end}
 
 -- All datatypes are one cell in Lua, but varying sizes on the SNES.
 dataspace:addNative{name="CHARS", runtime=function()
-  return nextIp()
+  -- Noop.
 end,
 asm=function() return [[
   rts
 ]] end}
 
 dataspace:addNative{name="CELLS", runtime=function()
-  return nextIp()
+  -- TODO: This should be two.
 end,
 asm=function() return [[
   asl z:1, X
@@ -149,7 +147,7 @@ asm=function() return [[
 ]] end}
 
 dataspace:addNative{name="ADDRS", runtime=function()
-  return nextIp()
+  -- TODO: This should be three.
 end,
 asm=function() return [[
   clc
@@ -162,12 +160,10 @@ asm=function() return [[
 
 dataspace:addNative{name="DATASPACE", runtime=function()
   dataspace:print(outputs)
-  return nextIp()
 end}
 
 dataspace:addNative{name="DEPTH", runtime=function()
   datastack:push(datastack:entries())
-  return nextIp()
 end,
 asm=function() return [[
   txa
@@ -182,7 +178,27 @@ asm=function() return [[
 
 dataspace:addNative{name=".s", LABEL="_dot_S", runtime=function()
   datastack:print(outputs)
-  return nextIp()
+end}
+
+dataspace:addNative{name="C,", label="_C_COMMA", runtime=function()
+  dataspace:addByte(datastack:pop() & 0xFF)
+end}
+
+dataspace:addNative{name=",", label="_COMMA", runtime=function()
+  dataspace:addNumber(datastack:pop())
+end}
+
+dataspace:addNative{name="A.,", label="_A_COMMA", runtime=function()
+  -- TODO: Zero top byte? Or error?
+  dataspace:addAddress(datastack:popDouble())
+end}
+
+dataspace:addNative{name="XT,", label="_XT_COMMA", runtime=function()
+  local xt = datastack:pop()
+  dataspace:add(Dataspace.xt(xt))
+  if debugging() then
+    infos:write("Compiling XT " .. dataspace[xt].name .. "\n")
+  end
 end}
 
 -- Set the XT for the latest word to start a docol at addr
@@ -194,43 +210,6 @@ dataspace:addNative{name="XT!", label="_XT_STORE", runtime=function()
     datastack:push(dataaddr)
     return dataspace[addr].runtime()
   end
-  return nextIp()
-end}
-
-dataspace:addNative{name="COMPILE-DOCOL", runtime=function()
-  local native = Dataspace.native{
-    name = "docol-fn",
-  }
-  -- Don't use addNative because we don't want a dictionary entry.
-  dataspace:add(native)
-  local addr = dataspace.here
-  function native:runtime() docol(addr) end
-  return nextIp()
-end}
-
-dataspace:addNative{name="C,", label="_C_COMMA", runtime=function()
-  dataspace:addByte(datastack:pop() & 0xFF)
-  return nextIp()
-end}
-
-dataspace:addNative{name=",", label="_COMMA", runtime=function()
-  dataspace:addNumber(datastack:pop())
-  return nextIp()
-end}
-
-dataspace:addNative{name="A.,", label="_A_COMMA", runtime=function()
-  -- TODO: Zero top byte? Or error?
-  dataspace:addAddress(datastack:popDouble())
-  return nextIp()
-end}
-
-dataspace:addNative{name="XT,", label="_XT_COMMA", runtime=function()
-  local xt = datastack:pop()
-  dataspace:add(Dataspace.xt(xt))
-  if debugging() then
-    infos:write("Compiling XT " .. dataspace[xt].name .. "\n")
-  end
-  return nextIp()
 end}
 
 dataspace:addNative{name="CREATE", runtime=function()
@@ -243,27 +222,22 @@ dataspace:addNative{name="CREATE", runtime=function()
   -- Now update the fn with the new HERE.
   native.runtime = function()
     datastack:push(dataaddr)
-    return nextIp()
   end
-  return nextIp()
 end}
 
 dataspace:addNative{name="CREATEDOCOL", runtime=function()
   local name = input:word()
   addColon(name)
-  return nextIp()
 end}
 
 dataspace:addNative{name="ALLOT", runtime=function()
   dataspace.here = dataspace.here + datastack:pop()
-  return nextIp()
 end}
 
 -- TODO: For now we'll actually implement EXIT in ASM, but on the SNES it should
 -- just be a `RTS` and not `JSR EXIT` like other Forth words.
 dataspace:addNative{name="EXIT", runtime=function()
-  ip = returnstack:popAddress()
-  return nextIp()
+  returnstack:popAddress()
 end,
 asm=function() return [[
   ; Remove the caller's return address (2 bytes) and return.
@@ -276,23 +250,20 @@ asm=function() return [[
 
 dataspace:addNative{name=".", label="_DOT", runtime=function()
   outputs:write(datastack:pop() .. "\n")
-  return nextIp()
 end}
 
 dataspace:addNative{name="BYE", runtime=function()
   infos:write("WE DONE!" .. "\n")
-  -- BYE ends the program by not calling nextIp
+  -- TODO: BYE ends the program by not calling nextIp
 end}
 
 dataspace:addNative{name="ABORT", runtime=function()
   infos:write("ABORTED!" .. "\n")
   assert(nil)
-  -- Abort ends the program by not calling nextIp
 end}
 
 dataspace:addNative{name="EMIT", runtime=function()
   outputs:write(string.char(datastack:pop()))
-  return nextIp()
 end}
 
 local wordBufferAddr = dataspace.here
@@ -329,24 +300,20 @@ end
 dataspace:addNative{name="WORD", runtime=function()
   setWordBuffer(input:word() or "")
   datastack:push(wordBufferAddr)
-  return nextIp()
 end}
 
 dataspace:addNative{name="PEEK", runtime=function()
   datastack:push(input:peek())
-  return nextIp()
 end}
 
 dataspace:addNative{name="KEY", runtime=function()
   datastack:push(input:key())
-  return nextIp()
 end}
 
 dataspace:addNative{name="TYPE", runtime=function()
   local count = datastack:pop()
   local addr = datastack:pop()
   outputs:write(getWordWithCount(addr, count))
-  return nextIp()
 end}
 
 -- Can probably be written in Forth? Though not interpreted-Forth.
@@ -365,7 +332,6 @@ dataspace:addNative{name="FIND", runtime=function()
     datastack:push(Dataspace.toCodeword(dictAddr))
     datastack:push(0xFFFF)
   end
-  return nextIp()
 end}
 
 -- Non-standard. Returns TRUE or FALSE at the top of the stack.
@@ -377,19 +343,18 @@ dataspace:addNative{name=">NUMBER", label="_TO_NUMBER", runtime=function()
     datastack:push(0)
     -- Failed.
     datastack:push(0)
-    return nextIp()
+    return
   end
 
   if number > 0xFFFF or number < -0x8000 then
     datastack:push(0)
     -- Failed.
     datastack:push(0)
-    return nextIp()
+    return
   end
 
   datastack:push(toUnsigned(number))
   datastack:push(0xFFFF)
-  return nextIp()
 end}
 
 -- Returns TRUE or FALSE at the top of the stack, and the parsed address below
@@ -401,7 +366,7 @@ dataspace:addNative{name=">ADDRESS", label="_TO_ADDRESS", runtime=function()
     datastack:pushDouble(0)
     -- Failed.
     datastack:push(0)
-    return nextIp()
+    return
   end
 
   local address = tonumber(string.sub(maybeAddress, 2), 16)
@@ -409,24 +374,22 @@ dataspace:addNative{name=">ADDRESS", label="_TO_ADDRESS", runtime=function()
     datastack:pushDouble(0)
     -- Failed.
     datastack:push(0)
-    return nextIp()
+    return
   end
 
   if address > 0xFFFFFF or address < 0 then
     datastack:pushDouble(0)
     -- Failed.
     datastack:push(0)
-    return nextIp()
+    return
   end
 
   datastack:pushDouble(address)
   datastack:push(0xFFFF)
-  return nextIp()
 end}
 
 dataspace:addNative{name="DUP", runtime=function()
   datastack:push(datastack:top())
-  return nextIp()
 end,
 asm=function() return [[
   lda z:1,X
@@ -437,7 +400,6 @@ asm=function() return [[
 dataspace:addNative{name="2DUP", runtime=function()
   local double = datastack:topDouble()
   datastack:pushDouble(double)
-  return nextIp()
 end,
 asm=function() return [[
   dex
@@ -453,7 +415,6 @@ asm=function() return [[
 
 dataspace:addNative{name="DROP", runtime=function()
   datastack:pop()
-  return nextIp()
 end,
 asm=function() return [[
   inx
@@ -463,7 +424,6 @@ asm=function() return [[
 
 dataspace:addNative{name="2DROP", runtime=function()
   datastack:popDouble()
-  return nextIp()
 end,
 asm=function() return [[
   inx
@@ -478,7 +438,6 @@ dataspace:addNative{name="SWAP", runtime=function()
   local second = datastack:pop()
   datastack:push(first)
   datastack:push(second)
-  return nextIp()
 end,
 asm=function() return [[
   ldy z:1, X
@@ -493,7 +452,6 @@ dataspace:addNative{name="2SWAP", runtime=function()
   local second = datastack:popDouble()
   datastack:pushDouble(first)
   datastack:pushDouble(second)
-  return nextIp()
 end,
 asm=function() return [[
   ldy z:1, X
@@ -514,7 +472,6 @@ dataspace:addNative{name="COMPILE,", label="_COMPILE_COMMA", runtime=function()
   if debugging() then
     infos:write("Compiling " .. dataspace[xt].name .. "\n")
   end
-  return nextIp()
 end}
 
 -- Pushes the address of the first character of the string, then the size of the
@@ -525,13 +482,11 @@ dataspace:addNative{name="COUNT", runtime=function()
   local length = dataspace[addr].number
   datastack:push(addr + 1)
   datastack:push(length)
-  return nextIp()
 end}
 
 -- Move a 2-byte word from from data stack to the R stack.
 dataspace:addNative{name=">R", label="_TO_R", runtime=function()
   returnstack:pushWord(datastack:pop())
-  return nextIp()
 end,
 asm=function() return [[
   ; First, move the return address two bytes back.
@@ -548,7 +503,6 @@ asm=function() return [[
 -- the stack MSB first)
 dataspace:addNative{name="A.>R", label="_A_TO_R", runtime=function()
   returnstack:pushAddress(datastack:popDouble())
-  return nextIp()
 end,
 asm=function() return [[
   ; First transfer the LSB of the address
@@ -572,7 +526,6 @@ asm=function() return [[
 
 dataspace:addNative{name="R>", label="_FROM_R", runtime=function()
   datastack:push(returnstack:popWord())
-  return nextIp()
 end,
 asm=function() return [[
   ; Move the cell from the return stack
@@ -588,7 +541,6 @@ asm=function() return [[
 
 dataspace:addNative{name="A.R>", label="_A_FROM_R", runtime=function()
   datastack:pushDouble(returnstack:popAddress())
-  return nextIp()
 end,
 asm=function() return [[
   dex
@@ -615,7 +567,6 @@ asm=function() return [[
 
 dataspace:addNative{name="R@", label="_FETCH_R", runtime=function()
   datastack:push(returnstack:topWord())
-  return nextIp()
 end,
 asm=function() return [[
   lda 3, S
@@ -625,7 +576,6 @@ asm=function() return [[
 
 dataspace:addNative{name="A.R@", label="_A_FETCH_R", runtime=function()
   datastack:pushDouble(returnstack:topAddress())
-  return nextIp()
 end,
 asm=function() return [[
   dex
@@ -654,10 +604,12 @@ function toUnsigned(signed)
   return signed & 0xFFFF
 end
 
--- Branch based on the relative offset stored at `ip`.
+-- Branch based on the relative offset stored in front of the called branch fn.
 function branch()
-  assert(dataspace[ip].type == "number", "Expected relative number to jump to at " .. ip)
-  ip = dataspace:fromRelativeAddress(ip, toSigned(dataspace[ip].number))
+  local retAddr = returnstack:popAddress()
+  assert(dataspace[retAddr].type == "number", "Expected relative number to jump to at " .. retAddr)
+  local newRet = dataspace:fromRelativeAddress(retAddr, toSigned(dataspace[retAddr].number))
+  returnstack:pushAddress(newRet)
 end
 
 dataspace:addNative{name="BRANCH0", runtime=function()
@@ -665,9 +617,8 @@ dataspace:addNative{name="BRANCH0", runtime=function()
     branch()
   else
     -- Skip past the relative address.
-    ip = ip + 1
+    returnstack:pushAddress(returnstack:popAddress() + 1)
   end
-  return nextIp()
 end,
 asm=function() return [[
   lda z:1, X
@@ -694,13 +645,11 @@ dataspace:addNative{name="ADDRESS-OFFSET", runtime=function()
   local delta = dataspace:toRelativeAddress(from, to)
   assert(delta >= -0x8000 and delta <= 0x7FFF, "Delta out of range: " .. delta)
   datastack:push(toUnsigned(delta))
-  return nextIp()
 end}
 
 -- Can we do this in Forth based on BRANCH0?
 dataspace:addNative{name="BRANCH", runtime=function()
   branch()
-  return nextIp()
 end,
 asm=function() return [[
   ldy #1
@@ -718,7 +667,6 @@ dataspace:addNative{name="@", label="_FETCH", runtime=function()
   local addr = datastack:pop()
   assert(dataspace[addr].type == "number", "Expected word at " .. addr)
   datastack:push(dataspace[addr].number)
-  return nextIp()
 end,
 asm=function() return [[
   lda (1, X)
@@ -731,7 +679,6 @@ dataspace:addNative{name="!", label="_STORE", runtime=function()
   local val = datastack:pop()
   assert(dataspace[addr].type == "number", "Address value must be word-sized: " .. addr)
   dataspace[addr].number = val
-  return nextIp()
 end,
 asm=function() return [[
   lda 3, X
@@ -749,7 +696,6 @@ dataspace:addNative{name="C@", label="_C_FETCH", runtime=function()
   local addr = datastack:pop()
   assert(dataspace[addr].type == "number", "Expected word at " .. addr)
   datastack:push(dataspace[addr].number)
-  return nextIp()
 end,
 asm=function() return [[
   A8
@@ -765,7 +711,6 @@ dataspace:addNative{name="C!", label="_C_STORE", runtime=function()
   local val = datastack:pop()
   assert(dataspace[addr].type == "byte", "Address value must be word-sized: " .. addr)
   dataspace[addr] = Dataspace.byte(val & 0xFF)
-  return nextIp()
 end,
 asm=function() return [[
   lda 3, X
@@ -784,7 +729,6 @@ dataspace:addNative{name="F@", label="_FAR_FETCH", runtime=function()
   local addr = datastack:pop()
   assert(dataspace[addr].type == "number", "Expected word at " .. addr)
   datastack:push(dataspace[addr].number)
-  return nextIp()
 end,
 asm=function() return [[
   inx ; Reduce stack size by one byte.
@@ -803,7 +747,6 @@ dataspace:addNative{name="F!", label="_FAR_STORE", runtime=function()
   local val = datastack:pop()
   assert(dataspace[addr].type == "number", "Address value must be word-sized: " .. addr)
   dataspace[addr] = Dataspace.number(val)
-  return nextIp()
 end,
 -- TODO: This expects three bytes from the data stack
 asm=function() return [[
@@ -820,7 +763,6 @@ asm=function() return [[
 
 dataspace:addNative{name="1+", label="_INCR", runtime=function()
   datastack:push(datastack:pop() + 1)
-  return nextIp()
 end,
 asm=function() return [[
   inc z:1, X
@@ -829,7 +771,6 @@ asm=function() return [[
 
 dataspace:addNative{name="DOUBLE+", label="_DOUBLE_INCR", runtime=function()
   datastack:pushDouble(datastack:popDouble() + 1)
-  return nextIp()
 end,
 asm=function() return [[
   inc z:1, X
@@ -844,17 +785,16 @@ asm=function() return [[
 
 dataspace:addNative{name="LIT", runtime=function()
   -- return stack should be the next IP, where the literal is located
-  local litaddr = ip
+  local litAddr = returnstack:popAddress()
   -- increment the return address to skip the literal
-  ip = ip + 1
-  if dataspace[litaddr].type == "number" then
-    datastack:push(dataspace[litaddr].number)
-  elseif dataspace[litaddr].type == "xt" then
-    datastack:push(dataspace[litaddr].addr)
+  returnstack:pushAddress(litAddr + 1)
+  if dataspace[litAddr].type == "number" then
+    datastack:push(dataspace[litAddr].number)
+  elseif dataspace[litAddr].type == "xt" then
+    datastack:push(dataspace[litAddr].addr)
   else
-    assert(false, "Expected number or xt for LIT at addr = " .. litaddr)
+    assert(false, "Expected number or xt for LIT at addr = " .. litAddr)
   end
-  return nextIp()
 end,
 -- TODO: calls to LIT should probably just be inlined :P
 asm=function() return [[
@@ -871,12 +811,11 @@ asm=function() return [[
 
 dataspace:addNative{name="A.LIT", runtime=function()
   -- return stack should be the next IP, where the literal is located
-  local litaddr = ip
+  local litAddr = returnstack:popAddress()
   -- increment the return address to skip the literal
-  ip = ip + 1
-  assert(dataspace[litaddr].type == "address", "Expected address for A.LIT at addr = " .. litaddr)
-  datastack:pushDouble(dataspace[litaddr].addr)
-  return nextIp()
+  returnstack:pushAddress(litAddr + 1)
+  assert(dataspace[litAddr].type == "address", "Expected address for A.LIT at addr = " .. litAddr)
+  datastack:pushDouble(dataspace[litAddr].addr)
 end,
 -- TODO: calls to A.LIT should probably just be inlined :P
 asm=function() return [[
@@ -903,8 +842,7 @@ dataspace:addNative{name="EXECUTE", runtime=function()
   if debugging() then
     infos:write("Executing " .. dataspace[addr].name .. "\n")
   end
-  return dataspace[addr].runtime()
-  -- No nextIp() is needed because the runtime() should call it.
+  return execute(addr)
 end}
 
 addColon("TRUE")
@@ -926,22 +864,21 @@ addColonWithLabel("]", "_RBRACK")
 
 dataspace:addNative{name="IMMEDIATE", runtime=function()
   dataspace[dataspace.latest].immediate = true
-  return nextIp()
 end}
 
 dataspace:addNative{name="LABEL", runtime=function()
   local label = input:word()
   dataspace[Dataspace.toCodeword(dataspace.latest)].label = label
-  return nextIp()
 end}
 
 addColon("DODOES")
+  -- TODO: More to consider here, probably need to change XT!
   dataspace:addWords("R> XT! EXIT")  -- Ends the calling word (CREATEing) early.
 
 addColonWithLabel("DOES>", "_DOES")
   dataspace:addWords("LIT")
   dataspace:addXt("DODOES")
-  dataspace:addWords("COMPILE, COMPILE-DOCOL EXIT")
+  dataspace:addWords("COMPILE, EXIT")
 dataspace[dataspace.latest].immediate = true
 
 -- TODO: Maybe pull these out into a mathops.lua file?
@@ -949,7 +886,6 @@ function unaryOp(name, label, op, asm)
   dataspace:addNative{name=name, label=label, runtime=function()
     local a = datastack:pop()
     datastack:push(op(a) & 0xFFFF)
-    return nextIp()
   end, asm=function() return asm end}
 end
 
@@ -991,7 +927,6 @@ function binaryOpRt(op)
     local b = datastack:pop()
     local a = datastack:pop()
     datastack:push(op(a,b) & 0xFFFF)
-    return nextIp()
   end
 end
 
@@ -1031,7 +966,6 @@ function binaryCmpOp(name, label, op, asmOp)
     local b = datastack:pop()
     local a = datastack:pop()
     datastack:push(op(a,b) and 0xFFFF or 0)
-    return nextIp()
   end,
   asm=function() return string.format([[
     ldy #$FFFF
@@ -1089,7 +1023,6 @@ end
 -- Given a return stack entry, push where the inline data for this word is.
 dataspace:addNative{name="INLINE-DATA", runtime=function()
   -- The return stack in Lua already points at the inline data.
-  return nextIp()
 end,
 asm=function() return [[
   ; We're one byte behind the inline data.
