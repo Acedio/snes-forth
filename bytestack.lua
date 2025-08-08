@@ -99,7 +99,7 @@ function ByteStack:print(file)
   -- values.
   file:write("#bottom#\n")
   for k,v in ipairs(self) do
-    file:write(string.format("% 3d: % 3d 0x%02x\n", k, v, v))
+    file:write(string.format("% 3d: % 3d 0x%02X\n", k, v, v))
   end
   file:write("#top#\n")
 end

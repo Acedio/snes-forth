@@ -118,6 +118,12 @@ VARIABLE TEST-VAR
   21 TEST-VAR !
   TEST-VAR @ 21 = ;
 
+: MY-CONSTANT CREATE , DOES> @ ;
+
+21 MY-CONSTANT TEST-MY-CONSTANT
+
+: TEST-DOES MY-CONSTANT 21 = ;
+
 (
 TODO: Implement the T{ ... -> ... }T notation.
 : T{
@@ -135,6 +141,7 @@ TODO: Implement the T{ ... -> ... }T notation.
   TEST-COMPARISON
   TEST-LITERALS
   TEST-MEMORY
+  TEST-DOES
 ;
 
 MAIN
