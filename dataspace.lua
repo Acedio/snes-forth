@@ -133,7 +133,7 @@ function Dataspace.call(addr)
   end
   function entry:asm(dataspace)
     assert(self.addr > 0 and self.addr < dataspace.here, "Invalid address " .. self.addr)
-    assert(dataspace[self.addr].type == "native" or dataspace[self.addr].type == "call", sring.format("Expected fn or call at $%04x", self.addr))
+    assert(dataspace[self.addr].type == "native" or dataspace[self.addr].type == "call", string.format("Expected fn or call at $%04x", self.addr))
     -- TODO: I think this might be broken for code after DODOES.
     return string.format("JSR %s", dataspace:addrDict(self.addr).label)
   end

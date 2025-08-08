@@ -39,6 +39,7 @@ local errors = io.stderr
 
 local dataspace = Dataspace:new()
 
+local running = true
 local ip = 0
 
 -- Make a variable that is easily accessible to Lua and the SNES.
@@ -75,44 +76,6 @@ end
 
 function debugging()
   return debugEntry.number ~= 0
-end
-
--- TODO: This should probably just be a while loop rather than this recursive
--- deal :P
-function nextIp()
-  local oldip = ip
-  ip = ip + 1
-  if debugging() then
-    if dataspace[oldip].type == "call" then
-      local name = dataspace:addrName(dataspace[oldip].addr) or "missing name"
-      infos:write(string.format("IP = $%04x (call %s)\n", oldip, name))
-    elseif dataspace[oldip].type == "native" then
-      local name = dataspace:addrName(oldip) or "missing name"
-      infos:write(string.format("IP = $%04x (native %s)\n", oldip, name))
-    end
-    infos:write("== data ==\n")
-    dataStack:print(infos)
-    infos:write("== return ==\n")
-    returnStack:print(infos)
-  end
-
-  return execute(oldip)
-end
-
-function execute(xt)
-  local instruction = dataspace[xt]
-  if instruction.type == "call" then
-    returnStack:pushWord(ip)
-    ip = instruction.addr
-    return nextIp()
-  elseif instruction.type == "native" then
-    instruction.runtime()
-    ip = returnStack:popWord()
-    return nextIp()
-  else
-    dataspace:print(infos)
-    assert(nil, string.format("Attempted to execute a non-call, non-native cell: $%04x\n", xt))
-  end
 end
 
 function addColonWithLabel(name, label)
@@ -259,8 +222,7 @@ end}
 
 dataspace:addNative{name="BYE", runtime=function()
   infos:write("WE DONE!" .. "\n")
-  -- TODO: WHY DOES THIS WORK? It's still quitting!
-  -- TODO: BYE ends the program by not calling nextIp
+  running = false
 end}
 
 dataspace:addNative{name="ABORT", runtime=function()
@@ -860,7 +822,7 @@ dataspace:addNative{name="EXECUTE", runtime=function()
   if debugging() then
     infos:write("Executing " .. dataspace:addrName(addr) .. "\n")
   end
-  ip = addr
+  returnStack:pushWord(addr)
 end}
 
 addColon("TRUE")
@@ -1169,7 +1131,36 @@ if debugging() then
   dataspace:print(io.stderr)
 end
 
-nextIp()
+while running do
+  local oldip = ip
+  ip = ip + 1
+  local instruction = dataspace[oldip]
+  if debugging() then
+    if instruction.type == "call" then
+      local name = dataspace:addrName(instruction.addr) or "missing name"
+      infos:write(string.format("IP = $%04x (call %s)\n", oldip, name))
+    elseif instruction.type == "native" then
+      local name = dataspace:addrName(oldip) or "missing name"
+      infos:write(string.format("IP = $%04x (native %s)\n", oldip, name))
+    end
+    infos:write("== data ==\n")
+    dataStack:print(infos)
+    infos:write("== return ==\n")
+    returnStack:print(infos)
+  end
+
+  if instruction.type == "call" then
+    returnStack:pushWord(ip)
+    ip = instruction.addr
+  elseif instruction.type == "native" then
+    instruction.runtime()
+    ip = returnStack:popWord()
+  else
+    dataspace:print(infos)
+    assert(nil, string.format("Attempted to execute a non-call, non-native cell: $%04x\n", oldip))
+  end
+end
+
 
 if debugging() then
   dataspace:print(io.stderr)
