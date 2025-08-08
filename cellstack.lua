@@ -64,7 +64,7 @@ function CellStack:print(file)
   -- values.
   file:write("#bottom#\n")
   for k,v in ipairs(self) do
-    file:write(k .. ": (" .. type(v) .. ") " .. v .. "\n")
+    file:write(string.format("%d: % 5d 0x%04x\n", k, v, v))
   end
   file:write("#top#\n")
 end
