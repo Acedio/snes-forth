@@ -12,15 +12,28 @@ function Dataspace:new()
   return dataspace
 end
 
+function Dataspace.formatAddr(addr)
+  return string.format("$%04X", addr)
+end
+
 function Dataspace:print(file)
   for k,v in ipairs(self) do
-    file:write(string.format("$%04X: %s\n", k, v:toString(self)))
+    file:write(string.format("%s: %s\n", Dataspace.formatAddr(k), v:toString(self)))
   end
 end
 
 function Dataspace:assembly(file)
   for k,v in ipairs(self) do
     file:write(v:asm(self) .. "\n")
+  end
+end
+
+-- Message should include a %s where the addr should be input.
+function Dataspace:assertAddr(dumpFile, cond, message, addr)
+  if not cond then
+    print("Dumping dataspace.")
+    self:print(dumpFile)
+    assert(nil, string.format(message, Dataspace.formatAddr(addr)))
   end
 end
 
@@ -61,14 +74,14 @@ end
 
 -- Returns address or nil if missing
 function Dataspace:dictionaryFind(name)
-  local i = self.latest
-  while i > 0 do
-    assert(self[i].type == "dictionary-entry", string.format("Expected dictionary entry at addr = $%04X", i))
-    if self[i].name == name then
+  local addr = self.latest
+  while addr > 0 do
+    assert(self[addr].type == "dictionary-entry", string.format("Expected dictionary entry at addr = %s", Dataspace.formatAddr(addr)))
+    if self[addr].name == name then
       -- Return the address of the dictionary entry.
-      return i
+      return addr
     end
-    i = self[i].prev
+    addr = self[addr].prev
   end
   return nil
 end
@@ -77,17 +90,29 @@ function Dataspace.toCodeword(dictAddr)
   return dictAddr + 1
 end
 
+-- Returns the dictionary-entry for the given XT.
 function Dataspace:addrDict(xt)
-  assert(self[xt - 1].type == "dictionary-entry")
+  local maybeDict = self[xt - 1]
+  if maybeDict.type ~= "dictionary-entry" then
+    return nil
+  end
   return self[xt - 1]
 end
 
 function Dataspace:addrName(addr)
-  return self:addrDict(addr).name
+  local maybeDict = self:addrDict(addr)
+  if not maybeDict then
+    return nil
+  end
+  return maybeDict.name
 end
 
 function Dataspace:addrLabel(addr)
-  return self:addrDict(addr).label
+  local maybeDict = self:addrDict(addr)
+  if not maybeDict then
+    return nil
+  end
+  return maybeDict.label
 end
 
 function Dataspace:codewordOf(name)
@@ -120,6 +145,8 @@ function Dataspace.native(entry)
   return entry
 end
 
+-- TODO: I think maybe `call` is just `native` but has a defined size? This
+-- should/could also probably have runtime().
 function Dataspace.call(addr)
   local entry = {
     type = "call",
@@ -128,14 +155,23 @@ function Dataspace.call(addr)
   }
   function entry:toString(dataspace)
     assert(self.addr > 0 and self.addr < dataspace.here, "Invalid address " .. self.addr )
-    assert(dataspace[self.addr].type == "native" or dataspace[self.addr].type == "call", string.format("Expected fn or call at $%04X", self.addr))
-    return "Call " .. dataspace:addrName(self.addr)
+    -- TODO: This check should happen at runtime()
+    assert(dataspace[self.addr].type == "native" or dataspace[self.addr].type == "call", string.format("Expected fn or call at %s", Dataspace.formatAddr(self.addr)))
+    local name = dataspace:addrName(self.addr)
+    if not name then
+      return string.format("Call to $%04X (missing name)", self.addr)
+    end
+    return "Call " .. name
   end
   function entry:asm(dataspace)
     assert(self.addr > 0 and self.addr < dataspace.here, "Invalid address " .. self.addr)
-    assert(dataspace[self.addr].type == "native" or dataspace[self.addr].type == "call", string.format("Expected fn or call at $%04X", self.addr))
+    assert(dataspace[self.addr].type == "native" or dataspace[self.addr].type == "call", string.format("Expected fn or call at %s", Dataspace.formatAddr(self.addr)))
     -- TODO: I think this might be broken for code after DODOES.
-    return string.format("JSR %s", dataspace:addrDict(self.addr).label)
+    local label = dataspace:addrLabel(self.addr)
+    if not label then
+      return nil
+    end
+    return string.format("JSR %s", label)
   end
   return entry
 end
@@ -164,12 +200,18 @@ function Dataspace.xt(addr)
     addr = addr,
   }
   function entry:toString(dataspace)
-    assert(self.addr < dataspace.here and dataspace:addrName(self.addr), string.format("Invalid xt $%04X", self.addr))
-    return string.format("XT: %d %s", self.addr, dataspace:addrName(self.addr))
+    local name = dataspace:addrName(self.addr)
+    if not name then
+      return string.format("XT: %d without name", self.addr)
+    end
+    return string.format("XT: %d %s", self.addr, name)
   end
   function entry:asm(dataspace)
-    assert(self.addr < dataspace.here and dataspace:addrDict(self.addr).label, string.format("Invalid xt $%04X", self.addr))
-    return string.format(".WORD %s", dataspace:addrDict(self.addr).label)
+    local label = dataspace:addrLabel(self.addr)
+    if not label then
+      return nil
+    end
+    return string.format(".WORD %s", label)
   end
   return entry
 end
@@ -245,7 +287,7 @@ function Dataspace.number(number)
     number = number & 0xFFFF,
   }
   function entry:toString(dataspace)
-    return "Number: " .. tostring(self.number)
+    return "Number: " .. string.format("$%04X", self.number)
   end
   function entry:asm(dataspace)
     return string.format(".WORD %d", self.number & 0xFFFF)
