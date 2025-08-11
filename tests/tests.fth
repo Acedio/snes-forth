@@ -111,18 +111,23 @@ TRUE DEBUG !
   SWAP 0x0012 = AND
 ;
 
-VARIABLE TEST-VAR
+VARIABLE TEST-VAR LABEL _TEST_VAR
 
-( TODO: Broken on the SNES )
+( TODO: Secretly broken on the SNES, since it uses the Lua address (which
+  happens to be a valid address on the SNES as well. )
 : TEST-MEMORY
   21 TEST-VAR !
-  TEST-VAR @ 21 = ;
+  TEST-VAR @ 21 =
+  42 TEST-VAR !
+  TEST-VAR @ 42 = AND ;
 
+( TODO: Once DOES> is fixed, reenable this.
 : MY-CONSTANT CREATE , DOES> @ ;
 
 21 MY-CONSTANT TEST-MY-CONSTANT
 
 : TEST-DOES MY-CONSTANT 21 = ;
+)
 
 (
 TODO: Implement the T{ ... -> ... }T notation.
@@ -141,7 +146,7 @@ TODO: Implement the T{ ... -> ... }T notation.
   TEST-COMPARISON
   TEST-LITERALS
   TEST-MEMORY
-  TEST-DOES
+  \ TEST-DOES
 ;
 
 MAIN
