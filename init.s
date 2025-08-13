@@ -16,7 +16,7 @@
   .word 0,0,0,0,0,0,0,0
   .word 0,0,0,0,0,0,reset,0
 
-.segment "CODE"
+.segment "UNSIZED"
 
 .include "preamble.s"
 

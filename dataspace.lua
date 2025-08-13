@@ -18,7 +18,7 @@ end
 
 function Dataspace:print(file)
   for k,v in ipairs(self) do
-    file:write(string.format("%s: %s\n", Dataspace.formatAddr(k), v:toString(self)))
+    file:write(string.format("%s: %s\n", Dataspace.formatAddr(k), v:toString(self, k)))
   end
 end
 
@@ -44,165 +44,51 @@ function Dataspace:add(entry)
   return entry
 end
 
-function Dataspace.dictionaryEntry(name, label, prev)
-  local entry = {
-    type = "dictionary-entry",
-    name = name,
-    label = label,
-    -- TODO: These should be sizable.
-    size = function() return nil end,
-    prev = prev,
-  }
-  function entry:toString(dataspace)
-    return "Dictionary entry: " .. name
-  end
-  function entry:asm(dataspace)
-    -- TODO: Implement.
-    return string.format([[
-    ; Dictionary entry for %s
-    %s:
-    ]], self.name, self.label)
-  end
-  return entry
-end
-
-function Dataspace:dictionaryAdd(name, label)
-  local entry = Dataspace.dictionaryEntry(name, label, self.latest)
-  self.latest = self.here
-  return self:add(entry)
-end
-
--- Returns address or nil if missing
-function Dataspace:dictionaryFind(name)
-  local addr = self.latest
-  while addr > 0 do
-    assert(self[addr].type == "dictionary-entry", string.format("Expected dictionary entry at addr = %s", Dataspace.formatAddr(addr)))
-    if self[addr].name == name then
-      -- Return the address of the dictionary entry.
-      return addr
-    end
-    addr = self[addr].prev
-  end
-  return nil
-end
-
-function Dataspace.toCodeword(dictAddr)
-  return dictAddr + 1
-end
-
--- Returns the dictionary-entry for the given XT.
-function Dataspace:addrDict(xt)
-  local maybeDict = self[xt - 1]
-  if maybeDict.type ~= "dictionary-entry" then
-    return nil
-  end
-  return self[xt - 1]
-end
-
-function Dataspace:addrName(addr)
-  local maybeDict = self:addrDict(addr)
-  if not maybeDict then
-    return nil
-  end
-  return maybeDict.name
-end
-
-function Dataspace:addrLabel(addr)
-  local maybeDict = self:addrDict(addr)
-  if not maybeDict then
-    return nil
-  end
-  return maybeDict.label
-end
-
-function Dataspace:codewordOf(name)
-  local dictAddr = self:dictionaryFind(name)
-  if dictAddr then
-    return Dataspace.toCodeword(dictAddr)
-  else
-    return dictAddr
-  end
-end
-
 function Dataspace.defaultLabel(name)
   return "_" .. string.gsub(name, "%W", "_")
 end
 
 -- Takes a (potentially partially initiated) native definition.
+-- TODO: Maybe we can also support inlining by specifying an `inline` field
+-- that, if specified, overrides the Forth word call and instead causes code to
+-- be added directly. e.g. LIT would be
+--   lda #LITERAL_NUM
+--   PUSH_A
+-- instead of the usual
+--   JSL LIT
+--   .WORD LITERNAL_NUM
+-- which is a lot slower.
 function Dataspace.native(entry)
   entry.type = "native"
-  if not entry.size then
-    entry.size = function() return nil end
-  end
   if not entry.asm then
     function entry:asm(dataspace)
-      return string.format("jsl not_implemented ; TODO: Not implemented")
+      return string.format([[
+        jsl not_implemented ; TODO: Not implemented
+      ]])
     end
   end
-  function entry:toString(dataspace)
-    return "Native: " .. self.name
+  if not entry.size then
+    function entry:size() return nil end
+  end
+  if not entry.toString then
+    function entry:toString(dataspace, opAddr)
+      return "Native: " .. self.name
+    end
   end
   return entry
 end
 
--- TODO: I think maybe `call` is just `native` but has a defined size? This
--- should/could also probably have runtime().
-function Dataspace.call(addr)
+-- TODO: Should this take an address instead? And resolve at asm time?
+function Dataspace.labelWord(label)
   local entry = {
-    type = "call",
-    size = function() return 3 end,
-    addr = addr,
+    type = "label-word",
+    size = function(self) return 2 end,
+    label = label,
   }
-  function entry:toString(dataspace)
-    assert(self.addr > 0 and self.addr < dataspace.here, "Invalid address " .. self.addr )
-    -- TODO: This check should happen at runtime()
-    assert(dataspace[self.addr].type == "native" or dataspace[self.addr].type == "call", string.format("Expected fn or call at %s", Dataspace.formatAddr(self.addr)))
+  function entry:toString(dataspace, opAddr)
     local name = dataspace:addrName(self.addr)
     if not name then
-      return string.format("Call to $%04X (missing name)", self.addr)
-    end
-    return "Call " .. name
-  end
-  function entry:asm(dataspace)
-    assert(self.addr > 0 and self.addr < dataspace.here, "Invalid address " .. self.addr)
-    assert(dataspace[self.addr].type == "native" or dataspace[self.addr].type == "call", string.format("Expected fn or call at %s", Dataspace.formatAddr(self.addr)))
-    -- TODO: I think this might be broken for code after DODOES.
-    local label = dataspace:addrLabel(self.addr)
-    if not label then
-      return nil
-    end
-    return string.format("JSR %s", label)
-  end
-  return entry
-end
-
-function Dataspace.address(addr)
-  local entry = {
-    type = "address",
-    size = function() return 3 end,
-    addr = addr,
-  }
-  function entry:toString(dataspace)
-    assert(self.addr >= -0x800000 and self.addr <= 0x7FFFFF, "Invalid address " .. self.addr )
-    return "Address: " .. tostring(self.addr)
-  end
-  function entry:asm(dataspace)
-    assert(self.addr >= -0x800000 and self.addr <= 0x7FFFFF, "Invalid address " .. self.addr )
-    return string.format(".FARADDR %d", self.addr)
-  end
-  return entry
-end
-
-function Dataspace.xt(addr)
-  local entry = {
-    type = "xt",
-    size = function() return 2 end,
-    addr = addr,
-  }
-  function entry:toString(dataspace)
-    local name = dataspace:addrName(self.addr)
-    if not name then
-      return string.format("XT: %d without name", self.addr)
+      return string.format("Label: %d without name", self.addr)
     end
     return string.format("XT: %d %s", self.addr, name)
   end
@@ -226,7 +112,7 @@ function Dataspace:getRelativeAddr(current, to)
   local delta = 0
   while current < to do
     local size = self[current]:size()
-    assert(size, "Couldn't get size of " .. self[current]:toString(self))
+    assert(size, "Couldn't get size of " .. self[current]:toString(self, current))
     delta = delta + size
     current = current + 1
   end
@@ -240,7 +126,7 @@ function Dataspace:fromRelativeAddress(current, delta)
   if delta >= 0 then
     while delta > 0 do
       local size = self[current]:size()
-      assert(size, "Couldn't get size of " .. self[current]:toString(self))
+      assert(size, "Couldn't get size of " .. self[current]:toString(self, current))
       delta = delta - size
       current = current + 1
     end
@@ -248,7 +134,7 @@ function Dataspace:fromRelativeAddress(current, delta)
     while delta < 0 do
       current = current - 1
       local size = self[current]:size()
-      assert(size, "Couldn't get size of " .. self[current]:toString(self))
+      assert(size, "Couldn't get size of " .. self[current]:toString(self, current))
       delta = delta + size
     end
   end
@@ -264,7 +150,7 @@ function Dataspace:toRelativeAddress(from, to)
   if current <= to then
     while current < to do
       local size = self[current]:size()
-      assert(size, "Couldn't get size of " .. self[current]:toString(self))
+      assert(size, "Couldn't get size of " .. self[current]:toString(self, current))
       delta = delta + size
       current = current + 1
     end
@@ -272,98 +158,81 @@ function Dataspace:toRelativeAddress(from, to)
     while current > to do
       current = current - 1
       local size = self[current]:size()
-      assert(size, "Couldn't get size of " .. self[current]:toString(self))
+      assert(size, "Couldn't get size of " .. self[current]:toString(self, current))
       delta = delta - size
     end
   end
   return delta
 end
 
--- Always unsigned.
-function Dataspace.number(number)
+function Dataspace.byte(byte)
+  assert(byte >= 0 and byte <= 0xFF)
   local entry = {
-    type = "number",
-    size = function() return 2 end,
-    number = number & 0xFFFF,
+    type = "byte",
+    size = function(self) return 1 end,
+    byte = byte & 0xFF,
   }
-  function entry:toString(dataspace)
-    return "Number: " .. string.format("$%04X", self.number)
+  function entry:toString(dataspace, opAddr)
+    return string.format("Byte: 0x%02X", self.byte)
   end
   function entry:asm(dataspace)
-    return string.format(".WORD %d", self.number & 0xFFFF)
+    return string.format(".byte %d", self.byte & 0xFF)
   end
   return entry
 end
 
-function Dataspace.byte(byte)
-  local entry = {
-    type = "byte",
-    size = function() return 1 end,
-    byte = byte & 0xFF,
-  }
-  function entry:toString(dataspace)
-    return "Byte: " .. tostring(self.byte)
-  end
-  function entry:asm(dataspace)
-    return string.format(".BYTE %d", self.byte & 0xFF)
-  end
-  return entry
+local function lowByte(value)
+  return value & 0xFF
+end
+
+local function highByte(value)
+  return (value >> 8) & 0xFF
+end
+
+local function bankByte(value)
+  return (value >> 16) & 0xFF
+end
+
+function Dataspace:getByte(addr)
+  self:assertAddr(io.stderr, addr >= 0 and addr < self.here, "Invalid addr %s", addr)
+  self:assertAddr(io.stderr, self[addr].type == "byte", "Expected byte at %s", addr)
+  return self[addr].byte
+end
+
+function Dataspace:setByte(addr, value)
+  self:assertAddr(io.stderr, addr >= 0 and addr < self.here, "Invalid addr %s", addr)
+  self:assertAddr(io.stderr, self[addr]:size() == 1, "Expected byte at %s", addr)
+  self[addr] = Dataspace.byte(value)
+end
+
+function Dataspace:getWord(addr)
+  return self:getByte(addr) | (self:getByte(addr + 1) << 8)
+end
+
+function Dataspace:setWord(addr, value)
+  assert(value <= 0xFFFF, "Invalid word " .. value)
+  self:setByte(addr, lowByte(value))
+  self:setByte(addr + 1, highByte(value))
 end
 
 -- Convenience methods.
-function Dataspace:addCall(addr)
-  return self:add(Dataspace.call(addr))
-end
-
+-- TODO: Can maybe add size hints to the first byte of multi-byte data? So we
+-- can pretty print it.
 function Dataspace:addAddress(addr)
-  return self:add(Dataspace.address(addr))
+  assert(addr >= 0 and addr <= 0xFFFFFF)
+  self:addByte(lowByte(addr))
+  self:addByte(highByte(addr))
+  self:addByte(bankByte(addr))
 end
 
-function Dataspace:addXt(name)
-  return self:add(Dataspace.xt(self:codewordOf(name)))
-end
-
-function Dataspace:addNumber(number)
-  return self:add(Dataspace.number(number))
+function Dataspace:addWord(number)
+  assert(number >= 0 and number <= 0xFFFF)
+  self:addByte(lowByte(number))
+  self:addByte(highByte(number))
 end
 
 function Dataspace:addByte(byte)
-  return self:add(Dataspace.byte(byte))
-end
-
--- Table should have at least name and runtime specified.
--- TODO: Maybe we can also support inlining by specifying an `inline` field
--- that, if specified, overrides the Forth word call and instead causes code to
--- be added directly. e.g. LIT would be
---   lda #LITERAL_NUM
---   PUSH_A
--- instead of the usual
---   JSL LIT
---   .WORD LITERNAL_NUM
--- which is a lot slower.
-function Dataspace:addNative(entry)
-  self:dictionaryAdd(entry.name, entry.label or Dataspace.defaultLabel(entry.name))
-  self:add(Dataspace.native(entry))
-end
-
--- Add word to the current colon defintion
-function Dataspace:addWord(name)
-  index = self:codewordOf(name)
-  assert(index, "Couldn't find " .. name)
-  self:addCall(index)
-end
-
-function Dataspace:addWords(names)
-  local first = 0
-  local last = 0
-  while true do
-    first, last = string.find(names, "%S+", last)
-    if first == nil then
-      break
-    end
-    self:addWord(string.sub(names, first, last))
-    last = last + 1
-  end
+  self:add(Dataspace.byte(byte))
 end
 
 return Dataspace
