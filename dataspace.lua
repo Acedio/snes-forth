@@ -24,7 +24,7 @@ end
 
 function Dataspace:assembly(file)
   for k,v in ipairs(self) do
-    file:write(v:asm(self) .. "\n")
+    file:write(v:asm(self, k) .. "\n")
   end
 end
 
@@ -213,6 +213,10 @@ function Dataspace:setWord(addr, value)
   assert(value <= 0xFFFF, "Invalid word " .. value)
   self:setByte(addr, lowByte(value))
   self:setByte(addr + 1, highByte(value))
+end
+
+function Dataspace:getAddr(addr)
+  return self:getByte(addr) | (self:getByte(addr + 1) << 8) | (self:getByte(addr + 2) << 16)
 end
 
 -- Convenience methods.
