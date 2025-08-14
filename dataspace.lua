@@ -2,10 +2,13 @@
 
 local Dataspace = {}
 
+local UNSIZED_START = 0x7A00
+
 function Dataspace:new()
   local dataspace = {
     latest = 0,
-    here = 1,
+    here = 0,
+    unsized_here = UNSIZED_START,
   }
   setmetatable(dataspace, self)
   self.__index = self
@@ -23,8 +26,31 @@ function Dataspace:print(file)
 end
 
 function Dataspace:assembly(file)
-  for k,v in ipairs(self) do
-    file:write(v:asm(self, k) .. "\n")
+  file:write(".segment \"CODE\"\n\n")
+
+  local i = 0
+  while i < self.here do
+    local v = self[i]
+    if v.label then
+      file:write(string.format("%s:\n", v.label))
+    end
+    file:write(v:asm(self, i) .. "\n")
+    if v:size() then
+      i = i + v:size()
+    else
+      -- TODO: Should be unnecessary.
+      i = i + 1
+    end
+  end
+
+  file:write(".segment \"UNSIZED\"\n\n")
+
+  for i=UNSIZED_START,self.unsized_here-1 do
+    local v = self[i]
+    if v.label then
+      file:write(string.format("%s:\n", v.label))
+    end
+    file:write(v:asm(self, i) .. "\n")
   end
 end
 
@@ -37,11 +63,19 @@ function Dataspace:assertAddr(dumpFile, cond, message, addr)
   end
 end
 
--- TODO: Maybe addSized and addUnsized
 function Dataspace:add(entry)
+  assert(entry:size())
+  local addr = self.here
   self[self.here] = entry
   self.here = self.here + 1
-  return entry
+  return addr
+end
+
+function Dataspace:addUnsized(entry)
+  local addr = self.unsized_here
+  self[self.unsized_here] = entry
+  self.unsized_here = self.unsized_here + 1
+  return addr
 end
 
 function Dataspace.defaultLabel(name)
@@ -176,7 +210,7 @@ function Dataspace.byte(byte)
     return string.format("Byte: 0x%02X", self.byte)
   end
   function entry:asm(dataspace)
-    return string.format(".byte %d", self.byte & 0xFF)
+    return string.format(".byte $%02X", self.byte & 0xFF)
   end
   return entry
 end
@@ -201,7 +235,7 @@ end
 
 function Dataspace:setByte(addr, value)
   self:assertAddr(io.stderr, addr >= 0 and addr < self.here, "Invalid addr %s", addr)
-  self:assertAddr(io.stderr, self[addr]:size() == 1, "Expected byte at %s", addr)
+  self:assertAddr(io.stderr, self[addr].type == "byte" and self[addr]:size() == 1, "Expected byte at %s", addr)
   self[addr] = Dataspace.byte(value)
 end
 

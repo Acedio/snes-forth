@@ -51,7 +51,7 @@ local ip = 0
 
 function addCall(addr)
   local entry = Dataspace.native{
-    size = function(self) return 1 end,
+    size = function(self) return 3 end,
     runtime = function(self, dataspace, opAddr)
       ip = ip + 3
       local callAddr = self:addr(dataspace, opAddr)
@@ -75,15 +75,21 @@ function addCall(addr)
     asm = function(self, dataspace, opAddr)
       local callAddr = self:addr(dataspace, opAddr)
       assert(dataspace[callAddr].type == "native", string.format("Expected native at %s", Dataspace.formatAddr(callAddr)))
-      local label = dictionary:addrLabel(callAddr)
-      if not label then
+      if dataspace[callAddr]:size() then
         return string.format([[
           jsr $%04X ; Cross our fingers!
         ]], callAddr)
+      else
+        local label = dictionary:addrLabel(callAddr)
+        if not label then
+          return string.format([[
+            jsr $%04X ; Cross our fingers!
+          ]], callAddr)
+        end
+        return string.format([[
+          jsr %s
+        ]], label)
       end
-      return string.format([[
-        jsr %s
-      ]], label)
     end,
   }
   dataspace:add(entry)
@@ -110,6 +116,7 @@ function addWords(names)
     local name = string.sub(names, first, last)
     local callAddr = dictionary:findAddr(name)
     assert(callAddr, "Couldn't find " .. name)
+    print(string.format("Found %s at %04X", name, callAddr))
     addCall(callAddr)
     last = last + 1
   end
@@ -117,14 +124,17 @@ end
 
 -- Table should have at least name and runtime specified.
 function addNative(entry)
-  dictionary:add(entry.name, entry.label or Dataspace.defaultLabel(entry.name), dataspace.here)
-  dataspace:add(Dataspace.native(entry))
+  entry.label = entry.label or Dataspace.defaultLabel(entry.name)
+  -- Native fns are unsized, so they don't affect/use HERE.
+  local addr = dataspace:addUnsized(Dataspace.native(entry))
+  print(string.format("Adding unsized %s at %04X", entry.name, addr))
+  dictionary:add(entry.name, entry.label, addr)
 end
 
 -- Make a variable that is easily accessible to Lua and the SNES.
 -- Returns the dataspace address of the variable contents.
 function makeSystemVariable(name)
-  local native = Dataspace.native{name=name}
+  local native = Dataspace.native{name=name, label=Dataspace.defaultLabel(name)}
   addNative(native)
   local dataaddr = dataspace.here
   native.runtime = function()
@@ -162,7 +172,8 @@ function debugging()
 end
 
 function addColonWithLabel(name, label)
-  local entry = dictionary:add(name, label, dataspace.here)
+  print(string.format("Adding colon %s at %04X", name, dataspace.here))
+  dictionary:add(name, label, dataspace.here)
 end
 
 function addColon(name)
@@ -228,7 +239,7 @@ asm=function() return [[
   rts
 ]] end}
 
-addNative{name=".s", LABEL="_dot_S", runtime=function()
+addNative{name=".S", label="_DOT_S", runtime=function()
   dataStack:print(outputs)
   rts()
 end}
@@ -265,7 +276,7 @@ end}
 addNative{name="XT!", label="_XT_STORE", runtime=function()
   local addr = dataStack:pop()
   -- Update the EXIT to instead jump to the code after DODOES.
-  local exitAddress = dictionary:latest().addr + 3 + 1
+  local exitAddress = dictionary:latest().addr + 3 + 2 + 1
   dataspace:setWord(exitAddress, addr)
   rts()
 end}
@@ -346,7 +357,6 @@ function setWordBuffer(str)
 end
 
 function getWordWithCount(addr, count)
-  print(addr .. " count " .. count)
   local str = ""
   for i=0,count-1 do
     str = str .. string.char(dataspace:getByte(addr + i))
@@ -979,7 +989,20 @@ addColon("DODOES")
 addColonWithLabel("DOES>", "_DOES")
   addWords("LIT")
   addXt("DODOES")
-  addWords("COMPILE, EXIT")
+  addWords("COMPILE,")
+
+  -- Need to drop the return address so we skip returning to the codeword of the
+  -- DOES body.
+  -- TODO: It should just be a jmp instead instead of a jsr.
+  addWords("LIT")
+  addXt("R>")
+  addWords("COMPILE,")
+
+  addWords("LIT")
+  addXt("DROP")
+  addWords("COMPILE,")
+
+  addWords("EXIT")
 dictionary:latest().immediate = true
 
 -- TODO: Maybe pull these out into a mathops.lua file?
@@ -1245,14 +1268,15 @@ do
   addWords("DROP EXIT")
 end
 
-ip = dataspace.here -- start on creating STATE, below
+ip = dataspace.here -- start on creating QUIT, below
+print(string.format("Starting IP at %04X", ip))
 addWords("QUIT")
 addWords("BYE")
 
 if debugging() then
   infos:write(string.format("here: %s\n", Dataspace.formatAddr(dataspace.here)))
 
-  dataspace:print(io.stderr)
+  dataspace:print(infos)
 end
 
 -- The processing loop.
@@ -1261,7 +1285,6 @@ while running do
   local oldip = ip
   local instruction = dataspace[oldip]
   if instruction.type ~= "native" then
-    dataspace:print(infos)
     assertAddr(nil, "Attempted to execute a non-call, non-native cell: %s\n", oldip)
   end
 
@@ -1279,9 +1302,9 @@ end
 
 
 if debugging() then
-  dataspace:print(io.stderr)
+  dataspace:print(infos)
 
-  dataStack:print(io.stderr)
+  dataStack:print(infos)
 end
 
 local output = assert(io.open(arg[2], "w"))

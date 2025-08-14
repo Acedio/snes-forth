@@ -36,7 +36,6 @@ end
 function Dictionary:findAddr(name)
   local dictEntry = self:find(name)
   if dictEntry then
-    print(string.format("Found %s at $%04X", name, dictEntry.addr))
     return dictEntry.addr
   else
     return nil
