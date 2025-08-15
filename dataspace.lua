@@ -8,7 +8,8 @@ function Dataspace:new()
   local dataspace = {
     latest = 0,
     here = 0,
-    unsized_here = UNSIZED_START,
+    hereLabel = nil,
+    unsizedHere = UNSIZED_START,
   }
   setmetatable(dataspace, self)
   self.__index = self
@@ -45,7 +46,7 @@ function Dataspace:assembly(file)
 
   file:write(".segment \"UNSIZED\"\n\n")
 
-  for i=UNSIZED_START,self.unsized_here-1 do
+  for i=UNSIZED_START,self.unsizedHere-1 do
     local v = self[i]
     if v.label then
       file:write(string.format("%s:\n", v.label))
@@ -63,18 +64,31 @@ function Dataspace:assertAddr(dumpFile, cond, message, addr)
   end
 end
 
+-- Set the label for HERE.
+-- Because HERE doesn't yet have an entry, we store this label temporarily until
+-- something is added at HERE.
+-- TODO: Is there a cleaner way of doing this? Maybe keeping a list of labels ->
+-- addresses somewhere?
+function Dataspace:labelHere(label)
+  self.hereLabel = label
+end
+
 function Dataspace:add(entry)
   assert(entry:size())
   local addr = self.here
+  if self.hereLabel then
+    entry.label = self.hereLabel
+    self.hereLabel = nil
+  end
   self[self.here] = entry
   self.here = self.here + 1
   return addr
 end
 
 function Dataspace:addUnsized(entry)
-  local addr = self.unsized_here
-  self[self.unsized_here] = entry
-  self.unsized_here = self.unsized_here + 1
+  local addr = self.unsizedHere
+  self[self.unsizedHere] = entry
+  self.unsizedHere = self.unsizedHere + 1
   return addr
 end
 
@@ -253,6 +267,16 @@ function Dataspace:getAddr(addr)
   return self:getByte(addr) | (self:getByte(addr + 1) << 8) | (self:getByte(addr + 2) << 16)
 end
 
+function Dataspace:addByte(byte)
+  self:add(Dataspace.byte(byte))
+end
+
+function Dataspace:addWord(number)
+  assert(number >= 0 and number <= 0xFFFF)
+  self:addByte(lowByte(number))
+  self:addByte(highByte(number))
+end
+
 -- Convenience methods.
 -- TODO: Can maybe add size hints to the first byte of multi-byte data? So we
 -- can pretty print it.
@@ -263,14 +287,11 @@ function Dataspace:addAddress(addr)
   self:addByte(bankByte(addr))
 end
 
-function Dataspace:addWord(number)
-  assert(number >= 0 and number <= 0xFFFF)
-  self:addByte(lowByte(number))
-  self:addByte(highByte(number))
-end
-
-function Dataspace:addByte(byte)
-  self:add(Dataspace.byte(byte))
+function Dataspace:allotBytes(bytes)
+  assert(bytes > 0)
+  for i=1,bytes do
+    self:addByte(0)
+  end
 end
 
 return Dataspace

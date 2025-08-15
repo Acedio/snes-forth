@@ -116,7 +116,6 @@ function addWords(names)
     local name = string.sub(names, first, last)
     local callAddr = dictionary:findAddr(name)
     assert(callAddr, "Couldn't find " .. name)
-    print(string.format("Found %s at %04X", name, callAddr))
     addCall(callAddr)
     last = last + 1
   end
@@ -127,7 +126,6 @@ function addNative(entry)
   entry.label = entry.label or Dataspace.defaultLabel(entry.name)
   -- Native fns are unsized, so they don't affect/use HERE.
   local addr = dataspace:addUnsized(Dataspace.native(entry))
-  print(string.format("Adding unsized %s at %04X", entry.name, addr))
   dictionary:add(entry.name, entry.label, addr)
 end
 
@@ -168,11 +166,11 @@ else
 end
 
 function debugging()
-  return true --dataspace:getWord(debugAddr) ~= 0
+  return dataspace:getWord(debugAddr) ~= 0
 end
 
 function addColonWithLabel(name, label)
-  print(string.format("Adding colon %s at %04X", name, dataspace.here))
+  dataspace:labelHere(label)
   dictionary:add(name, label, dataspace.here)
 end
 
@@ -299,7 +297,7 @@ addNative{name="CREATEDOCOL", runtime=function()
 end}
 
 addNative{name="ALLOT", runtime=function()
-  dataspace.here = dataspace.here + dataStack:pop()
+  dataspace:allotBytes(dataStack:pop())
   rts()
 end}
 
@@ -343,9 +341,7 @@ end}
 local wordBufferAddr = dataspace.here
 local wordBufferSize = 32
 dataspace:addWord(0)
-for i=1,wordBufferSize do
-  dataspace:addByte(0)
-end
+dataspace:allotBytes(wordBufferSize)
 
 function setWordBuffer(str)
   local length = string.len(str)
@@ -978,6 +974,7 @@ end}
 addNative{name="LABEL", runtime=function()
   local label = input:word()
   dictionary:latest().label = label
+  dataspace[dictionary:latest().addr].label = label
   rts()
 end}
 
@@ -1269,14 +1266,13 @@ do
 end
 
 ip = dataspace.here -- start on creating QUIT, below
-print(string.format("Starting IP at %04X", ip))
 addWords("QUIT")
 addWords("BYE")
 
 if debugging() then
-  infos:write(string.format("here: %s\n", Dataspace.formatAddr(dataspace.here)))
-
   dataspace:print(infos)
+  infos:write(string.format("HERE = %s\n", Dataspace.formatAddr(dataspace.here)))
+  infos:write(string.format("Starting IP at %04X\n", ip))
 end
 
 -- The processing loop.
