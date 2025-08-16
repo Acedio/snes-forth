@@ -281,7 +281,7 @@ end}
 
 addNative{name="CREATE", runtime=function()
   local name = input:word()
-  dictionary:add(name, name, dataspace.here)
+  dictionary:add(name, Dataspace.defaultLabel(name), dataspace.here)
   addWords("LIT")
   local dataAddrAddr = dataspace.here
   dataspace:addWord(0)
