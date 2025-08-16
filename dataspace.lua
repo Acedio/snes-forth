@@ -2,12 +2,13 @@
 
 local Dataspace = {}
 
-local UNSIZED_START = 0x7A00
+local SIZED_START = 0x8000
+local UNSIZED_START = 0xFA00
 
 function Dataspace:new()
   local dataspace = {
     latest = 0,
-    here = 0,
+    here = SIZED_START,
     hereLabel = nil,
     unsizedHere = UNSIZED_START,
   }
@@ -21,27 +22,30 @@ function Dataspace.formatAddr(addr)
 end
 
 function Dataspace:print(file)
-  for k,v in ipairs(self) do
-    file:write(string.format("%s: %s\n", Dataspace.formatAddr(k), v:toString(self, k)))
+  local i = SIZED_START
+  while i < self.here do
+    local v = self[i]
+    file:write(string.format("%s: %s\n", Dataspace.formatAddr(i), v:toString(self, i)))
+    assert(v:size())
+    i = i + v:size()
   end
 end
 
 function Dataspace:assembly(file)
-  file:write(".segment \"CODE\"\n\n")
+  -- TODO: Maybe assert that the current address is where we think we are?
+  file:write([[
+  .segment "CODE"
+  ]])
 
-  local i = 0
+  local i = SIZED_START
   while i < self.here do
     local v = self[i]
     if v.label then
       file:write(string.format("%s:\n", v.label))
     end
     file:write(v:asm(self, i) .. "\n")
-    if v:size() then
-      i = i + v:size()
-    else
-      -- TODO: Should be unnecessary.
-      i = i + 1
-    end
+    assert(v:size())
+    i = i + v:size()
   end
 
   file:write(".segment \"UNSIZED\"\n\n")

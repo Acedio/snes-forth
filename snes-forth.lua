@@ -75,20 +75,18 @@ function addCall(addr)
     asm = function(self, dataspace, opAddr)
       local callAddr = self:addr(dataspace, opAddr)
       assert(dataspace[callAddr].type == "native", string.format("Expected native at %s", Dataspace.formatAddr(callAddr)))
-      if dataspace[callAddr]:size() then
-        return string.format([[
-          jsr $%04X ; Cross our fingers!
-        ]], callAddr)
-      else
-        local label = dictionary:addrLabel(callAddr)
-        if not label then
-          return string.format([[
-            jsr $%04X ; Cross our fingers!
-          ]], callAddr)
-        end
+
+      local label = dictionary:addrLabel(callAddr)
+      if label then
         return string.format([[
           jsr %s
         ]], label)
+      else
+        -- TODO: Assert that we're in sized space. Or maybe just assert that we
+        -- can get an address/label for the given (Lua) address?
+        return string.format([[
+          jsr $%04X ; Cross our fingers!
+        ]], callAddr)
       end
     end,
   }
@@ -281,7 +279,9 @@ end}
 
 addNative{name="CREATE", runtime=function()
   local name = input:word()
-  dictionary:add(name, Dataspace.defaultLabel(name), dataspace.here)
+  local label = Dataspace.defaultLabel(name)
+  dictionary:add(name, label, dataspace.here)
+  dataspace:labelHere(label)
   addWords("LIT")
   local dataAddrAddr = dataspace.here
   dataspace:addWord(0)
