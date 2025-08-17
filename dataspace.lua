@@ -2,15 +2,30 @@
 
 local Dataspace = {}
 
-local SIZED_START = 0x8000
-local UNSIZED_START = 0xFA00
+-- First 0x2000 bytes of RAM, accessible from every bank from 0 to 0x3F.
+Dataspace.LOWRAM_BANK = 0xFFFF
 
 function Dataspace:new()
   local dataspace = {
-    latest = 0,
-    here = SIZED_START,
-    hereLabel = nil,
-    unsizedHere = UNSIZED_START,
+    bank = 0,
+    banks = {
+      [0] = {
+        SIZED_START = 0x8000,
+        here = 0x8000,
+        UNSIZED_START = 0xFA00,
+        unsizedHere = 0xFA00,
+        hereLabel = nil,
+        segment = "CODE",
+      },
+      [Dataspace.LOWRAM_BANK] = {
+        SIZED_START = 0x300,
+        here = 0x300,
+        UNSIZED_START = 0x1900,
+        unsizedHere = 0x1900,
+        hereLabel = nil,
+        segment = "BSS",
+      },
+    },
   }
   setmetatable(dataspace, self)
   self.__index = self
@@ -22,8 +37,8 @@ function Dataspace.formatAddr(addr)
 end
 
 function Dataspace:print(file)
-  local i = SIZED_START
-  while i < self.here do
+  local i = self.banks[self.bank].SIZED_START
+  while i < self:getHere() do
     local v = self[i]
     file:write(string.format("%s: %s\n", Dataspace.formatAddr(i), v:toString(self, i)))
     assert(v:size())
@@ -32,30 +47,33 @@ function Dataspace:print(file)
 end
 
 function Dataspace:assembly(file)
-  -- TODO: Maybe assert that the current address is where we think we are?
-  file:write([[
-  .segment "CODE"
-  ]])
+  for index,bankInfo in pairs(self.banks) do
+    file:write(string.format([[
+    .segment "%s"
+    ]], bankInfo.segment))
 
-  local i = SIZED_START
-  while i < self.here do
-    local v = self[i]
-    if v.label then
-      file:write(string.format("%s:\n", v.label))
+    -- TODO: Maybe assert that the current address is where we think we are?
+    local i = bankInfo.SIZED_START
+    while i < bankInfo.here do
+      local v = self[i]
+      if v.label then
+        file:write(string.format("%s:\n", v.label))
+      end
+      file:write(v:asm(self, i) .. "\n")
+      assert(v:size())
+      i = i + v:size()
     end
-    file:write(v:asm(self, i) .. "\n")
-    assert(v:size())
-    i = i + v:size()
-  end
 
-  file:write(".segment \"UNSIZED\"\n\n")
+    -- TODO: There should be one UNSIZED segment per bank.
+    file:write(".segment \"UNSIZED\"\n\n")
 
-  for i=UNSIZED_START,self.unsizedHere-1 do
-    local v = self[i]
-    if v.label then
-      file:write(string.format("%s:\n", v.label))
+    for i=bankInfo.UNSIZED_START,bankInfo.unsizedHere-1 do
+      local v = self[i]
+      if v.label then
+        file:write(string.format("%s:\n", v.label))
+      end
+      file:write(v:asm(self, i) .. "\n")
     end
-    file:write(v:asm(self, i) .. "\n")
   end
 end
 
@@ -66,6 +84,22 @@ function Dataspace:assertAddr(dumpFile, cond, message, addr)
     self:print(dumpFile)
     assert(nil, string.format(message, Dataspace.formatAddr(addr)))
   end
+end
+
+function Dataspace:getBank()
+  return self.bank
+end
+
+function Dataspace:setBank(bank)
+  self.bank = bank
+end
+
+function Dataspace:getHere()
+  return self.banks[self.bank].here
+end
+
+function Dataspace:setHere(val)
+  self.banks[self.bank].here = val
 end
 
 -- Set the label for HERE.
@@ -79,20 +113,20 @@ end
 
 function Dataspace:add(entry)
   assert(entry:size())
-  local addr = self.here
+  local addr = self:getHere()
   if self.hereLabel then
     entry.label = self.hereLabel
     self.hereLabel = nil
   end
-  self[self.here] = entry
-  self.here = self.here + 1
+  self[self:getHere()] = entry
+  self:setHere(self:getHere() + 1)
   return addr
 end
 
 function Dataspace:addUnsized(entry)
-  local addr = self.unsizedHere
-  self[self.unsizedHere] = entry
-  self.unsizedHere = self.unsizedHere + 1
+  local addr = self.banks[self.bank].unsizedHere
+  self[self.banks[self.bank].unsizedHere] = entry
+  self.banks[self.bank].unsizedHere = self.banks[self.bank].unsizedHere + 1
   return addr
 end
 
@@ -174,13 +208,12 @@ local function bankByte(value)
 end
 
 function Dataspace:getByte(addr)
-  self:assertAddr(io.stderr, addr >= 0 and addr < self.here, "Invalid addr %s", addr)
+  -- TODO: Implement banking for this and setByte.
   self:assertAddr(io.stderr, self[addr].type == "byte", "Expected byte at %s", addr)
   return self[addr].byte
 end
 
 function Dataspace:setByte(addr, value)
-  self:assertAddr(io.stderr, addr >= 0 and addr < self.here, "Invalid addr %s", addr)
   self:assertAddr(io.stderr, self[addr].type == "byte" and self[addr]:size() == 1, "Expected byte at %s", addr)
   self[addr] = Dataspace.byte(value)
 end

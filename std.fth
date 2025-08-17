@@ -28,8 +28,6 @@
 : WHILE POSTPONE IF SWAP ; IMMEDIATE
 : REPEAT ['] BRANCH COMPILE, HERE ADDRESS-OFFSET , POSTPONE THEN ; IMMEDIATE
 
-: VARIABLE CREATE 0 , ;
-
 : CR S" 
 " TYPE ;
 
@@ -72,4 +70,9 @@
 : CHAR+ 1 CHARS + ;
 : CELL+ 1 CELLS + ;
 : ADDR+ 1 ADDRS + ;
+
+: VARIABLE CREATE 0 , ;
+
+\ Create a variable in low RAM bank (but definition in the current bank).
+: CREATELOWRAM BANK@ LOWRAM BANK! HERE SWAP BANK! CONSTANT ;
 

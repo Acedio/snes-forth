@@ -111,7 +111,10 @@ TRUE DEBUG !
   SWAP 0x0012 = AND
 ;
 
-VARIABLE TEST-VAR
+CREATELOWRAM TEST-VAR
+BANK@
+LOWRAM BANK! 1 CELLS ALLOT
+BANK!
 
 ( TODO: Secretly broken on the SNES, since it uses the Lua address (which
   happens to be a valid address on the SNES as well. )
