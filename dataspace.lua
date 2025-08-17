@@ -130,91 +130,19 @@ function Dataspace.native(entry)
   return entry
 end
 
--- TODO: Should this take an address instead? And resolve at asm time?
-function Dataspace.labelWord(label)
-  local entry = {
-    type = "label-word",
-    size = function(self) return 2 end,
-    label = label,
-  }
-  function entry:toString(dataspace, opAddr)
-    local name = dataspace:addrName(self.addr)
-    if not name then
-      return string.format("Label: %d without name", self.addr)
-    end
-    return string.format("XT: %d %s", self.addr, name)
-  end
-  function entry:asm(dataspace)
-    local label = dataspace:addrLabel(self.addr)
-    if not label then
-      return nil
-    end
-    return string.format(".WORD %s", label)
-  end
-  return entry
-end
-
+-- TODO: Now that we're mimicking SNES addressing in Lua these aren't really
+-- needed, but maybe handy keep around for error checking.
+-- TODO: Add error checking to ensure all intervening cells have a size.
 -- Input: lua dataspace addressing
 -- Returns: SNES delta
-function Dataspace:getRelativeAddr(current, to)
-  if current > to then
-    return -self:getRelativeAddr(to, current)
-  end
-
-  local delta = 0
-  while current < to do
-    local size = self[current]:size()
-    assert(size, "Couldn't get size of " .. self[current]:toString(self, current))
-    delta = delta + size
-    current = current + 1
-  end
-  return delta
+function Dataspace:getRelativeAddr(from, to)
+  return to - from
 end
 
 -- Input: Lua address and SNES address space delta
 -- Returns: Lua address
 function Dataspace:fromRelativeAddress(current, delta)
-  local original = current
-  if delta >= 0 then
-    while delta > 0 do
-      local size = self[current]:size()
-      assert(size, "Couldn't get size of " .. self[current]:toString(self, current))
-      delta = delta - size
-      current = current + 1
-    end
-  else
-    while delta < 0 do
-      current = current - 1
-      local size = self[current]:size()
-      assert(size, "Couldn't get size of " .. self[current]:toString(self, current))
-      delta = delta + size
-    end
-  end
-  assert(delta == 0, "Delta was not zero from: " .. original)
-  return current
-end
-
--- Input: Two lua adddresses
--- Returns: SNES address-space delta
-function Dataspace:toRelativeAddress(from, to)
-  local current = from
-  local delta = 0
-  if current <= to then
-    while current < to do
-      local size = self[current]:size()
-      assert(size, "Couldn't get size of " .. self[current]:toString(self, current))
-      delta = delta + size
-      current = current + 1
-    end
-  else
-    while current > to do
-      current = current - 1
-      local size = self[current]:size()
-      assert(size, "Couldn't get size of " .. self[current]:toString(self, current))
-      delta = delta - size
-    end
-  end
-  return delta
+  return current + delta
 end
 
 function Dataspace.byte(byte)

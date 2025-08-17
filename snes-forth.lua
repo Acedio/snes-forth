@@ -745,7 +745,7 @@ asm=function() return [[
 addNative{name="ADDRESS-OFFSET", runtime=function()
   local from = dataStack:pop()
   local to = dataStack:pop()
-  local delta = dataspace:toRelativeAddress(from, to)
+  local delta = dataspace:getRelativeAddr(from, to)
   assert(delta >= -0x8000 and delta <= 0x7FFF, "Delta out of range: " .. delta)
   dataStack:push(toUnsigned(delta))
   rts()
@@ -1147,6 +1147,8 @@ end
 -- Given a return stack entry, push where the inline data for this word is.
 addNative{name="INLINE-DATA", runtime=function()
   -- The return stack in Lua already points at the inline data.
+  -- TODO: Probably should make the return stack behave the same as the SNES
+  -- (point at one byte behind the return address) 
   rts()
 end,
 asm=function() return [[
