@@ -191,9 +191,6 @@ addNative{name="LOWRAM", runtime=function()
   rts()
 end}
 
--- TODO: Should this be a 2 byte or 4 byte address if we switch to 1-word
--- addressing? Probably keep it as a two byte and have it update depending on
--- our bank.
 addNative{name="HERE", runtime=function()
   dataStack:push(dataspace:getHere())
   rts()
@@ -1178,10 +1175,19 @@ do
 end
 
 -- Given a return stack entry, push where the inline data for this word is.
+--
+-- The SNES and Lua diverge a bit on how the inline data is addressed, so this
+-- word allows for normalized access.
+-- On the 6502, JSR pushes an address that doesn't quite jump past the JSR
+-- instruction itself
+-- [link](https://retrocomputing.stackexchange.com/questions/19543/why-does-the-6502-jsr-instruction-only-increment-the-return-address-by-2-bytes)
+-- Also true for 816's
+-- [JSL](https://web.archive.org/web/20250114225959/http://www.6502.org/tutorials/65c816opcodes.html#6.2.2.1),
+-- which increments IP by 3 and not the full 4.
+-- TODO: Probably should make the return stack behave the same as the SNES
+-- (point at one byte behind the return address) 
 addNative{name="INLINE-DATA", runtime=function()
   -- The return stack in Lua already points at the inline data.
-  -- TODO: Probably should make the return stack behave the same as the SNES
-  -- (point at one byte behind the return address) 
   rts()
 end,
 asm=function() return [[

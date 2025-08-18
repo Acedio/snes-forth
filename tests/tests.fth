@@ -93,16 +93,20 @@ TRUE DEBUG !
 : TEST-COMPARISON
   1 2 < TRUE =
   2 1 < FALSE = AND
+  -1 1 < TRUE = AND
+  1 -1 < FALSE = AND
   2 1 > TRUE = AND
   1 2 > FALSE = AND
+  1 -1 > TRUE = AND
+  -1 1 > FALSE = AND
   1 1 = TRUE = AND
   0 1 = FALSE = AND
   0 1 <> TRUE = AND
   1 1 <> FALSE = AND
-  0xFFFE 0xFFFF U< TRUE = AND
-  0xFFFF 0xFFFE U< FALSE = AND
-  0xFFFF 0xFFFE U> TRUE = AND
-  0xFFFE 0xFFFF U> FALSE = AND
+  0x0001 0xFFFF U< TRUE = AND
+  0xFFFF 0x0001 U< FALSE = AND
+  0xFFFF 0x0001 U> TRUE = AND
+  0x0001 0xFFFF U> FALSE = AND
 ;
 
 : TEST-LITERALS
@@ -111,18 +115,26 @@ TRUE DEBUG !
   SWAP 0x0012 = AND
 ;
 
-CREATELOWRAM TEST-VAR
+CREATELOWRAM TEST-LOWRAM-VAR
 BANK@
 LOWRAM BANK! 1 CELLS ALLOT
 BANK!
+CREATE TEST-VAR 1 CELLS ALLOT
 
-( TODO: Secretly broken on the SNES, since it uses the Lua address (which
-  happens to be a valid address on the SNES as well. )
 : TEST-MEMORY
-  21 TEST-VAR !
-  TEST-VAR @ 21 =
-  42 TEST-VAR !
-  TEST-VAR @ 42 = AND ;
+  21 TEST-LOWRAM-VAR !
+  TEST-LOWRAM-VAR @ 21 =
+  42 TEST-LOWRAM-VAR !
+  TEST-LOWRAM-VAR @ 42 = AND ;
+
+\ Lowram should still be accessible in different banks.
+: TEST-BANKS
+  0 BANK!
+  33 TEST-LOWRAM-VAR !
+  55 TEST-VAR !
+  LOWRAM BANK!
+  TEST-LOWRAM-VAR @ 33 =
+  TEST-VAR @ 55 = AND ;
 
 : MY-CONSTANT CREATE , DOES> @ ;
 
@@ -147,6 +159,7 @@ TODO: Implement the T{ ... -> ... }T notation.
   TEST-COMPARISON
   TEST-LITERALS
   TEST-MEMORY
+  TEST-BANKS
   TEST-DOES
 ;
 
