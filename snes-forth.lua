@@ -49,49 +49,65 @@ end
 local running = true
 local ip = 0
 
-function compileCall(addr)
-  -- TODO: This implementation is shared by all Calls, pull it out.
-  local entry = Dataspace.native{
-    size = function(self) return 3 end,
-    runtime = function(self, dataspace, opAddr)
-      ip = ip + 3
-      local callAddr = self:addr(dataspace, opAddr)
-      -- TODO: Can probably just remove this check as the interpreter will do it
-      assert(dataspace[callAddr].type == "native", string.format("Expected native at %s", Dataspace.formatAddr(callAddr)))
-      -- TODO: To match the 65816 this should be ip - 1
-      returnStack:pushWord(ip)
-      ip = callAddr
-    end,
-    addr = function(self, dataspace, opAddr)
-      return dataspace:getWord(opAddr + 1)
-    end,
-    toString = function(self, dataspace, opAddr)
-      local callAddr = self:addr(dataspace, opAddr)
-      local name = dictionary:addrName(callAddr)
-      if not name then
-        return string.format("Call to $%04X (missing name)", callAddr)
-      end
-      return string.format("Call $%04X (to %s)", callAddr, name)
-    end,
-    asm = function(self, dataspace, opAddr)
-      local callAddr = self:addr(dataspace, opAddr)
-      assert(dataspace[callAddr].type == "native", string.format("Expected native at %s", Dataspace.formatAddr(callAddr)))
+local Call = {}
 
-      local label = dictionary:addrLabel(callAddr)
-      if label then
-        return string.format([[
-          jsr %s
-        ]], label)
-      else
-        -- TODO: Assert that we're in sized space. Or maybe just assert that we
-        -- can get an address/label for the given (Lua) address?
-        return string.format([[
-          jsr $%04X ; Cross our fingers!
-        ]], callAddr)
-      end
-    end,
+function Call:size()
+  return 3
+end
+
+function Call:runtime(dataspace, opAddr)
+  ip = ip + 3
+  local callAddr = self:addr(dataspace, opAddr)
+  -- TODO: Can probably just remove this check as the interpreter will do it
+  assert(dataspace[callAddr].type == "native", string.format("Expected native at %s", Dataspace.formatAddr(callAddr)))
+  -- TODO: To match the 65816 this should be ip - 1
+  returnStack:pushWord(ip)
+  ip = callAddr
+end
+
+function Call:addr(dataspace, opAddr)
+  return dataspace:getWord(opAddr + 1)
+end
+
+function Call:toString(dataspace, opAddr)
+  local callAddr = self:addr(dataspace, opAddr)
+  local name = dictionary:addrName(callAddr)
+  if not name then
+    return string.format("Call to $%04X (missing name)", callAddr)
+  end
+  return string.format("Call $%04X (to %s)", callAddr, name)
+end
+
+function Call:asm(dataspace, opAddr)
+  local callAddr = self:addr(dataspace, opAddr)
+  assert(dataspace[callAddr].type == "native", string.format("Expected native at %s", Dataspace.formatAddr(callAddr)))
+
+  local label = dictionary:addrLabel(callAddr)
+  if label then
+    return string.format([[
+      jsr %s
+    ]], label)
+  else
+    -- TODO: Assert that we're in sized space. Or maybe just assert that we
+    -- can get an address/label for the given (Lua) address?
+    return string.format([[
+      jsr $%04X ; Cross our fingers!
+    ]], callAddr)
+  end
+end
+
+function Call:new()
+  -- TODO: Some sort of inheritance possible here?
+  local call = {
+    type = "native",
   }
-  dataspace:compile(entry)
+  setmetatable(call, self)
+  self.__index = self
+  return call
+end
+
+function compileCall(addr)
+  dataspace:compile(Call:new())
   dataspace:compileWord(addr)
 end
 

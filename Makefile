@@ -27,4 +27,4 @@ tests: tests.smc tests.mlb
 	echo tests
 
 clean:
-	rm *.smc *.labels *.dbg *.o *.mlb *.out.s *.out.fth
+	rm *.smc *.labels *.dbg *.o *.mlb *.out.s *.out.fth dataspace.dump

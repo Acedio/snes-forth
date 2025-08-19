@@ -129,6 +129,7 @@ function Dataspace:labelCodeHere(label)
   self.hereLabel = label
 end
 
+-- Add at the current data space pointer (HERE).
 function Dataspace:add(entry)
   assert(entry:size())
   local addr = self:getDataHere()
@@ -138,6 +139,7 @@ function Dataspace:add(entry)
   return addr
 end
 
+-- Add at the current code space pointer.
 function Dataspace:compile(entry)
   assert(entry:size())
   local addr = self:getCodeHere()
@@ -294,6 +296,13 @@ function Dataspace:compileWord(number)
   assert(number >= 0 and number <= 0xFFFF)
   self:compileByte(lowByte(number))
   self:compileByte(highByte(number))
+end
+
+function Dataspace:compileAddress(addr)
+  assert(addr >= 0 and addr <= 0xFFFFFF)
+  self:compileByte(lowByte(addr))
+  self:compileByte(highByte(addr))
+  self:compileByte(bankByte(addr))
 end
 
 return Dataspace

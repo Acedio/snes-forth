@@ -1,3 +1,5 @@
+; These macros use direct addressing, so will always use bank 0 for the stack.
+
 .macro POP_A
   lda z:1, X  ; X is the datastack reg
   inx

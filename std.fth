@@ -71,6 +71,6 @@
 : CELL+ 1 CELLS + ;
 : ADDR+ 1 ADDRS + ;
 
-\ Create a variable in low RAM bank (but definition in the current bank).
+\ Create a variable in low RAM bank (but definition in the current code bank).
 : CREATELOWRAM BANK@ LOWRAM BANK! HERE SWAP BANK! CONSTANT ;
 
