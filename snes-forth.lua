@@ -49,7 +49,8 @@ end
 local running = true
 local ip = 0
 
-function addCall(addr)
+function compileCall(addr)
+  -- TODO: This implementation is shared by all Calls, pull it out.
   local entry = Dataspace.native{
     size = function(self) return 3 end,
     runtime = function(self, dataspace, opAddr)
@@ -90,20 +91,21 @@ function addCall(addr)
       end
     end,
   }
-  dataspace:add(entry)
-  dataspace:addWord(addr)
+  dataspace:compile(entry)
+  dataspace:compileWord(addr)
 end
 
 function rts()
   ip = returnStack:popWord()
 end
 
-function addXt(name)
-  return dataspace:addWord(dictionary:findAddr(name))
+-- Right now this is the same as `['] name ,`.
+function compileXt(name)
+  return dataspace:compileWord(dictionary:findAddr(name))
 end
 
 -- Add words to the current colon defintion
-function addWords(names)
+function compile(names)
   local first = 0
   local last = 0
   while true do
@@ -114,7 +116,7 @@ function addWords(names)
     local name = string.sub(names, first, last)
     local callAddr = dictionary:findAddr(name)
     assert(callAddr, "Couldn't find " .. name)
-    addCall(callAddr)
+    compileCall(callAddr)
     last = last + 1
   end
 end
@@ -123,7 +125,7 @@ end
 function addNative(entry)
   entry.label = entry.label or Dataspace.defaultLabel(entry.name)
   -- Native fns are unsized, so they don't affect/use HERE.
-  local addr = dataspace:addUnsized(Dataspace.native(entry))
+  local addr = dataspace:compileUnsized(Dataspace.native(entry))
   dictionary:add(entry.name, entry.label, addr)
 end
 
@@ -133,11 +135,11 @@ function makeSystemVariable(name)
   local native = Dataspace.native{name=name, label=Dataspace.defaultLabel(name)}
   addNative(native)
 
-  local originalBank = dataspace:getBank()
-  dataspace:setBank(Dataspace.LOWRAM_BANK)
-  local dataaddr = dataspace:getHere()
+  local originalBank = dataspace:getDataBank()
+  dataspace:setDataBank(Dataspace.LOWRAM_BANK)
+  local dataaddr = dataspace:getDataHere()
   dataspace:addWord(0)
-  dataspace:setBank(originalBank)
+  dataspace:setDataBank(originalBank)
 
   native.runtime = function()
     dataStack:push(dataaddr)
@@ -168,8 +170,8 @@ function debugging()
 end
 
 function addColonWithLabel(name, label)
-  dataspace:labelHere(label)
-  dictionary:add(name, label, dataspace:getHere())
+  dataspace:labelCodeHere(label)
+  dictionary:add(name, label, dataspace:getCodeHere())
 end
 
 function addColon(name)
@@ -177,12 +179,12 @@ function addColon(name)
 end
 
 addNative{name="BANK@", label="_BANK_FETCH", runtime=function()
-  dataStack:push(dataspace:getBank())
+  dataStack:push(dataspace:getDataBank())
   rts()
 end}
 
 addNative{name="BANK!", label="_BANK_STORE", runtime=function()
-  dataspace:setBank(dataStack:pop())
+  dataspace:setDataBank(dataStack:pop())
   rts()
 end}
 
@@ -192,7 +194,7 @@ addNative{name="LOWRAM", runtime=function()
 end}
 
 addNative{name="HERE", runtime=function()
-  dataStack:push(dataspace:getHere())
+  dataStack:push(dataspace:getDataHere())
   rts()
 end}
 
@@ -268,9 +270,11 @@ addNative{name="A.,", label="_A_COMMA", runtime=function()
   rts()
 end}
 
+-- TODO: This is now basically the same as "," now . Should that be the case?
 addNative{name="XT,", label="_XT_COMMA", runtime=function()
   -- TODO: How do we deal with this when we quantize dataspace?
   local xt = dataStack:pop()
+  -- TODO: Use a code-space HERE instead of dataspace HERE?
   dataspace:addWord(xt)
   if debugging() then
     local name = dictionary:addrName(xt) or "missing name"
@@ -292,13 +296,15 @@ end}
 addNative{name="CREATE", runtime=function()
   local name = input:word()
   local label = Dataspace.defaultLabel(name)
-  dictionary:add(name, label, dataspace:getHere())
-  dataspace:labelHere(label)
-  addWords("LIT")
-  local dataAddrAddr = dataspace:getHere()
-  dataspace:addWord(0)
-  addWords("EXIT")
-  dataspace:setWord(dataAddrAddr, dataspace:getHere())
+  dictionary:add(name, label, dataspace:getCodeHere())
+  dataspace:labelCodeHere(label)
+  compile("LIT")
+  -- Need to wait to set this until after we're done compiling the execution
+  -- behavior because data ptr and code ptr might be using the same bank.
+  local dataAddrAddr = dataspace:getCodeHere()
+  dataspace:compileWord(0)
+  compile("EXIT")
+  dataspace:setWord(dataAddrAddr, dataspace:getDataHere())
   rts()
 end}
 
@@ -306,11 +312,11 @@ addNative{name="CONSTANT", runtime=function()
   local name = input:word()
   local value = dataStack:pop()
   local label = Dataspace.defaultLabel(name)
-  dictionary:add(name, label, dataspace:getHere())
-  dataspace:labelHere(label)
-  addWords("LIT")
-  dataspace:addWord(value)
-  addWords("EXIT")
+  dictionary:add(name, label, dataspace:getCodeHere())
+  dataspace:labelCodeHere(label)
+  compile("LIT")
+  dataspace:compileWord(value)
+  compile("EXIT")
   rts()
 end}
 
@@ -368,7 +374,7 @@ addNative{name="EMIT", runtime=function()
   rts()
 end}
 
-local wordBufferAddr = dataspace:getHere()
+local wordBufferAddr = dataspace:getDataHere()
 local wordBufferSize = 32
 dataspace:addWord(0)
 dataspace:allotBytes(wordBufferSize)
@@ -583,7 +589,7 @@ asm=function() return [[
 
 addNative{name="COMPILE,", label="_COMPILE_COMMA", runtime=function()
   local xt = dataStack:pop()
-  addCall(xt)
+  compileCall(xt)
   if debugging() then
     local name = dictionary:addrName(xt) or "missing name"
     infos:write("Compiling " .. name .. "\n")
@@ -980,21 +986,21 @@ addNative{name="EXECUTE", runtime=function()
 end}
 
 addColon("TRUE")
-  addWords("LIT")
-  dataspace:addWord(0xFFFF)
-  addWords("EXIT")
+  compile("LIT")
+  dataspace:compileWord(0xFFFF)
+  compile("EXIT")
 
 addColon("FALSE")
-  addWords("LIT")
-  dataspace:addWord(0)
-  addWords("EXIT")
+  compile("LIT")
+  dataspace:compileWord(0)
+  compile("EXIT")
 
 addColonWithLabel("[", "_LBRACK")
-  addWords("FALSE STATE ! EXIT")
+  compile("FALSE STATE ! EXIT")
 dictionary:latest().immediate = true
 
 addColonWithLabel("]", "_RBRACK")
-  addWords("TRUE STATE ! EXIT")
+  compile("TRUE STATE ! EXIT")
 
 addNative{name="IMMEDIATE", runtime=function()
   dictionary:latest().immediate = true
@@ -1011,25 +1017,25 @@ end}
 addColon("DODOES")
   -- TODO: More to consider here, probably need to change XT!
   -- TODO: Should probably use INLINE-DATA instead of R>
-  addWords("R> XT! EXIT")  -- Ends the calling word (CREATEing) early.
+  compile("R> XT! EXIT")  -- Ends the calling word (CREATEing) early.
 
 addColonWithLabel("DOES>", "_DOES")
-  addWords("LIT")
-  addXt("DODOES")
-  addWords("COMPILE,")
+  compile("LIT")
+  compileXt("DODOES")
+  compile("COMPILE,")
 
   -- Need to drop the return address so we skip returning to the codeword of the
   -- DOES body.
   -- TODO: It should just be a jmp instead instead of a jsr.
-  addWords("LIT")
-  addXt("R>")
-  addWords("COMPILE,")
+  compile("LIT")
+  compileXt("R>")
+  compile("COMPILE,")
 
-  addWords("LIT")
-  addXt("DROP")
-  addWords("COMPILE,")
+  compile("LIT")
+  compileXt("DROP")
+  compile("COMPILE,")
 
-  addWords("EXIT")
+  compile("EXIT")
 dictionary:latest().immediate = true
 
 -- TODO: Maybe pull these out into a mathops.lua file?
@@ -1162,15 +1168,15 @@ end, "bcs")
 
 do
   addColonWithLabel(":", "_COLON")
-  addWords("CREATEDOCOL ] EXIT")
+  compile("CREATEDOCOL ] EXIT")
 end
 
 do
   addColonWithLabel(";", "_SEMICOLON")
-  addWords("[ LIT")
-  addXt("EXIT")
+  compile("[ LIT")
+  compileXt("EXIT")
   -- Also need to make the word visible now.
-  addWords("COMPILE, EXIT")
+  compile("COMPILE, EXIT")
   dictionary:latest().immediate = true
 end
 
@@ -1199,34 +1205,34 @@ asm=function() return [[
 -- Push the inline string address and the length.
 addColonWithLabel("DOS\"", "_DO_SLIT")
 do
-  addWords("R@ INLINE-DATA DUP LIT")
-  dataspace:addWord(1)
-  addWords("CELLS + SWAP @ DUP CHARS LIT")
-  dataspace:addWord(1)
-  addWords("CELLS + R> + >R EXIT")
+  compile("R@ INLINE-DATA DUP LIT")
+  dataspace:compileWord(1)
+  compile("CELLS + SWAP @ DUP CHARS LIT")
+  dataspace:compileWord(1)
+  compile("CELLS + R> + >R EXIT")
 end
 
 addColonWithLabel("S\"", "_SLIT")
 do
-  addWords("LIT")
-  addXt("DOS\"")
-  addWords("COMPILE,")
+  compile("LIT")
+  compileXt("DOS\"")
+  compile("COMPILE,")
   -- Make space for the length and save its addr.
-  addWords("HERE LIT")
-  dataspace:addWord(0)
-  addWords("DUP ,") -- Also grab a zero to track the length.
-  addWords("KEY DROP") -- Discard the first whitespace.
-  local loop = dataspace:getHere()
-  addWords("KEY DUP LIT")
-  dataspace:addWord(string.byte('"'))
-  addWords("<> BRANCH0")
-  local exitBranchAddr = dataspace:getHere()
-  dataspace:addWord(2000)
-  addWords("C, 1+ BRANCH")
-  dataspace:addWord(toUnsigned(dataspace:getRelativeAddr(dataspace:getHere(), loop)))
-  dataspace:setWord(exitBranchAddr, toUnsigned(dataspace:getRelativeAddr(exitBranchAddr, dataspace:getHere())))
-  addWords("DROP SWAP !") -- Drop the " and fill in the length
-  addWords("EXIT")
+  compile("HERE LIT")
+  dataspace:compileWord(0)
+  compile("DUP ,") -- Also grab a zero to track the length.
+  compile("KEY DROP") -- Discard the first whitespace.
+  local loop = dataspace:getCodeHere()
+  compile("KEY DUP LIT")
+  dataspace:compileWord(string.byte('"'))
+  compile("<> BRANCH0")
+  local exitBranchAddr = dataspace:getCodeHere()
+  dataspace:compileWord(2000)
+  compile("C, 1+ BRANCH")
+  dataspace:compileWord(toUnsigned(dataspace:getRelativeAddr(dataspace:getCodeHere(), loop)))
+  dataspace:setWord(exitBranchAddr, toUnsigned(dataspace:getRelativeAddr(exitBranchAddr, dataspace:getCodeHere())))
+  compile("DROP SWAP !") -- Drop the " and fill in the length
+  compile("EXIT")
 end
 dictionary:latest().immediate = true
 
@@ -1234,85 +1240,85 @@ do
   -- TODO: Can we define a simpler QUIT here and then define the real QUIT in
   -- Forth?
   addColon("QUIT")
-  local loop = dataspace:getHere()
+  local loop = dataspace:getCodeHere()
   -- Grab the length of the counted string with @.
-  addWords("WORD DUP @ BRANCH0")
-  local eofBranchAddr = dataspace:getHere()
-  dataspace:addWord(2000)
+  compile("WORD DUP @ BRANCH0")
+  local eofBranchAddr = dataspace:getCodeHere()
+  dataspace:compileWord(2000)
 
-  addWords("FIND")
+  compile("FIND")
 
-  addWords("DUP LIT")
-  dataspace:addWord(0)
-  addWords("= BRANCH0")
-  local wordFoundBranchAddr = dataspace:getHere()
-  dataspace:addWord(2000) -- will be replaced later
+  compile("DUP LIT")
+  dataspace:compileWord(0)
+  compile("= BRANCH0")
+  local wordFoundBranchAddr = dataspace:getCodeHere()
+  dataspace:compileWord(2000) -- will be replaced later
     -- Not found, try and parse as a number.
-    addWords("DROP DUP >NUMBER BRANCH0")
-    local numberParseErrorAddr = dataspace:getHere()
-    dataspace:addWord(2000)
+    compile("DROP DUP >NUMBER BRANCH0")
+    local numberParseErrorAddr = dataspace:getCodeHere()
+    dataspace:compileWord(2000)
     -- String is no longer needed, drop it.
-    addWords(">R DROP R>")
+    compile(">R DROP R>")
     -- If we're compiling, compile TOS as a literal.
-    addWords("STATE @ BRANCH0")
-    dataspace:addWord(toUnsigned(dataspace:getRelativeAddr(dataspace:getHere(), loop)))
+    compile("STATE @ BRANCH0")
+    dataspace:compileWord(toUnsigned(dataspace:getRelativeAddr(dataspace:getCodeHere(), loop)))
     -- LIT the LIT so we can LIT while we LIT.
-    addWords("LIT")
-    addXt("LIT")
+    compile("LIT")
+    compileXt("LIT")
     -- Compile LIT and then the number.
-    addWords("COMPILE, , BRANCH")
-    dataspace:addWord(toUnsigned(dataspace:getRelativeAddr(dataspace:getHere(), loop)))
+    compile("COMPILE, , BRANCH")
+    dataspace:compileWord(toUnsigned(dataspace:getRelativeAddr(dataspace:getCodeHere(), loop)))
 
-    dataspace:setWord(numberParseErrorAddr, toUnsigned(dataspace:getRelativeAddr(numberParseErrorAddr, dataspace:getHere())))
-    addWords("DROP DUP >ADDRESS BRANCH0")
-    local addressParseErrorAddr = dataspace:getHere()
-    dataspace:addWord(2000)
+    dataspace:setWord(numberParseErrorAddr, toUnsigned(dataspace:getRelativeAddr(numberParseErrorAddr, dataspace:getCodeHere())))
+    compile("DROP DUP >ADDRESS BRANCH0")
+    local addressParseErrorAddr = dataspace:getCodeHere()
+    dataspace:compileWord(2000)
     -- String is no longer needed, drop it.
-    addWords(">R >R DROP R> R>")
+    compile(">R >R DROP R> R>")
     -- If we're compiling, compile TOS as a literal.
-    addWords("STATE @ BRANCH0")
-    dataspace:addWord(toUnsigned(dataspace:getRelativeAddr(dataspace:getHere(), loop)))
+    compile("STATE @ BRANCH0")
+    dataspace:compileWord(toUnsigned(dataspace:getRelativeAddr(dataspace:getCodeHere(), loop)))
     -- LIT the A.LIT so we can A.LIT while we LIT.
-    addWords("LIT")
-    addXt("A.LIT")
+    compile("LIT")
+    compileXt("A.LIT")
     -- Compile A.LIT and then the number.
-    addWords("COMPILE, A., BRANCH")
-    dataspace:addWord(toUnsigned(dataspace:getRelativeAddr(dataspace:getHere(), loop)))
-  dataspace:setWord(wordFoundBranchAddr, toUnsigned(dataspace:getRelativeAddr(wordFoundBranchAddr, dataspace:getHere())))
+    compile("COMPILE, A., BRANCH")
+    dataspace:compileWord(toUnsigned(dataspace:getRelativeAddr(dataspace:getCodeHere(), loop)))
+  dataspace:setWord(wordFoundBranchAddr, toUnsigned(dataspace:getRelativeAddr(wordFoundBranchAddr, dataspace:getCodeHere())))
 
   -- Word found, see if we're compiling or interpreting.
-  addWords("LIT")
-  dataspace:addWord(0)
-  addWords("> STATE @ INVERT OR BRANCH0")
-  local branchAddrIfNotImmediate = dataspace:getHere()
-  dataspace:addWord(2000) -- will be replaced later
+  compile("LIT")
+  dataspace:compileWord(0)
+  compile("> STATE @ INVERT OR BRANCH0")
+  local branchAddrIfNotImmediate = dataspace:getCodeHere()
+  dataspace:compileWord(2000) -- will be replaced later
     -- Interpreting, just run the word.
-    addWords("EXECUTE BRANCH")
-    dataspace:addWord(toUnsigned(dataspace:getRelativeAddr(dataspace:getHere(), loop)))
-  dataspace:setWord(branchAddrIfNotImmediate, toUnsigned(dataspace:getRelativeAddr(branchAddrIfNotImmediate, dataspace:getHere())))
+    compile("EXECUTE BRANCH")
+    dataspace:compileWord(toUnsigned(dataspace:getRelativeAddr(dataspace:getCodeHere(), loop)))
+  dataspace:setWord(branchAddrIfNotImmediate, toUnsigned(dataspace:getRelativeAddr(branchAddrIfNotImmediate, dataspace:getCodeHere())))
 
   -- else, compiling
-  addWords("COMPILE, BRANCH")
-  dataspace:addWord(toUnsigned(dataspace:getRelativeAddr(dataspace:getHere(), loop)))
+  compile("COMPILE, BRANCH")
+  dataspace:compileWord(toUnsigned(dataspace:getRelativeAddr(dataspace:getCodeHere(), loop)))
 
-  dataspace:setWord(addressParseErrorAddr, toUnsigned(dataspace:getRelativeAddr(addressParseErrorAddr, dataspace:getHere())))
-  addWords("2DROP DUP COUNT TYPE")
-  addWords("DOS\"")
-  dataspace:addWord(2)
-  dataspace:addByte(string.byte("?"))
-  dataspace:addByte(string.byte("\n"))
-  addWords("TYPE ABORT")
-  dataspace:setWord(eofBranchAddr, toUnsigned(dataspace:getRelativeAddr(eofBranchAddr, dataspace:getHere())))
-  addWords("DROP EXIT")
+  dataspace:setWord(addressParseErrorAddr, toUnsigned(dataspace:getRelativeAddr(addressParseErrorAddr, dataspace:getCodeHere())))
+  compile("2DROP DUP COUNT TYPE")
+  compile("DOS\"")
+  dataspace:compileWord(2)
+  dataspace:compileByte(string.byte("?"))
+  dataspace:compileByte(string.byte("\n"))
+  compile("TYPE ABORT")
+  dataspace:setWord(eofBranchAddr, toUnsigned(dataspace:getRelativeAddr(eofBranchAddr, dataspace:getCodeHere())))
+  compile("DROP EXIT")
 end
 
-ip = dataspace:getHere() -- start on creating QUIT, below
-addWords("QUIT")
-addWords("BYE")
+ip = dataspace:getCodeHere() -- start on creating QUIT, below
+compile("QUIT")
+compile("BYE")
 
 if debugging() then
   dataspace:print(infos)
-  infos:write(string.format("HERE = %s\n", Dataspace.formatAddr(dataspace:getHere())))
+  infos:write(string.format("CODEHERE = %s\n", Dataspace.formatAddr(dataspace:getCodeHere())))
   infos:write(string.format("Starting IP at %04X\n", ip))
 end
 

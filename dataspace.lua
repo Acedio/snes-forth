@@ -7,7 +7,8 @@ Dataspace.LOWRAM_BANK = 0xFFFF
 
 function Dataspace:new()
   local dataspace = {
-    bank = 0,
+    codeBank = 0,
+    dataBank = 0,
     banks = {
       [0] = {
         SIZED_START = 0x8000,
@@ -36,9 +37,10 @@ function Dataspace.formatAddr(addr)
   return string.format("$%04X", addr)
 end
 
+-- TODO: Print all banks?
 function Dataspace:print(file)
-  local i = self.banks[self.bank].SIZED_START
-  while i < self:getHere() do
+  local i = self.banks[self.codeBank].SIZED_START
+  while i < self:getCodeHere() do
     local v = self[i]
     file:write(string.format("%s: %s\n", Dataspace.formatAddr(i), v:toString(self, i)))
     assert(v:size())
@@ -86,20 +88,36 @@ function Dataspace:assertAddr(dumpFile, cond, message, addr)
   end
 end
 
-function Dataspace:getBank()
-  return self.bank
+function Dataspace:getCodeBank()
+  return self.codeBank
 end
 
-function Dataspace:setBank(bank)
-  self.bank = bank
+function Dataspace:setCodeBank(bank)
+  self.codeBank = bank
 end
 
-function Dataspace:getHere()
-  return self.banks[self.bank].here
+function Dataspace:getDataBank()
+  return self.dataBank
 end
 
-function Dataspace:setHere(val)
-  self.banks[self.bank].here = val
+function Dataspace:setDataBank(bank)
+  self.dataBank = bank
+end
+
+function Dataspace:getCodeHere()
+  return self.banks[self.codeBank].here
+end
+
+function Dataspace:getDataHere()
+  return self.banks[self.dataBank].here
+end
+
+function Dataspace:setCodeHere(val)
+  self.banks[self.codeBank].here = val
+end
+
+function Dataspace:setDataHere(val)
+  self.banks[self.dataBank].here = val
 end
 
 -- Set the label for HERE.
@@ -107,26 +125,35 @@ end
 -- something is added at HERE.
 -- TODO: Is there a cleaner way of doing this? Maybe keeping a list of labels ->
 -- addresses somewhere?
-function Dataspace:labelHere(label)
+function Dataspace:labelCodeHere(label)
   self.hereLabel = label
 end
 
 function Dataspace:add(entry)
   assert(entry:size())
-  local addr = self:getHere()
+  local addr = self:getDataHere()
+  -- TODO: Do we need a dataspace hereLabel?
+  self[self:getDataHere()] = entry
+  self:setDataHere(self:getDataHere() + 1)
+  return addr
+end
+
+function Dataspace:compile(entry)
+  assert(entry:size())
+  local addr = self:getCodeHere()
   if self.hereLabel then
     entry.label = self.hereLabel
     self.hereLabel = nil
   end
-  self[self:getHere()] = entry
-  self:setHere(self:getHere() + 1)
+  self[self:getCodeHere()] = entry
+  self:setCodeHere(self:getCodeHere() + 1)
   return addr
 end
 
-function Dataspace:addUnsized(entry)
-  local addr = self.banks[self.bank].unsizedHere
-  self[self.banks[self.bank].unsizedHere] = entry
-  self.banks[self.bank].unsizedHere = self.banks[self.bank].unsizedHere + 1
+function Dataspace:compileUnsized(entry)
+  local addr = self.banks[self.codeBank].unsizedHere
+  self[self.banks[self.codeBank].unsizedHere] = entry
+  self.banks[self.codeBank].unsizedHere = self.banks[self.codeBank].unsizedHere + 1
   return addr
 end
 
@@ -232,6 +259,9 @@ function Dataspace:getAddr(addr)
   return self:getByte(addr) | (self:getByte(addr + 1) << 8) | (self:getByte(addr + 2) << 16)
 end
 
+-- Convenience methods.
+-- TODO: Can maybe add size hints to the first byte of multi-byte data? So we
+-- can pretty print it.
 function Dataspace:addByte(byte)
   self:add(Dataspace.byte(byte))
 end
@@ -242,9 +272,6 @@ function Dataspace:addWord(number)
   self:addByte(highByte(number))
 end
 
--- Convenience methods.
--- TODO: Can maybe add size hints to the first byte of multi-byte data? So we
--- can pretty print it.
 function Dataspace:addAddress(addr)
   assert(addr >= 0 and addr <= 0xFFFFFF)
   self:addByte(lowByte(addr))
@@ -257,6 +284,16 @@ function Dataspace:allotBytes(bytes)
   for i=1,bytes do
     self:addByte(0)
   end
+end
+
+function Dataspace:compileByte(byte)
+  self:compile(Dataspace.byte(byte))
+end
+
+function Dataspace:compileWord(number)
+  assert(number >= 0 and number <= 0xFFFF)
+  self:compileByte(lowByte(number))
+  self:compileByte(highByte(number))
 end
 
 return Dataspace
