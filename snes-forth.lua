@@ -141,14 +141,29 @@ end
 function addNative(entry)
   entry.label = entry.label or Dataspace.defaultLabel(entry.name)
   -- Native fns are unsized, so they don't affect/use HERE.
-  local addr = dataspace:compileUnsized(Dataspace.native(entry))
+  local addr = dataspace:compileUnsized(Dataspace.Native:new(entry))
   dictionary:add(entry.name, entry.label, addr)
 end
+
+addNative{name="CODE", label="_CODE", runtime=function()
+  local name = input:word()
+  local asm = input:untilToken("END%-CODE")
+  assert(asm)
+  local native = Dataspace.Native:new{
+    name = name,
+    asm = function(dataspace) return asm end,
+  }
+  addNative(native)
+  rts()
+end}
 
 -- Make a variable that is easily accessible to Lua and the SNES.
 -- Returns the dataspace address of the variable contents.
 function makeSystemVariable(name)
-  local native = Dataspace.native{name=name, label=Dataspace.defaultLabel(name)}
+  local native = Dataspace.Native:new{
+    name=name,
+    label=Dataspace.defaultLabel(name),
+  }
   addNative(native)
 
   local originalBank = dataspace:getDataBank()

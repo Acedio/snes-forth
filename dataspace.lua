@@ -163,39 +163,9 @@ function Dataspace.defaultLabel(name)
   return "_" .. string.gsub(name, "%W", "_")
 end
 
--- Takes a (potentially partially initiated) native definition.
--- TODO: Maybe we can also support inlining by specifying an `inline` field
--- that, if specified, overrides the Forth word call and instead causes code to
--- be added directly. e.g. LIT would be
---   lda #LITERAL_NUM
---   PUSH_A
--- instead of the usual
---   JSL LIT
---   .WORD LITERNAL_NUM
--- which is a lot slower.
-function Dataspace.native(entry)
-  entry.type = "native"
-  if not entry.asm then
-    function entry:asm(dataspace)
-      return string.format([[
-        jsl not_implemented ; TODO: Not implemented
-      ]])
-    end
-  end
-  if not entry.size then
-    function entry:size() return nil end
-  end
-  if not entry.toString then
-    function entry:toString(dataspace, opAddr)
-      return "Native: " .. self.name
-    end
-  end
-  return entry
-end
-
 -- TODO: Now that we're mimicking SNES addressing in Lua these aren't really
 -- needed, but maybe handy keep around for error checking.
--- TODO: Add error checking to ensure all intervening cells have a size.
+-- TODO: Add error checking to ensure all intervening cells have a size().
 -- Input: lua dataspace addressing
 -- Returns: SNES delta
 function Dataspace:getRelativeAddr(from, to)
@@ -208,20 +178,79 @@ function Dataspace:fromRelativeAddress(current, delta)
   return current + delta
 end
 
-function Dataspace.byte(byte)
-  assert(byte >= 0 and byte <= 0xFF)
-  local entry = {
-    type = "byte",
-    size = function(self) return 1 end,
-    byte = byte & 0xFF,
-  }
-  function entry:toString(dataspace, opAddr)
-    return string.format("Byte: 0x%02X", self.byte)
-  end
-  function entry:asm(dataspace)
-    return string.format(".byte $%02X", self.byte & 0xFF)
-  end
-  return entry
+-- Entry types, which make up Dataspace.
+Dataspace.Entry = {}
+
+function Dataspace.Entry:new(o)
+  cell = o or {}
+  setmetatable(cell, self)
+  self.__index = self
+  return cell
+end
+
+-- TODO: Should this be a function? This essentially does nothing (because all
+-- undefined entries in a map are nil), but thinking it's useful for documenting
+-- that subclasses should override it.
+Dataspace.Entry.type = nil
+
+-- TODO: This should be renamed. Each Entry in (sized) Dataspace must be 1 byte
+-- wide to make addressing work correctly. size() is used to determine how many
+-- bytes to skip after calling asm() or toString(). For example, an entry with
+-- size 3 (such as a Call) is stating that it "consumes" the two following bytes
+-- in addition to its own cell.
+function Dataspace.Entry:size()
+  return nil
+end
+
+function Dataspace.Entry:toString(dataspace, opAddr)
+  return nil
+end
+
+function Dataspace.Entry:asm(dataspace)
+  return nil
+end
+
+Dataspace.Native = Dataspace.Entry:new()
+
+Dataspace.Native.type = "native"
+
+function Dataspace.Native:size()
+  return nil
+end
+
+function Dataspace.Native:toString(dataspace, opAddr)
+  return "Native: " .. self.name
+end
+
+-- TODO: Maybe we can also support inlining by specifying an `inline` field
+-- that, if specified, overrides the Forth word call and instead causes code to
+-- be added directly. e.g. LIT would be
+--   lda #LITERAL_NUM
+--   PUSH_A
+-- instead of the usual
+--   JSL LIT
+--   .WORD LITERNAL_NUM
+-- which is a lot slower.
+function Dataspace.Native:asm(dataspace)
+  return string.format([[
+    jsl not_implemented ; TODO: Not implemented
+  ]])
+end
+
+Dataspace.Byte = Dataspace.Entry:new()
+
+Dataspace.Byte.type = "byte"
+
+function Dataspace.Byte:size()
+  return 1
+end
+
+function Dataspace.Byte:toString(dataspace, opAddr)
+  return string.format("Byte: 0x%02X", self.byte)
+end
+
+function Dataspace.Byte:asm(dataspace)
+  return string.format(".byte $%02X", self.byte & 0xFF)
 end
 
 local function lowByte(value)
@@ -244,7 +273,7 @@ end
 
 function Dataspace:setByte(addr, value)
   self:assertAddr(io.stderr, self[addr].type == "byte" and self[addr]:size() == 1, "Expected byte at %s", addr)
-  self[addr] = Dataspace.byte(value)
+  self[addr].byte = value
 end
 
 function Dataspace:getWord(addr)
@@ -265,7 +294,8 @@ end
 -- TODO: Can maybe add size hints to the first byte of multi-byte data? So we
 -- can pretty print it.
 function Dataspace:addByte(byte)
-  self:add(Dataspace.byte(byte))
+  assert(byte >= 0 and byte <= 0xFF)
+  self:add(Dataspace.Byte:new{byte=byte})
 end
 
 function Dataspace:addWord(number)
@@ -289,7 +319,8 @@ function Dataspace:allotBytes(bytes)
 end
 
 function Dataspace:compileByte(byte)
-  self:compile(Dataspace.byte(byte))
+  assert(byte >= 0 and byte <= 0xFF)
+  self:compile(Dataspace.Byte:new{byte=byte})
 end
 
 function Dataspace:compileWord(number)

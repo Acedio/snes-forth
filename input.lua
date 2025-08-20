@@ -33,6 +33,17 @@ function Input:word()
   return string.sub(self.str, first, last)
 end
 
+-- Returns all text until `token`, then discards `token`.
+function Input:untilToken(token)
+  local first = self.i
+  local tokenFirst, tokenLast = string.find(self.str, token, first)
+  if tokenFirst == nil then
+    return nil
+  end
+  self.i = tokenLast+1
+  return string.sub(self.str, first, tokenFirst-1)
+end
+
 function Input:peek()
   return string.byte(string.sub(self.str, self.i, self.i))
 end
