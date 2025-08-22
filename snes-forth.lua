@@ -1184,6 +1184,25 @@ end, [[
   rts
 ]])
 
+unaryOp("HIBYTE", "_HIBYTE", function(a)
+  return (0xFF00 & a) >> 8
+end, [[
+  lda z:1, X
+  xba
+  and #$FF
+  sta z:1, X
+  rts
+]])
+
+unaryOp("SWAPBYTES", "_SWAPBYTES", function(a)
+  return ((0xFF00 & a) >> 8) | ((0xFF & a) << 8)
+end, [[
+  lda z:1, X
+  xba
+  sta z:1, X
+  rts
+]])
+
 local function binaryOpRt(op)
   return function()
     local b = dataStack:pop()
