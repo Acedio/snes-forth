@@ -31,21 +31,6 @@ reset:
   dex
   bpl @loop
 
-  sep #$20
-  .a8
-  ; Set background color to $03E0
-  lda #$1F
-  sta $2122
-  lda #$3C
-  sta $2122
-  ; sta z:$12
-
-  ; Maximum screen brightness
-  lda #$0F
-  sta $2100
-  rep #$20
-  .a16
-
   ldx #RETURN_STACK_ADDR
   txs
   ldx #DATA_STACK_ADDR

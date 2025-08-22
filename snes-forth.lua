@@ -49,14 +49,15 @@ end
 local running = true
 local ip = 0
 
-local Call = {}
+local Call = Dataspace.Native:new()
 
 function Call:size()
   return 3
 end
 
+-- Closes over returnStack and ip
 function Call:runtime(dataspace, opAddr)
-  ip = ip + 3
+  ip = ip + self:size()
   local callAddr = self:addr(dataspace, opAddr)
   -- TODO: Can probably just remove this check as the interpreter will do it
   assert(dataspace[callAddr].type == "native", string.format("Expected native at %s", Dataspace.formatAddr(callAddr)))
@@ -69,6 +70,7 @@ function Call:addr(dataspace, opAddr)
   return dataspace:getWord(opAddr + 1)
 end
 
+-- Closes over dictionary
 function Call:toString(dataspace, opAddr)
   local callAddr = self:addr(dataspace, opAddr)
   local name = dictionary:addrName(callAddr)
@@ -78,6 +80,7 @@ function Call:toString(dataspace, opAddr)
   return string.format("Call $%04X (to %s)", callAddr, name)
 end
 
+-- Closes over dictionary
 function Call:asm(dataspace, opAddr)
   local callAddr = self:addr(dataspace, opAddr)
   assert(dataspace[callAddr].type == "native", string.format("Expected native at %s", Dataspace.formatAddr(callAddr)))
@@ -96,32 +99,59 @@ function Call:asm(dataspace, opAddr)
   end
 end
 
-function Call:new()
-  -- TODO: Some sort of inheritance possible here?
-  local call = {
-    type = "native",
-  }
-  setmetatable(call, self)
-  self.__index = self
-  return call
-end
-
-function compileCall(addr)
+local function compileCall(addr)
   dataspace:compile(Call:new())
   dataspace:compileWord(addr)
 end
 
-function rts()
-  ip = returnStack:popWord()
+local Lit = Dataspace.Native:new()
+
+function Lit:size()
+  -- See :asm(), below.
+  return 3 + 1 + 1 + 2
+end
+
+-- Closes over dataStack and ip
+function Lit:runtime(dataspace, opAddr)
+  ip = ip + self:size()
+  local value = self:value(dataspace, opAddr)
+  dataStack:push(value)
+end
+
+function Lit:value(dataspace, opAddr)
+  return dataspace:getWord(opAddr + 1)
+end
+
+function Lit:toString(dataspace, opAddr)
+  local value = self:value(dataspace, opAddr)
+  return string.format("Lit $%04X", value)
+end
+
+function Lit:asm(dataspace, opAddr)
+  local value = self:value(dataspace, opAddr)
+  return string.format([[
+    lda #$%04X ; dataspace address, 3 bytes
+    dex        ; 1 byte
+    dex        ; 1 byte
+    sta z:1, X ; 2 bytes
+  ]], value)
+end
+
+local function compileLit(value)
+  dataspace:compile(Lit:new())
+  dataspace:compileWord(value)
+  -- Garbage bytes to fill for assembly.
+  dataspace:allotBytes(1 + 1 + 2)
+  -- TODO: assert that we've added bytes equal to Lit:size()
 end
 
 -- Right now this is the same as `['] name ,`.
-function compileXt(name)
-  return dataspace:compileWord(dictionary:findAddr(name))
+local function compileXtLit(name)
+  return compileLit(dictionary:findAddr(name))
 end
 
 -- Add words to the current colon defintion
-function compile(names)
+local function compile(names)
   local first = 0
   local last = 0
   while true do
@@ -138,28 +168,33 @@ function compile(names)
 end
 
 -- Table should have at least name and runtime specified.
-function addNative(entry)
+local function addNative(entry)
   entry.label = entry.label or Dataspace.defaultLabel(entry.name)
   -- Native fns are unsized, so they don't affect/use HERE.
   local addr = dataspace:compileUnsized(Dataspace.Native:new(entry))
   dictionary:add(entry.name, entry.label, addr)
 end
 
-addNative{name="CODE", label="_CODE", runtime=function()
-  local name = input:word()
-  local asm = input:untilToken("END%-CODE")
-  assert(asm)
-  local native = Dataspace.Native:new{
-    name = name,
-    asm = function(dataspace) return asm end,
-  }
-  addNative(native)
-  rts()
-end}
+-- Should be called at the end of every (normal) native words runtime() to
+-- return control to the caller.
+local function rts()
+  ip = returnStack:popWord()
+end
+
+local function toSigned(unsigned)
+  if unsigned > 0x7FFF then
+    return unsigned - 0x10000
+  end
+  return unsigned
+end
+
+local function toUnsigned(signed)
+  return signed & 0xFFFF
+end
 
 -- Make a variable that is easily accessible to Lua and the SNES.
 -- Returns the dataspace address of the variable contents.
-function makeSystemVariable(name)
+local function makeSystemVariable(name)
   local native = Dataspace.Native:new{
     name=name,
     label=Dataspace.defaultLabel(name),
@@ -196,16 +231,28 @@ else
   dataspace:setWord(debugAddr, 0x0)
 end
 
-function debugging()
+local function debugging()
   return dataspace:getWord(debugAddr) ~= 0
 end
 
-function addColonWithLabel(name, label)
+addNative{name="CODE", label="_CODE", runtime=function()
+  local name = input:word()
+  local asm = input:untilToken("END%-CODE")
+  assert(asm)
+  local native = Dataspace.Native:new{
+    name = name,
+    asm = function(dataspace) return asm end,
+  }
+  addNative(native)
+  rts()
+end}
+
+local function addColonWithLabel(name, label)
   dataspace:labelCodeHere(label)
   dictionary:add(name, label, dataspace:getCodeHere())
 end
 
-function addColon(name)
+local function addColon(name)
   addColonWithLabel(name, Dataspace.defaultLabel(name))
 end
 
@@ -302,10 +349,10 @@ addNative{name="A.,", label="_A_COMMA", runtime=function()
 end}
 
 -- TODO: This is now basically the same as "," now . Should that be the case?
+-- e.g. should we be able to store a label in Dataspace and have it resolved by
+-- the assembler? I think this is only necessary for calls to unsized words.
 addNative{name="XT,", label="_XT_COMMA", runtime=function()
-  -- TODO: How do we deal with this when we quantize dataspace?
   local xt = dataStack:pop()
-  -- TODO: Use a code-space HERE instead of dataspace HERE?
   dataspace:addWord(xt)
   if debugging() then
     local name = dictionary:addrName(xt) or "missing name"
@@ -319,7 +366,13 @@ end}
 addNative{name="XT!", label="_XT_STORE", runtime=function()
   local addr = dataStack:pop()
   -- Update the EXIT to instead jump to the code after DODOES.
-  local exitAddress = dictionary:latest().addr + 3 + 2 + 1
+  -- CREATEd word looks like:
+  --   lda $1234 ; dataspace address, 3 byte instruction
+  --   dex ; 1 byte
+  --   dex ; 1 byte
+  --   sta z:1, x ; 2 bytes
+  --   jsr EXIT ; 1 byte opcode + 2 byte addr, we want the addr
+  local exitAddress = dictionary:latest().addr + 3 + 1 + 1 + 2 + 1
   dataspace:setWord(exitAddress, addr)
   rts()
 end}
@@ -329,11 +382,11 @@ addNative{name="CREATE", runtime=function()
   local label = Dataspace.defaultLabel(name)
   dictionary:add(name, label, dataspace:getCodeHere())
   dataspace:labelCodeHere(label)
-  compile("LIT")
+  -- The value of the Lit is 1 byte into the assembly.
   -- Need to wait to set this until after we're done compiling the execution
   -- behavior because data ptr and code ptr might be using the same bank.
-  local dataAddrAddr = dataspace:getCodeHere()
-  dataspace:compileWord(0)
+  local dataAddrAddr = dataspace:getCodeHere() + 1
+  compileLit(0)
   compile("EXIT")
   dataspace:setWord(dataAddrAddr, dataspace:getDataHere())
   rts()
@@ -345,8 +398,7 @@ addNative{name="CONSTANT", runtime=function()
   local label = Dataspace.defaultLabel(name)
   dictionary:add(name, label, dataspace:getCodeHere())
   dataspace:labelCodeHere(label)
-  compile("LIT")
-  dataspace:compileWord(value)
+  compileLit(value)
   compile("EXIT")
   rts()
 end}
@@ -391,11 +443,11 @@ end}
 addNative{name="ABORT", runtime=function()
   -- TODO: Also print a stack trace?
   infos:write("ABORTED!" .. "\n")
-  dataspace:print(errors)
-  infos:write(" == data ==\n")
-  dataStack:print(infos)
-  infos:write(" == return ==\n")
-  returnStack:print(infos)
+  dataspace:print(dumpFile)
+  dumpFile:write(" == data ==\n")
+  dataStack:print(dumpFile)
+  dumpFile:write(" == return ==\n")
+  returnStack:print(dumpFile)
   assert(nil)
   rts()
 end}
@@ -407,10 +459,12 @@ end}
 
 local wordBufferAddr = dataspace:getDataHere()
 local wordBufferSize = 32
+-- Currently allocating this in ROM, but if we move the interpreter to the SNES
+-- then it should be in RAM (probably high-ram).
 dataspace:addWord(0)
 dataspace:allotBytes(wordBufferSize)
 
-function setWordBuffer(str)
+local function setWordBuffer(str)
   local length = string.len(str)
   assert(length < wordBufferSize, "Strings length too large: " .. str)
   dataspace:setWord(wordBufferAddr, length)
@@ -419,7 +473,7 @@ function setWordBuffer(str)
   end
 end
 
-function getWordWithCount(addr, count)
+local function getWordWithCount(addr, count)
   local str = ""
   for i=0,count-1 do
     str = str .. string.char(dataspace:getByte(addr + i))
@@ -427,7 +481,7 @@ function getWordWithCount(addr, count)
   return str
 end
 
-function getCountedWord(addr)
+local function getCountedWord(addr)
   local count = dataspace:getWord(addr)
   return getWordWithCount(addr + 2, count)
 end
@@ -633,7 +687,7 @@ end}
 addNative{name="COUNT", runtime=function()
   local addr = dataStack:pop()
   local length = dataspace:getWord(addr)
-  dataStack:push(addr + 1)
+  dataStack:push(addr + 2)
   dataStack:push(length)
   rts()
 end}
@@ -765,19 +819,8 @@ asm=function() return [[
   rts
 ]] end}
 
-function toSigned(unsigned)
-  if unsigned > 0x7FFF then
-    return unsigned - 0x10000
-  end
-  return unsigned
-end
-
-function toUnsigned(signed)
-  return signed & 0xFFFF
-end
-
 -- Branch based on the relative offset stored in front of the called branch fn.
-function branch()
+local function branch()
   local retAddr = returnStack:popWord()
   ip = dataspace:fromRelativeAddress(retAddr, toSigned(dataspace:getWord(retAddr)))
 end
@@ -965,7 +1008,6 @@ addNative{name="LIT", runtime=function()
   dataStack:push(dataspace:getWord(litAddr))
   rts()
 end,
--- TODO: calls to LIT should probably just be inlined :P
 asm=function() return [[
   ldy #1
   lda (1, S), Y
@@ -978,6 +1020,12 @@ asm=function() return [[
   rts
 ]] end}
 
+-- Inlines a literal into dataspace (e.g. calls LDA #x instead of a word).
+addNative{name="COMPILE-LIT", runtime=function()
+  compileLit(dataStack:pop())
+  rts()
+end}
+
 addNative{name="A.LIT", runtime=function()
   -- return stack should be the next IP, where the literal is located
   local litAddr = returnStack:popWord()
@@ -986,7 +1034,7 @@ addNative{name="A.LIT", runtime=function()
   dataStack:pushDouble(dataspace:getAddr(litAddr))
   rts()
 end,
--- TODO: calls to A.LIT should probably just be inlined :P
+-- TODO: calls to A.LIT should be inlined if we use this more often.
 asm=function() return [[
   ; Copy the MSB and garbage
   ldy #3
@@ -1017,13 +1065,11 @@ addNative{name="EXECUTE", runtime=function()
 end}
 
 addColon("TRUE")
-  compile("LIT")
-  dataspace:compileWord(0xFFFF)
+  compileLit(0xFFFF)
   compile("EXIT")
 
 addColon("FALSE")
-  compile("LIT")
-  dataspace:compileWord(0)
+  compileLit(0)
   compile("EXIT")
 
 addColonWithLabel("[", "_LBRACK")
@@ -1051,26 +1097,23 @@ addColon("DODOES")
   compile("R> XT! EXIT")  -- Ends the calling word (CREATEing) early.
 
 addColonWithLabel("DOES>", "_DOES")
-  compile("LIT")
-  compileXt("DODOES")
+  compileXtLit("DODOES")
   compile("COMPILE,")
 
   -- Need to drop the return address so we skip returning to the codeword of the
   -- DOES body.
   -- TODO: It should just be a jmp instead instead of a jsr.
-  compile("LIT")
-  compileXt("R>")
+  compileXtLit("R>")
   compile("COMPILE,")
 
-  compile("LIT")
-  compileXt("DROP")
+  compileXtLit("DROP")
   compile("COMPILE,")
 
   compile("EXIT")
 dictionary:latest().immediate = true
 
 -- TODO: Maybe pull these out into a mathops.lua file?
-function unaryOp(name, label, op, asm)
+local function unaryOp(name, label, op, asm)
   addNative{name=name, label=label, runtime=function()
     local a = dataStack:pop()
     dataStack:push(op(a) & 0xFFFF)
@@ -1111,7 +1154,7 @@ end, [[
   rts
 ]])
 
-function binaryOpRt(op)
+local function binaryOpRt(op)
   return function()
     local b = dataStack:pop()
     local a = dataStack:pop()
@@ -1120,7 +1163,7 @@ function binaryOpRt(op)
   end
 end
 
-function binaryOpWithLabel(name, label, op, asmOp)
+local function binaryOpWithLabel(name, label, op, asmOp)
   addNative{name=name, label=label, runtime=binaryOpRt(op), asm=function() return string.format([[
     lda z:3, X
     %s z:1, X ; Perform computation
@@ -1151,7 +1194,7 @@ binaryOpWithLabel("+", "_PLUS", function(a,b)
   return a + b
 end, "clc\n  adc")
 
-function binaryCmpOp(name, label, op, asmOp)
+local function binaryCmpOp(name, label, op, asmOp)
   addNative{name=name, label=label, runtime=function()
     local b = dataStack:pop()
     local a = dataStack:pop()
@@ -1204,8 +1247,8 @@ end
 
 do
   addColonWithLabel(";", "_SEMICOLON")
-  compile("[ LIT")
-  compileXt("EXIT")
+  compile("[")
+  compileXtLit("EXIT")
   -- Also need to make the word visible now.
   compile("COMPILE, EXIT")
   dictionary:latest().immediate = true
@@ -1236,26 +1279,25 @@ asm=function() return [[
 -- Push the inline string address and the length.
 addColonWithLabel("DOS\"", "_DO_SLIT")
 do
-  compile("R@ INLINE-DATA DUP LIT")
-  dataspace:compileWord(1)
-  compile("CELLS + SWAP @ DUP CHARS LIT")
-  dataspace:compileWord(1)
+  compile("R@ INLINE-DATA DUP")
+  compileLit(1)
+  compile("CELLS + SWAP @ DUP CHARS")
+  compileLit(1)
   compile("CELLS + R> + >R EXIT")
 end
 
 addColonWithLabel("S\"", "_SLIT")
 do
-  compile("LIT")
-  compileXt("DOS\"")
+  compileXtLit("DOS\"")
   compile("COMPILE,")
   -- Make space for the length and save its addr.
-  compile("HERE LIT")
-  dataspace:compileWord(0)
+  compile("HERE")
+  compileLit(0)
   compile("DUP ,") -- Also grab a zero to track the length.
   compile("KEY DROP") -- Discard the first whitespace.
   local loop = dataspace:getCodeHere()
-  compile("KEY DUP LIT")
-  dataspace:compileWord(string.byte('"'))
+  compile("KEY DUP")
+  compileLit(string.byte('"'))
   compile("<> BRANCH0")
   local exitBranchAddr = dataspace:getCodeHere()
   dataspace:compileWord(2000)
@@ -1279,8 +1321,8 @@ do
 
   compile("FIND")
 
-  compile("DUP LIT")
-  dataspace:compileWord(0)
+  compile("DUP")
+  compileLit(0)
   compile("= BRANCH0")
   local wordFoundBranchAddr = dataspace:getCodeHere()
   dataspace:compileWord(2000) -- will be replaced later
@@ -1293,11 +1335,8 @@ do
     -- If we're compiling, compile TOS as a literal.
     compile("STATE @ BRANCH0")
     dataspace:compileWord(toUnsigned(dataspace:getRelativeAddr(dataspace:getCodeHere(), loop)))
-    -- LIT the LIT so we can LIT while we LIT.
-    compile("LIT")
-    compileXt("LIT")
     -- Compile LIT and then the number.
-    compile("COMPILE, , BRANCH")
+    compile("COMPILE-LIT BRANCH")
     dataspace:compileWord(toUnsigned(dataspace:getRelativeAddr(dataspace:getCodeHere(), loop)))
 
     dataspace:setWord(numberParseErrorAddr, toUnsigned(dataspace:getRelativeAddr(numberParseErrorAddr, dataspace:getCodeHere())))
@@ -1310,16 +1349,14 @@ do
     compile("STATE @ BRANCH0")
     dataspace:compileWord(toUnsigned(dataspace:getRelativeAddr(dataspace:getCodeHere(), loop)))
     -- LIT the A.LIT so we can A.LIT while we LIT.
-    compile("LIT")
-    compileXt("A.LIT")
+    compileXtLit("A.LIT")
     -- Compile A.LIT and then the number.
     compile("COMPILE, A., BRANCH")
     dataspace:compileWord(toUnsigned(dataspace:getRelativeAddr(dataspace:getCodeHere(), loop)))
   dataspace:setWord(wordFoundBranchAddr, toUnsigned(dataspace:getRelativeAddr(wordFoundBranchAddr, dataspace:getCodeHere())))
 
   -- Word found, see if we're compiling or interpreting.
-  compile("LIT")
-  dataspace:compileWord(0)
+  compileLit(0)
   compile("> STATE @ INVERT OR BRANCH0")
   local branchAddrIfNotImmediate = dataspace:getCodeHere()
   dataspace:compileWord(2000) -- will be replaced later
@@ -1398,3 +1435,4 @@ output:write([[
 
 dataspace:assembly(output)
 
+dumpFile:close()

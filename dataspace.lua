@@ -54,7 +54,8 @@ function Dataspace:assembly(file)
     .segment "%s"
     ]], bankInfo.segment))
 
-    -- TODO: Maybe assert that the current address is where we think we are?
+    -- TODO: Maybe assert that the current address is where we think we are and
+    -- have the assembler check it?
     local i = bankInfo.SIZED_START
     while i < bankInfo.here do
       local v = self[i]

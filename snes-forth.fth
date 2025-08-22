@@ -1,16 +1,28 @@
 0 BANK!
 
-: MY-CONSTANT CREATE , DOES> @ ; LABEL MY_CONSTANT
+CODE SET-BG
+  sep #$20
+  .a8
+  ; Set background color to $03E0
+  lda #$1F
+  sta $2122
+  lda #$3C
+  sta $2122
+  ; sta z:$12
 
-21 MY-CONSTANT TEST-MY-CONSTANT LABEL TEST_MY_CONSTANT
+  ; Maximum screen brightness
+  lda #$0F
+  sta $2100
+  rep #$20
+  .a16
 
-CODE TEST
-  jsr not_implemented
+  rts
 END-CODE
 
-: TESTING-TEST TEST ;
+: SET-BG-FORTH
+  0x1F 0x2122 C!
+  0x3C 0x2122 C!
+  0x0F 0x2100 C!
+  ;
 
-: MAIN TEST-MY-CONSTANT 21 = ;
-
-MAIN
-
+: MAIN SET-BG ;
