@@ -150,6 +150,37 @@ local function compileXtLit(name)
   return compileLit(dictionary:findAddr(name))
 end
 
+local Rts = Dataspace.Native:new()
+
+function Rts:size()
+  return 1
+end
+
+-- Should be called at the end of every (normal) native words runtime() to
+-- return control to the caller.
+local function rts()
+  ip = returnStack:popWord()
+end
+
+-- Closes over dataStack and ip
+function Rts:runtime(dataspace, opAddr)
+  rts()
+end
+
+function Rts:toString(dataspace, opAddr)
+  return "Rts"
+end
+
+function Rts:asm(dataspace, opAddr)
+  return [[
+    rts
+  ]]
+end
+
+local function compileRts()
+  dataspace:compile(Rts:new())
+end
+
 -- Add words to the current colon defintion
 local function compile(names)
   local first = 0
@@ -173,12 +204,6 @@ local function addNative(entry)
   -- Native fns are unsized, so they don't affect/use HERE.
   local addr = dataspace:compileUnsized(Dataspace.Native:new(entry))
   dictionary:add(entry.name, entry.label, addr)
-end
-
--- Should be called at the end of every (normal) native words runtime() to
--- return control to the caller.
-local function rts()
-  ip = returnStack:popWord()
 end
 
 local function toSigned(unsigned)
@@ -387,6 +412,8 @@ addNative{name="CREATE", runtime=function()
   -- behavior because data ptr and code ptr might be using the same bank.
   local dataAddrAddr = dataspace:getCodeHere() + 1
   compileLit(0)
+  -- TODO: We should use compileRts() here instead, but once we do that we'll
+  -- also need to add a Jmp instruction to replace it with when we call DOES>.
   compile("EXIT")
   dataspace:setWord(dataAddrAddr, dataspace:getDataHere())
   rts()
@@ -399,7 +426,7 @@ addNative{name="CONSTANT", runtime=function()
   dictionary:add(name, label, dataspace:getCodeHere())
   dataspace:labelCodeHere(label)
   compileLit(value)
-  compile("EXIT")
+  compileRts()
   rts()
 end}
 
@@ -1066,18 +1093,20 @@ end}
 
 addColon("TRUE")
   compileLit(0xFFFF)
-  compile("EXIT")
+  compileRts()
 
 addColon("FALSE")
   compileLit(0)
-  compile("EXIT")
+  compileRts()
 
 addColonWithLabel("[", "_LBRACK")
-  compile("FALSE STATE ! EXIT")
+  compile("FALSE STATE !")
+  compileRts()
 dictionary:latest().immediate = true
 
 addColonWithLabel("]", "_RBRACK")
-  compile("TRUE STATE ! EXIT")
+  compile("TRUE STATE !")
+  compileRts()
 
 addNative{name="IMMEDIATE", runtime=function()
   dictionary:latest().immediate = true
@@ -1094,7 +1123,8 @@ end}
 addColon("DODOES")
   -- TODO: More to consider here, probably need to change XT!
   -- TODO: Should probably use INLINE-DATA instead of R>
-  compile("R> XT! EXIT")  -- Ends the calling word (CREATEing) early.
+  compile("R> XT!")  -- Ends the calling word (CREATEing) early.
+  compileRts()
 
 addColonWithLabel("DOES>", "_DOES")
   compileXtLit("DODOES")
@@ -1109,7 +1139,7 @@ addColonWithLabel("DOES>", "_DOES")
   compileXtLit("DROP")
   compile("COMPILE,")
 
-  compile("EXIT")
+  compileRts()
 dictionary:latest().immediate = true
 
 -- TODO: Maybe pull these out into a mathops.lua file?
@@ -1242,15 +1272,20 @@ end, "bcs")
 
 do
   addColonWithLabel(":", "_COLON")
-  compile("CREATEDOCOL ] EXIT")
+  compile("CREATEDOCOL ]")
+  compileRts()
 end
+
+addNative{name="COMPILE-RTS", runtime=function()
+  compileRts()
+  rts()
+end}
 
 do
   addColonWithLabel(";", "_SEMICOLON")
-  compile("[")
-  compileXtLit("EXIT")
-  -- Also need to make the word visible now.
-  compile("COMPILE, EXIT")
+  compile("[ COMPILE-RTS")
+  compileRts()
+  -- TODO: The word should have been non-visible up to this point.
   dictionary:latest().immediate = true
 end
 
@@ -1283,7 +1318,8 @@ do
   compileLit(1)
   compile("CELLS + SWAP @ DUP CHARS")
   compileLit(1)
-  compile("CELLS + R> + >R EXIT")
+  compile("CELLS + R> + >R")
+  compileRts()
 end
 
 addColonWithLabel("S\"", "_SLIT")
@@ -1305,7 +1341,7 @@ do
   dataspace:compileWord(toUnsigned(dataspace:getRelativeAddr(dataspace:getCodeHere(), loop)))
   dataspace:setWord(exitBranchAddr, toUnsigned(dataspace:getRelativeAddr(exitBranchAddr, dataspace:getCodeHere())))
   compile("DROP SWAP !") -- Drop the " and fill in the length
-  compile("EXIT")
+  compileRts()
 end
 dictionary:latest().immediate = true
 
@@ -1377,7 +1413,8 @@ do
   dataspace:compileByte(string.byte("\n"))
   compile("TYPE ABORT")
   dataspace:setWord(eofBranchAddr, toUnsigned(dataspace:getRelativeAddr(eofBranchAddr, dataspace:getCodeHere())))
-  compile("DROP EXIT")
+  compile("DROP")
+  compileRts()
 end
 
 ip = dataspace:getCodeHere() -- start on creating QUIT, below
