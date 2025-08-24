@@ -172,5 +172,8 @@ TODO: Implement the T{ ... -> ... }T notation.
   SHARED-TESTS
 ;
 
+\ Needed to run on the SNES.
+: SNES-NMI ;
+
 SHARED-TESTS
 LUA-ONLY-TESTS
