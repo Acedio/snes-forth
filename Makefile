@@ -21,7 +21,7 @@ snes-forth.lua: bytestack.lua  cellstack.lua  dataspace.lua  dictionary.lua  inp
 tests.out.fth: std.fth tests/tests.fth
 	cat $^ > $@
 
-%.out.fth: std.fth %.fth 
+game.out.fth: std.fth font.fth game.fth 
 	# Does $^ preserve order?
 	cat $^ > $@
 
