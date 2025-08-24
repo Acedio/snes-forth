@@ -142,7 +142,7 @@ CREATE TEST-VAR 1 CELLS ALLOT
 
 21 MY-CONSTANT TEST-MY-CONSTANT
 
-: TEST-DOES TEST-MY-CONSTANT 21 = ;
+: TEST-DOES TEST-MY-CONSTANT 21 = TEST-MY-CONSTANT 21 = AND ;
 
 (
 TODO: Implement the T{ ... -> ... }T notation.
@@ -150,7 +150,7 @@ TODO: Implement the T{ ... -> ... }T notation.
 : ->
 )
 
-: MAIN
+: SHARED-TESTS
   TEST-STACK-OPS
   TEST-RETURN-STACK
   TEST-UNTIL
@@ -161,8 +161,16 @@ TODO: Implement the T{ ... -> ... }T notation.
   TEST-COMPARISON
   TEST-LITERALS
   TEST-MEMORY
-  TEST-BANKS
   TEST-DOES
 ;
 
-MAIN
+: LUA-ONLY-TESTS
+  TEST-BANKS \ Not implemented on the SNES yet.
+;
+
+: SNES-MAIN
+  SHARED-TESTS
+;
+
+SHARED-TESTS
+LUA-ONLY-TESTS

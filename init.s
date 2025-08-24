@@ -35,8 +35,8 @@ reset:
   txs
   ldx #DATA_STACK_ADDR
 
-.import _MAIN
-  jsr _MAIN
+.import _SNES_MAIN
+  jsr _SNES_MAIN
 
 forever:
   jmp forever

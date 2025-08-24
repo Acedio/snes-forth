@@ -1485,7 +1485,7 @@ output:write([[
 
 .include "preamble.s"
 
-.export _MAIN
+.export _SNES_MAIN
 
 ]])
 
