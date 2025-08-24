@@ -15,7 +15,8 @@ function Dataspace:new()
         here = 0x8000,
         UNSIZED_START = 0xFA00,
         unsizedHere = 0xFA00,
-        hereLabel = nil,
+        codeHereLabel = nil,
+        dataHereLabel = nil,
         segment = "CODE",
       },
       [Dataspace.LOWRAM_BANK] = {
@@ -23,7 +24,8 @@ function Dataspace:new()
         here = 0x300,
         UNSIZED_START = 0x1900,
         unsizedHere = 0x1900,
-        hereLabel = nil,
+        codeHereLabel = nil,
+        dataHereLabel = nil,
         segment = "BSS",
       },
     },
@@ -127,14 +129,21 @@ end
 -- TODO: Is there a cleaner way of doing this? Maybe keeping a list of labels ->
 -- addresses somewhere?
 function Dataspace:labelCodeHere(label)
-  self.hereLabel = label
+  self.codeHereLabel = label
+end
+
+function Dataspace:labelDataHere(label)
+  self.dataHereLabel = label
 end
 
 -- Add at the current data space pointer (HERE).
 function Dataspace:add(entry)
   assert(entry:size())
   local addr = self:getDataHere()
-  -- TODO: Do we need a dataspace hereLabel?
+  if self.dataHereLabel then
+    entry.label = self.dataHereLabel
+    self.dataHereLabel = nil
+  end
   self[self:getDataHere()] = entry
   self:setDataHere(self:getDataHere() + 1)
   return addr
@@ -144,9 +153,9 @@ end
 function Dataspace:compile(entry)
   assert(entry:size())
   local addr = self:getCodeHere()
-  if self.hereLabel then
-    entry.label = self.hereLabel
-    self.hereLabel = nil
+  if self.codeHereLabel then
+    entry.label = self.codeHereLabel
+    self.codeHereLabel = nil
   end
   self[self:getCodeHere()] = entry
   self:setCodeHere(self:getCodeHere() + 1)
@@ -312,7 +321,7 @@ function Dataspace:addAddress(addr)
   self:addByte(bankByte(addr))
 end
 
-function Dataspace:allotBytes(bytes)
+function Dataspace:allotDataBytes(bytes)
   assert(bytes > 0)
   for i=1,bytes do
     self:addByte(0)
@@ -335,6 +344,13 @@ function Dataspace:compileAddress(addr)
   self:compileByte(lowByte(addr))
   self:compileByte(highByte(addr))
   self:compileByte(bankByte(addr))
+end
+
+function Dataspace:allotCodeBytes(bytes)
+  assert(bytes > 0)
+  for i=1,bytes do
+    self:compileByte(0)
+  end
 end
 
 return Dataspace

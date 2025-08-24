@@ -141,7 +141,7 @@ local function compileLit(value)
   dataspace:compile(Lit:new())
   dataspace:compileWord(value)
   -- Garbage bytes to fill for assembly.
-  dataspace:allotBytes(1 + 1 + 2)
+  dataspace:allotCodeBytes(1 + 1 + 2)
   -- TODO: assert that we've added bytes equal to Lit:size()
 end
 
@@ -407,6 +407,7 @@ addNative{name="CREATE", runtime=function()
   local label = Dataspace.defaultLabel(name)
   dictionary:add(name, label, dataspace:getCodeHere())
   dataspace:labelCodeHere(label)
+  dataspace:labelDataHere(label .. "_data")
   -- The value of the Lit is 1 byte into the assembly.
   -- Need to wait to set this until after we're done compiling the execution
   -- behavior because data ptr and code ptr might be using the same bank.
@@ -437,12 +438,10 @@ addNative{name="CREATEDOCOL", runtime=function()
 end}
 
 addNative{name="ALLOT", runtime=function()
-  dataspace:allotBytes(dataStack:pop())
+  dataspace:allotDataBytes(dataStack:pop())
   rts()
 end}
 
--- TODO: For now we'll actually implement EXIT in ASM, but on the SNES it should
--- just be a `RTS` and not `JSR EXIT` like other Forth words.
 addNative{name="EXIT", runtime=function()
   returnStack:popWord()
   rts()
@@ -489,7 +488,7 @@ local wordBufferSize = 32
 -- Currently allocating this in ROM, but if we move the interpreter to the SNES
 -- then it should be in RAM (probably high-ram).
 dataspace:addWord(0)
-dataspace:allotBytes(wordBufferSize)
+dataspace:allotDataBytes(wordBufferSize)
 
 local function setWordBuffer(str)
   local length = string.len(str)

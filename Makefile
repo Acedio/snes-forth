@@ -1,4 +1,4 @@
-all: snes-forth.smc snes-forth.mlb
+all: game.smc game.mlb
 
 %.smc %.labels %.dbg: %.o init.o lorom128.cfg
 	ld65 -C lorom128.cfg -Ln $*.labels --dbgfile $*.dbg -o $*.smc $*.o init.o
@@ -15,6 +15,8 @@ all: snes-forth.smc snes-forth.mlb
 
 %.out.s: %.out.fth snes-forth.lua
 	./snes-forth.lua $< $@
+
+snes-forth.lua: bytestack.lua  cellstack.lua  dataspace.lua  dictionary.lua  input.lua
 
 tests.out.fth: std.fth tests/tests.fth
 	cat $^ > $@
