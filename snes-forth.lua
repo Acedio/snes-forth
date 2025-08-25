@@ -34,7 +34,7 @@ else
   input = Input:readAll(arg[1])
 end
 
-local outputs = io.stderr
+local outputs = io.stdout
 local infos = io.stdout
 local errors = io.stderr
 local dumpFile = assert(io.open("dataspace.dump", "w"))
@@ -1276,16 +1276,32 @@ binaryCmpOp("<", "_LT", function(a, b)
   return toSigned(a) < toSigned(b)
 end, "bmi")
 
+binaryCmpOp("<=", "_LTE", function(a, b)
+  return toSigned(a) <= toSigned(b)
+end, "bmi")
+
 binaryCmpOp(">", "_GT", function(a, b)
   return toSigned(a) > toSigned(b)
+end, "bpl")
+
+binaryCmpOp(">=", "_GTE", function(a, b)
+  return toSigned(a) >= toSigned(b)
 end, "bpl")
 
 binaryCmpOp("U<", "_UNSIGNED_LT", function(a, b)
   return toUnsigned(a) < toUnsigned(b)
 end, "bcc")
 
+binaryCmpOp("U<=", "_UNSIGNED_LTE", function(a, b)
+  return toUnsigned(a) <= toUnsigned(b)
+end, "bcc")
+
 binaryCmpOp("U>", "_UNSIGNED_GT", function(a, b)
   return toUnsigned(a) > toUnsigned(b)
+end, "bcs")
+
+binaryCmpOp("U>=", "_UNSIGNED_GTE", function(a, b)
+  return toUnsigned(a) >= toUnsigned(b)
 end, "bcs")
 
 do

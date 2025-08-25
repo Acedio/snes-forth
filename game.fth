@@ -118,19 +118,14 @@ BANK!
   PULSE-BG
 ;
 
+\ Converts ASCII string (bytes) to tile references (words where 0 = space, 1 =
+\ !, etc)
 ( addr u tilemap-addr -- )
-\ TODO: This is broken!
-: COPY-STRING
-  SWAP CELLS OVER + >R
-  BEGIN
-    OVER C@
-    DUP !
-
-    SWAP 1+
-    SWAP CELL+
-    DUP R@ =
-  UNTIL
-  R> DROP
+: COPY-STRING-TO-TILES
+  SWAP CELLS OVER + SWAP DO
+    DUP C@ 0x20 - I !
+    1+
+  1 CELLS +LOOP DROP ;
 ;
 
 : SNES-MAIN
@@ -139,7 +134,7 @@ BANK!
   TILEMAP ZERO-TILEMAP
 
   S" Song is cute!"
-  TILEMAP COPY-STRING
+  TILEMAP COPY-STRING-TO-TILES
 
   BEGIN FALSE UNTIL
 ;
