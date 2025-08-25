@@ -139,8 +139,15 @@ BANK!
 
   TILEMAP ZERO-TILEMAP
 
-  S" Song is cute! <3 <3 <3"
-  TILEMAP 4 14 TILEMAP-XY CELLS + COPY-STRING-TO-TILES
+  S"   Testing out this fanciness!  
+                               
+We're not interpreting Forth   
+here, but we are indeed running
+compiled Forth code! Pretty    
+cool, if a bit slow...         
+                               
+        :D :D :D :D            "
+  TILEMAP 0 10 TILEMAP-XY CELLS + COPY-STRING-TO-TILES
 
   BEGIN FALSE UNTIL
 ;
