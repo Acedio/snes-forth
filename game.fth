@@ -5,8 +5,6 @@
   \ Set background, low byte first
   DUP 0x2122 C!
   HIBYTE 0x2122 C!
-  \ Maximum screen brightness
-  0x0F 0x2100 C!
 ;
 
 : SET-BACKDROP-COLOR
@@ -22,7 +20,7 @@
 
 BANK@
 LOWRAM BANK!
-CREATE BG-COLOR 1 ALLOT
+CREATE BG-COLOR 1 CELLS ALLOT
 BANK!
 
 : 2BIT-TILES
@@ -41,7 +39,7 @@ BANK!
 : ZERO-TILEMAP
   DUP TILEMAP-TILE-COUNT TILEMAP-ENTRIES CELLS + >R
   BEGIN
-    0x41 OVER !
+    0 OVER !
     CELL+ DUP R@ =
   UNTIL
   R> DROP
@@ -115,7 +113,12 @@ BANK!
 
   COPY-FONT
 
+  TEXT-PALETTE
+
   PULSE-BG
+
+  \ Maximum screen brightness
+  0x0F 0x2100 C!
 ;
 
 \ Converts ASCII string (bytes) to tile references (words where 0 = space, 1 =
@@ -128,13 +131,16 @@ BANK!
   1 CELLS +LOOP DROP ;
 ;
 
+: TILEMAP-XY
+  32 PPU-MULT DROP + ;
+
 : SNES-MAIN
   0x0044 BG-COLOR !
 
   TILEMAP ZERO-TILEMAP
 
-  S" Song is cute!"
-  TILEMAP COPY-STRING-TO-TILES
+  S" Song is cute! <3 <3 <3"
+  TILEMAP 4 14 TILEMAP-XY CELLS + COPY-STRING-TO-TILES
 
   BEGIN FALSE UNTIL
 ;

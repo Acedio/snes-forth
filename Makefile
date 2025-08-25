@@ -18,10 +18,10 @@ all: game.smc game.mlb
 
 snes-forth.lua: bytestack.lua  cellstack.lua  dataspace.lua  dictionary.lua  input.lua
 
-tests.out.fth: std.fth tests/tests.fth
+tests.out.fth: std.fth snes-std.fth tests/tests.fth
 	cat $^ > $@
 
-game.out.fth: std.fth font.fth game.fth 
+game.out.fth: std.fth snes-std.fth font.fth game.fth 
 	# Does $^ preserve order?
 	cat $^ > $@
 

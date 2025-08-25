@@ -148,6 +148,11 @@ CREATE TEST-VAR 1 CELLS ALLOT
 
 : TEST-DOES TEST-MY-CONSTANT 21 = TEST-MY-CONSTANT 21 = AND ;
 
+: TEST-MULT
+  0x4000 0x40 PPU-MULT
+  0x10 =
+  SWAP 0 = AND ;
+
 (
 TODO: Implement the T{ ... -> ... }T notation.
 : T{
@@ -173,7 +178,12 @@ TODO: Implement the T{ ... -> ... }T notation.
   TEST-BANKS \ Not implemented on the SNES yet.
 ;
 
+: SNES-ONLY-TESTS
+  TEST-MULT
+;
+
 : SNES-MAIN
+  SNES-ONLY-TESTS
   SHARED-TESTS
 ;
 
