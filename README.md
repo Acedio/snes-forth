@@ -1,6 +1,6 @@
 # snes-forth
 
-![screenshot.png](A screenshot of snes-forth, showing text output.)
+![A screenshot of snes-forth, showing text output.](screenshot.png)
 
 A (at the moment very incomplete) Forth for the SNES!
 
