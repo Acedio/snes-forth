@@ -71,8 +71,10 @@ BANK!
 ;
 
 : COPY-FONT
-  FONT
-  FONT-CHARS 2BIT-TILES
+  \ FONT
+  \ FONT-CHARS 2BIT-TILES
+  CAT_TILES
+  CAT_TILES_BYTES
   \ Start at the character data area (4Kth word).
   0x1000
   DMA1-VRAM-TRANSFER
