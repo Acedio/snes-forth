@@ -92,3 +92,11 @@
 \ Create a variable in low RAM bank (but definition in the current code bank).
 : CREATELOWRAM BANK@ LOWRAM BANK! HERE SWAP BANK! CONSTANT ;
 
+\ Masks the data and updates the value at address so that only the mask bytes
+\ are modified.
+: MASK! ( data mask address -- )
+  >R >R
+  R@ AND
+  R> INVERT R@ @ AND OR
+  R> !
+;

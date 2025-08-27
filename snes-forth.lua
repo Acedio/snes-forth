@@ -442,6 +442,7 @@ addNative{name="ALLOT", runtime=function()
   rts()
 end}
 
+-- TODO: Maybe this should compile an RTS instead?
 addNative{name="EXIT", runtime=function()
   returnStack:popWord()
   rts()
