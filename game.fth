@@ -107,8 +107,7 @@ BANK!
 ;
 
 : COPY-CAT
-  \ TODO: This copies all tiles sequentially, but we actually need the bottom
-  \ two tiles to be 16 tiles ahead (1 row below) the first tile.
+  \ The bottom two tiles are 16 tiles ahead (1 row below) the first tile.
   CAT-TILES
   CAT-TILES-BYTES
   0x2000
