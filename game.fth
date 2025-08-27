@@ -27,28 +27,55 @@ BANK!
   2* 2* 2* 2*
 ;
 
-: TILEMAP-TILE-COUNT
-  32 2* 2* 2* 2* 2*
-;
+32 2* 2* 2* 2* 2* CONSTANT TILEMAP-TILE-COUNT
 
 : TILEMAP-ENTRIES
-  \ 1 word each
+  CELLS
 ;
 
 ( tilemap-addr -- )
 : ZERO-TILEMAP
-  DUP TILEMAP-TILE-COUNT TILEMAP-ENTRIES CELLS + SWAP DO
+  DUP TILEMAP-TILE-COUNT TILEMAP-ENTRIES + SWAP DO
     0 I !
   1 CELLS +LOOP
 ;
 
+128 CONSTANT OAM-OBJECT-COUNT
+
+\ 4 bytes per object
+: OAM-OBJECT-LOWER-BYTES
+  2* 2*
+;
+
+\ 2 bits per object
+: OAM-OBJECT-UPPER-BYTES
+  LSR LSR
+;
+
 BANK@
 LOWRAM BANK!
-CREATE TILEMAP TILEMAP-TILE-COUNT TILEMAP-ENTRIES ALLOT
+CREATE SHADOW-TILEMAP TILEMAP-TILE-COUNT TILEMAP-ENTRIES ALLOT
+CREATE SHADOW-OAM-LOWER OAM-OBJECT-COUNT OAM-OBJECT-LOWER-BYTES ALLOT
+CREATE SHADOW-OAM-UPPER OAM-OBJECT-COUNT OAM-OBJECT-UPPER-BYTES ALLOT
 BANK!
 
+: ZERO-OAM
+  SHADOW-OAM-LOWER OAM-OBJECT-COUNT OAM-OBJECT-LOWER-BYTES +
+  SHADOW-OAM-LOWER DO
+    -32 I     C! \ X (lower 8 bits)
+    -32 I 1 + C! \ Y
+      0 I 2 + C! \ Tile no (lower 8 bits)
+      0 I 3 + C! \ Attributes
+  1 OAM-OBJECT-LOWER-BYTES +LOOP
+
+  SHADOW-OAM-UPPER OAM-OBJECT-COUNT OAM-OBJECT-UPPER-BYTES +
+  SHADOW-OAM-UPPER DO
+    0x55 I C!
+  LOOP
+;
+
 ( from bytes to -- )
-: DMA1-VRAM-TRANSFER
+: DMA0-VRAM-TRANSFER
   \ Set up VRAM reg.
   \ Increment after writing high byte
   0x80 0x2115 C!
@@ -61,7 +88,7 @@ BANK!
   0x4302 !
   \ Page (TODO: This shouldn't always be 0)
   0 0x4304 C!
-  \ Copy low byte, then high byte.
+  \ Copy to addr (2118), then addr+1 (2119).
   0x1 0x4300 C!
   \ Copy to VRAM reg
   0x18 0x4301 C!
@@ -71,21 +98,41 @@ BANK!
 ;
 
 : COPY-FONT
-  \ FONT
-  \ FONT-CHARS 2BIT-TILES
-  CAT-TILES
-  CAT-TILES-BYTES
+  FONT
+  FONT-CHARS 2BIT-TILES
   \ Start at the character data area (4Kth word).
   0x1000
-  DMA1-VRAM-TRANSFER
+  DMA0-VRAM-TRANSFER
 ;
 
 : COPY-TILEMAP
-  TILEMAP
-  TILEMAP-TILE-COUNT TILEMAP-ENTRIES CELLS
+  SHADOW-TILEMAP
+  TILEMAP-TILE-COUNT TILEMAP-ENTRIES
   \ Start at the tilemap data area (0th word).
   0x0000
-  DMA1-VRAM-TRANSFER
+  DMA0-VRAM-TRANSFER
+;
+
+: COPY-OAM
+  \ Set OAM address to 0.
+  0 0x2102 C!
+  0 0x2103 C!
+
+  \ Number of copies (bytes)
+  [ OAM-OBJECT-COUNT OAM-OBJECT-LOWER-BYTES
+    OAM-OBJECT-COUNT OAM-OBJECT-UPPER-BYTES +
+    COMPILE-LIT ] 0x4305 !
+  \ Transfer from shadow OAM
+  SHADOW-OAM-LOWER 0x4302 !
+  \ Page (TODO: This shouldn't always be 0)
+  0 0x4304 C!
+  \ Always copy byte-by-byte to the same address.
+  0x0 0x4300 C!
+  \ Copy to OAM write reg
+  0x04 0x4301 C!
+
+  \ Start DMA transfer.
+  0x01 0x420B C!
 ;
 
 : PULSE-BG
@@ -99,14 +146,19 @@ BANK!
   ;
 
 : SNES-NMI
-  \ Only layer 3
-  0x04 0x212C C!
+  \ layer 3 and sprites
+  0x14 0x212C C!
   \ Set Mode 1
   1 0x2105 C!
   \ Set BG base (0)
   0 0x2109 C!
   \ Character data area (BG3 1*4K words = 4K words start)
   0x0100 0x210B !
+
+  \ Small sprites, tile base at VRAM 0x0000
+  0 0x2101 C!
+
+  COPY-OAM
 
   COPY-TILEMAP
 
@@ -136,7 +188,9 @@ BANK!
 : SNES-MAIN
   0x0044 BG-COLOR !
 
-  TILEMAP ZERO-TILEMAP
+  SHADOW-TILEMAP ZERO-TILEMAP
+
+  ZERO-OAM
 
   S"   Testing out this fanciness!  
                                
@@ -146,7 +200,7 @@ compiled Forth code! Pretty
 cool, if a bit slow...         
                                
         :D :D :D :D            "
-  TILEMAP 0 10 TILEMAP-XY CELLS + COPY-STRING-TO-TILES
+  SHADOW-TILEMAP 0 10 TILEMAP-XY CELLS + COPY-STRING-TO-TILES
 
   BEGIN FALSE UNTIL
 ;
