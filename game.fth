@@ -54,6 +54,7 @@ BANK!
 
 BANK@
 LOWRAM BANK!
+CREATE VRAM-COPIED 1 CELLS ALLOT
 CREATE SHADOW-TILEMAP TILEMAP-TILE-COUNT TILEMAP-ENTRIES ALLOT
 CREATE SHADOW-OAM-LOWER OAM-OBJECT-COUNT OAM-OBJECT-LOWER-BYTES ALLOT
 CREATE SHADOW-OAM-UPPER OAM-OBJECT-COUNT OAM-OBJECT-UPPER-BYTES ALLOT
@@ -103,6 +104,41 @@ BANK!
   \ Start at the character data area (4Kth word).
   0x1000
   DMA0-VRAM-TRANSFER
+;
+
+: COPY-CAT
+  \ TODO: This copies all tiles sequentially, but we actually need the bottom
+  \ two tiles to be 16 tiles ahead (1 row below) the first tile.
+  CAT-TILES
+  CAT-TILES-BYTES
+  0x2000
+  DMA0-VRAM-TRANSFER
+;
+
+( from bytes to-word-index -- )
+: COPY-CGRAM-PALETTE
+  \ Which word-indexed entry to transfer to.
+  0x2121 C!
+  \ Number of copies (bytes)
+  0x4305 !
+  \ Transfer from
+  0x4302 !
+  \ Page (TODO: This shouldn't always be 0)
+  0 0x4304 C!
+  \ Always copy byte-by-byte to the same address.
+  0x0 0x4300 C!
+  \ Copy to CGRAM reg
+  0x22 0x4301 C!
+
+  \ Start DMA transfer.
+  0x01 0x420B C!
+;
+
+: COPY-CAT-PALETTE
+  CAT-PAL
+  CAT-PAL-BYTES
+  0x80
+  COPY-CGRAM-PALETTE
 ;
 
 : COPY-TILEMAP
@@ -155,18 +191,24 @@ BANK!
   \ Character data area (BG3 1*4K words = 4K words start)
   0x0100 0x210B !
 
-  \ Small sprites, tile base at VRAM 0x0000
-  0 0x2101 C!
+  \ Small sprites, tile base at VRAM 0x2000 (8Kth word)
+  1 0x2101 C!
 
-  COPY-OAM
+  VRAM-COPIED @ 0= IF
+    COPY-FONT
+
+    COPY-CAT
+    COPY-CAT-PALETTE
+
+    TEXT-PALETTE
+
+    TRUE VRAM-COPIED !
+  THEN
 
   COPY-TILEMAP
+  COPY-OAM
 
-  COPY-FONT
-
-  TEXT-PALETTE
-
-  PULSE-BG
+  \ PULSE-BG
 
   \ Maximum screen brightness
   0x0F 0x2100 C!
@@ -186,6 +228,7 @@ BANK!
   32 PPU-MULT DROP + ;
 
 : SNES-MAIN
+  FALSE VRAM-COPIED !
   0x0044 BG-COLOR !
 
   SHADOW-TILEMAP ZERO-TILEMAP
@@ -202,5 +245,11 @@ cool, if a bit slow...
         :D :D :D :D            "
   SHADOW-TILEMAP 0 10 TILEMAP-XY CELLS + COPY-STRING-TO-TILES
 
-  BEGIN FALSE UNTIL
+  0x7000 SHADOW-OAM-LOWER 2 + !
+  0x56   SHADOW-OAM-UPPER     C!
+
+  0
+  BEGIN
+    1+ DUP LSR LSR LSR LSR LSR LSR LSR LSR 0x2000 OR SHADOW-OAM-LOWER !
+  FALSE UNTIL
 ;
