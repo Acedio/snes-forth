@@ -183,6 +183,7 @@ BANK!
 
 : SNES-NMI
   NMI-READY @ 0= IF
+    \ TODO: We missed a frame. Find a way to track/signal this.
     EXIT
   THEN
 
@@ -210,23 +211,34 @@ BANK!
 
     TRUE VRAM-COPIED !
   ELSE
+    \ Shift BG3 right by 4 pixels to center text.
+    0xFC 0x2111 C!
+    0xFF 0x2111 C!
+
     COPY-TILEMAP
     COPY-OAM
-  THEN
 
-  \ PULSE-BG
+    PULSE-BG
+  THEN
 
   \ Maximum screen brightness
   0x0F 0x2100 C!
 ;
 
 \ Converts ASCII string (bytes) to tile references (words where 0 = space, 1 =
-\ !, etc)
+\ !, etc). Ignores 0x0A (line feed?) characters.
 ( addr u tilemap-addr -- )
 : COPY-STRING-TO-TILES
   SWAP CELLS OVER + SWAP DO
-    DUP C@ 0x20 - I !
-    1+
+    BEGIN
+      DUP 1+ SWAP
+      C@
+      DUP 0x0A =
+    WHILE
+      DROP
+    REPEAT
+    \ Convert to text tile offset (missing the first 0x20 control characters).
+    0x20 - I !
   1 CELLS +LOOP DROP ;
 ;
 
@@ -242,15 +254,15 @@ BANK!
 
   ZERO-OAM
 
-  S"   Testing out this fanciness!  
-                               
-We're not interpreting Forth   
-here, but we are indeed running
-compiled Forth code! Pretty    
-cool, if a bit slow...         
-                               
-        :D :D :D :D            "
-  SHADOW-TILEMAP 0 10 TILEMAP-XY CELLS + COPY-STRING-TO-TILES
+  S"   Testing out this fanciness!   
+                                
+We're not interpreting Forth    
+here, but we are indeed running 
+compiled Forth code! Pretty     
+cool, if a bit slow...          
+                                
+        :D :D :D :D             "
+  DROP [ 32 2* 2* 2* COMPILE-LIT ] SHADOW-TILEMAP 0 10 TILEMAP-XY CELLS + COPY-STRING-TO-TILES
 
   0x7000 SHADOW-OAM-LOWER 2 + !
   0x56   SHADOW-OAM-UPPER     C!
@@ -258,8 +270,18 @@ cool, if a bit slow...
   0
   BEGIN
     1+
+
     DUP 0xFF AND 0x2000 OR SHADOW-OAM-LOWER !
     DUP HIBYTE 0x02 OR 0x03 SHADOW-OAM-UPPER MASK!
+
+    DUP 2*
+    DUP 0xFF AND 0x3000 OR SHADOW-OAM-LOWER 4 + !
+    HIBYTE 0x02 OR 2* 2* 0x0C SHADOW-OAM-UPPER MASK!
+
+    DUP LSR
+    DUP 0xFF AND 0x4000 OR SHADOW-OAM-LOWER 8 + !
+    HIBYTE 0x02 OR 2* 2* 2* 2* 0x30 SHADOW-OAM-UPPER MASK!
+
     TRUE NMI-READY !
     BEGIN NMI-READY @ 0= UNTIL
   FALSE UNTIL
