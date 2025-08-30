@@ -55,8 +55,9 @@ BANK!
 BANK@
 LOWRAM BANK!
 CREATE NMI-READY 1 CELLS ALLOT
-CREATE VRAM-COPIED 1 CELLS ALLOT
-CREATE SHADOW-TILEMAP TILEMAP-TILE-COUNT TILEMAP-ENTRIES ALLOT
+CREATE NMI-STATE 1 CELLS ALLOT
+CREATE BG1-SHADOW-TILEMAP TILEMAP-TILE-COUNT TILEMAP-ENTRIES ALLOT
+CREATE BG3-SHADOW-TILEMAP TILEMAP-TILE-COUNT TILEMAP-ENTRIES ALLOT
 CREATE SHADOW-OAM-LOWER OAM-OBJECT-COUNT OAM-OBJECT-LOWER-BYTES ALLOT
 CREATE SHADOW-OAM-UPPER OAM-OBJECT-COUNT OAM-OBJECT-UPPER-BYTES ALLOT
 BANK!
@@ -115,6 +116,17 @@ BANK!
   DMA0-VRAM-TRANSFER
 ;
 
+\ TODO: VRAM organization
+\ TODO: Store details about VRAM locations all in the same place.
+
+: COPY-MAPTILES
+  \ TODO: What does maptile data look like?
+  MAPTILES-TILES
+  MAPTILES-TILES-BYTES
+  0x4000
+  DMA0-VRAM-TRANSFER
+;
+
 ( from bytes to-word-index -- )
 : COPY-CGRAM-PALETTE
   \ Which word-indexed entry to transfer to.
@@ -134,6 +146,16 @@ BANK!
   0x01 0x420B C!
 ;
 
+( CGRAM organization
+  0x0 - 0x0F = 4 4 color palettes for BG3
+  0x10 - 0x7F = 7 4 color palettes for BG1 and BG2
+  0x80 - 0xFF = 8 16 color palettes for OBJ
+
+  Text is currently using 4 color palette 0 = CGRAM @ 0x0
+  Tiles are using 16 color palette 1 = CGRAM @ 0x10
+  Cat is using 16 color obj palette 0 = CGRAM @ 0x80
+)
+
 : COPY-CAT-PALETTE
   CAT-PAL
   CAT-PAL-BYTES
@@ -141,8 +163,23 @@ BANK!
   COPY-CGRAM-PALETTE
 ;
 
-: COPY-TILEMAP
-  SHADOW-TILEMAP
+: COPY-MAPTILES-PALETTE
+  MAPTILES-PAL
+  MAPTILES-PAL-BYTES
+  0x10
+  COPY-CGRAM-PALETTE
+;
+
+: COPY-BG1
+  BG1-SHADOW-TILEMAP
+  TILEMAP-TILE-COUNT TILEMAP-ENTRIES
+  \ Start at the tilemap data area (1kth word).
+  0x0400 \ word-indexed
+  DMA0-VRAM-TRANSFER
+;
+
+: COPY-BG3
+  BG3-SHADOW-TILEMAP
   TILEMAP-TILE-COUNT TILEMAP-ENTRIES
   \ Start at the tilemap data area (0th word).
   0x0000
@@ -190,36 +227,59 @@ BANK!
   FALSE NMI-READY !
 
   \ layer 3 and sprites
-  0x14 0x212C C!
-  \ Set Mode 1
-  1 0x2105 C!
-  \ Set BG base (0)
+  0x15 0x212C C!
+  \ Set Mode 1 BG3 high priority (0x.9), BG1 tile size 16x16 (0x1.), other BGs 8x8
+  0x19 0x2105 C!
+  \ Set BG1 base (VRAM @ 0x800)
+  4 0x2107 C!
+  \ Set BG3 base (VRAM @ 0)
   0 0x2109 C!
-  \ Character data area (BG3 1*4K words = 4K words start)
-  0x0100 0x210B !
+  \ Character data area (BG1 4*4K words = 16K words start, BG3 1*4K words = 4K words start)
+  0x0104 0x210B !
 
   \ Small sprites, tile base at VRAM 0x2000 (8Kth word)
   1 0x2101 C!
 
-  VRAM-COPIED @ 0= IF
-    COPY-FONT
+  NMI-STATE @ CASE
+    0 OF
+      COPY-FONT
 
-    COPY-CAT
-    COPY-CAT-PALETTE
+      COPY-CAT
+      COPY-CAT-PALETTE
 
-    TEXT-PALETTE
+      TEXT-PALETTE
 
-    TRUE VRAM-COPIED !
-  ELSE
-    \ Shift BG3 right by 4 pixels to center text.
-    0xFC 0x2111 C!
-    0xFF 0x2111 C!
+      1 NMI-STATE !
+    ENDOF
+    1 OF
+      COPY-MAPTILES
+      COPY-MAPTILES-PALETTE
 
-    COPY-TILEMAP
-    COPY-OAM
+      2 NMI-STATE !
+    ENDOF
+    2 OF
+      \ Zero shift for BG1
+      0x00 0x210D C!
+      0x00 0x210D C!
+      \ Shift BG3 right by 4 pixels to center text.
+      0xFC 0x2111 C!
+      0xFF 0x2111 C!
 
-    PULSE-BG
-  THEN
+      COPY-BG3
+
+      3 NMI-STATE !
+    ENDOF
+    3 OF
+      COPY-BG1
+
+      4 NMI-STATE !
+    ENDOF
+    4 OF
+      COPY-OAM
+
+      PULSE-BG
+    ENDOF
+  ENDCASE
 
   \ Maximum screen brightness
   0x0F 0x2100 C!
@@ -242,15 +302,72 @@ BANK!
   1 CELLS +LOOP DROP ;
 ;
 
+: INIT-LEVEL-TILEMAP
+  S"                                 
+      #####                     
+      #Rr #                     
+      ## @#                     
+       ####                     
+                                
+                                
+                                
+                                
+ # # ### # #                    
+ # #  #  # #                    
+ ###  #  # #                    
+ # #  #                         
+ # # ### # #                    
+                                
+                                
+                                
+                                
+                                
+                                
+                                
+                                
+                                
+                                
+                                
+                                
+                                
+                                
+                                
+                                
+                                
+                                "
+  ( addr u )
+  DROP BG1-SHADOW-TILEMAP TILEMAP-TILE-COUNT CELLS EACH DO
+    BEGIN
+      DUP 1+ SWAP
+      C@
+      DUP 0x0A =
+    WHILE
+      DROP
+    REPEAT
+    \ Convert to text tile offset (missing the first 0x20 control characters).
+    CASE
+      [CHAR] # OF 0x0400 ENDOF
+      [CHAR] R OF 0x0402 ENDOF
+      [CHAR] r OF 0x0402 ENDOF
+      [CHAR] @ OF 0x0402 ENDOF
+      [CHAR]   OF 0x0404 ENDOF
+      >R 0x0404 R>
+    ENDCASE
+    I !
+  1 CELLS +LOOP
+  \ Drop the string indexing address.
+  DROP ;
+
 : TILEMAP-XY
   32 PPU-MULT DROP + ;
 
 : SNES-MAIN
   FALSE NMI-READY !
-  FALSE VRAM-COPIED !
+  0 NMI-STATE !
   0x0044 BG-COLOR !
 
-  SHADOW-TILEMAP ZERO-TILEMAP
+  BG1-SHADOW-TILEMAP ZERO-TILEMAP
+  BG3-SHADOW-TILEMAP ZERO-TILEMAP
 
   ZERO-OAM
 
@@ -262,7 +379,9 @@ compiled Forth code! Pretty
 cool, if a bit slow...          
                                 
         :D :D :D :D             "
-  DROP [ 32 2* 2* 2* COMPILE-LIT ] SHADOW-TILEMAP 0 10 TILEMAP-XY CELLS + COPY-STRING-TO-TILES
+  DROP [ 32 2* 2* 2* COMPILE-LIT ] BG3-SHADOW-TILEMAP 0 10 TILEMAP-XY CELLS + COPY-STRING-TO-TILES
+
+  INIT-LEVEL-TILEMAP
 
   0x7000 SHADOW-OAM-LOWER 2 + !
   0x56   SHADOW-OAM-UPPER     C!

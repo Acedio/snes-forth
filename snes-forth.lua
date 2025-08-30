@@ -1243,6 +1243,11 @@ binaryOpWithLabel("+", "_PLUS", function(a,b)
   return a + b
 end, "clc\n  adc")
 
+addNative{name="*", label="_MULTIPLY", runtime=function()
+  dataStack.push((dataStack:pop() * dataStack:pop()) & 0xFFFF)
+  rts()
+end}
+
 local function binaryCmpOp(name, label, op, asmOp)
   addNative{name=name, label=label, runtime=function()
     local b = dataStack:pop()

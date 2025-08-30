@@ -100,3 +100,6 @@
   R> INVERT R@ @ AND OR
   R> !
 ;
+
+( addr length -- end begin )
+: EACH OVER + SWAP ;

@@ -10,3 +10,4 @@ dataspace.dump
 *.tiles.out
 *.map.out
 *.tiles.fth
+*.sprites.fth
