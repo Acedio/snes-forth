@@ -1,2 +1,12 @@
-*.o
 *.smc
+*.labels
+*.dbg
+*.o
+*.mlb
+*.out.s
+*.out.fth
+dataspace.dump
+*.pal.out
+*.tiles.out
+*.map.out
+*.tiles.fth
