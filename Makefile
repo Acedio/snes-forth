@@ -13,6 +13,7 @@ all: game.smc game.mlb
 %.mlb: %.labels
 	< $< awk 'BEGIN {IFS=" "} {printf("SnesPrgRom:%x:%s\n", strtonum("0x" $$2) - 0x8000, substr($$3,2));}' > $@
 
+.PRECIOUS: %.out.s
 %.out.s: %.out.fth snes-forth.lua
 	./snes-forth.lua $< $@
 

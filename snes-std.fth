@@ -7,3 +7,8 @@
   0x2136 C@
 ;
 
+CODE BREAKPOINT
+  ; Mesen will break on this failed assert.
+  ; assert(0)
+  rts
+END-CODE
