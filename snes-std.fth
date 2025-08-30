@@ -12,3 +12,8 @@ CODE BREAKPOINT
   ; assert(0)
   rts
 END-CODE
+
+CODE NMI-WAIT
+  wai
+  rts
+END-CODE

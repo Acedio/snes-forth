@@ -39,9 +39,9 @@ fastrom:
   txs
   ldx #DATA_STACK_ADDR
 
-  ; Enable NMI
+  ; Enable NMI and automatic controller reading.
   A8
-  lda #$80
+  lda #$81
   sta $4200
   A16
 
