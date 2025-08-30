@@ -298,7 +298,10 @@ BANK!
       DROP
     REPEAT
     \ Convert to text tile offset (missing the first 0x20 control characters).
-    0x20 - I !
+    0x20 -
+    \ Give text tiles priority over others. (bit 5 of $2105 ensures they show
+    \ over other backgrounds).
+    0x2000 OR I !
   1 CELLS +LOOP DROP ;
 ;
 
@@ -308,10 +311,10 @@ BANK!
       #Rr #                     
       ## @#                     
        ####                     
-                                
-                                
-                                
-                                
+       R                        
+       R                        
+       R                        
+       R                        
  # # ### # #                    
  # #  #  # #                    
  ###  #  # #                    
