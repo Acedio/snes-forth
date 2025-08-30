@@ -1,7 +1,7 @@
 CODE FONT
   dex
   dex
-  lda #FONT_DATA
+  lda #.LOWORD(FONT_DATA)
   sta z:1, X
   rts
 

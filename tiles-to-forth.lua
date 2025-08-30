@@ -33,7 +33,7 @@ function makeDataWords(name, label, data)
 CODE %s
   dex
   dex
-  lda #%s_DATA
+  lda #.LOWORD(%s_DATA)
   sta z:1, X
   rts
 

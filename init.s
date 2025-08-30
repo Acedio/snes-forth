@@ -13,8 +13,8 @@
   .word $FFFF,$0000 ; dummy checksums
 
 .segment "VECTORS"
-  .word 0,0,0,0,0,nmi,0,0
-  .word 0,0,0,0,0,0,reset,0
+  .addr 0,0,0,0,0,nmi,0,0
+  .addr 0,0,0,0,0,0,reset,0
 
 .segment "UNSIZED"
 
@@ -24,6 +24,10 @@ reset:
   clc  ; native mode
   xce
   rep #$30  ; A/X/Y 16-bit
+  ; We'll start in the 0th bank, but doing a long jump to `fastrom` (which ld65
+  ; will put into the $80th bank, fast rom) will switch us.
+  jml fastrom
+fastrom:
   ; Clear PPU registers
   ldx #$33
 @loop:  stz $2100,x
