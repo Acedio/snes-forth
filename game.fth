@@ -24,7 +24,7 @@ CREATE BG-TICKS 1 CELLS ALLOT
 BANK!
 
 : 2BIT-TILES
-  2* 2* 2* 2*
+  16*
 ;
 
 32 2* 2* 2* 2* 2* CONSTANT TILEMAP-TILE-COUNT
@@ -224,10 +224,6 @@ BANK!
     ENDOF
     3 OF
       COPY-BG1
-
-      4 NMI-STATE !
-    ENDOF
-    4 OF
       COPY-OAM
 
       PULSE-BG
@@ -255,84 +251,95 @@ BANK!
     \ Give text tiles priority over others. (bit 5 of $2105 ensures they show
     \ over other backgrounds).
     0x2000 OR I !
-  1 CELLS +LOOP DROP ;
+  1 CELLS +LOOP DROP
 ;
 
-: BALL-ENABLED ; \ First cell.
-: BALL-Y 1 CELLS + ;
-: BALL-X 2 CELLS + ;
-: BALLS DUP 2* + CELLS ;
+: GOAL-ENABLED ; \ First cell.
+: GOAL-Y 1 CELLS + ;
+: GOAL-X 2 CELLS + ;
+: GOALS DUP 2* + CELLS ;
 
-8 CONSTANT MAX-BALLS
+8 CONSTANT MAX-GOALS
 
 BANK@
 LOWRAM BANK!
 CREATE PLAYER-X 1 CELLS ALLOT
 CREATE PLAYER-Y 1 CELLS ALLOT
-CREATE BALL-ARRAY MAX-BALLS BALLS ALLOT
+CREATE GOAL-ARRAY MAX-GOALS GOALS ALLOT
 BANK!
 
-: CLEAR-BALLS
-  BALL-ARRAY MAX-BALLS BALLS EACH DO
-    FALSE I BALL-ENABLED !
-  1 BALLS +LOOP
+: CLEAR-GOALS
+  GOAL-ARRAY MAX-GOALS GOALS EACH DO
+    FALSE I GOAL-ENABLED !
+  1 GOALS +LOOP
 ;
 
 ( y x -- )
-: ADD-BALL
-  BALL-ARRAY MAX-BALLS BALLS EACH DO
-    I BALL-ENABLED @ 0= IF
-      TRUE I BALL-ENABLED !
-      I BALL-X !
-      I BALL-Y !
+: ADD-GOAL
+  GOAL-ARRAY MAX-GOALS GOALS EACH DO
+    I GOAL-ENABLED @ 0= IF
+      TRUE I GOAL-ENABLED !
+      I GOAL-X !
+      I GOAL-Y !
       UNLOOP EXIT
     THEN
-  1 BALLS +LOOP
+  1 GOALS +LOOP
   BREAKPOINT
 ;
 
-4 CONSTANT FIRST-BALL-OAM-OBJECT
+4 CONSTANT FIRST-GOAL-OAM-OBJECT
 
-: DRAW-BALL
+: DRAW-GOAL
   >R
-  SHADOW-OAM-LOWER FIRST-BALL-OAM-OBJECT R@ + OAM-LOWER-OBJECTS +
-  \ 0x02 = ball sprite
-  0x02 OVER OAM-TILE-NUMBER C!
+  SHADOW-OAM-LOWER FIRST-GOAL-OAM-OBJECT R@ + OAM-LOWER-OBJECTS +
+  \ 0x04 = goal sprite
+  0x04 OVER OAM-TILE-NUMBER C!
   0x00 SWAP OAM-ATTRIBUTES C!
 
-  BALL-ARRAY R@ BALLS +
+  GOAL-ARRAY R@ GOALS +
 
-  DUP BALL-ENABLED @ IF
-    DUP BALL-Y @ 2* 2* 2* 2*
-    SWAP BALL-X @ 2* 2* 2* 2*
+  DUP GOAL-ENABLED @ IF
+    DUP GOAL-Y @ 16*
+    SWAP GOAL-X @ 16*
   ELSE
     DROP
     \ Hide the ball.
     -32 -32
   THEN
-  FIRST-BALL-OAM-OBJECT R@ + OAM-OBJECT-COORDS!
-  TRUE FIRST-BALL-OAM-OBJECT R> + OAM-OBJECT-LARGE!
+  FIRST-GOAL-OAM-OBJECT R@ + OAM-OBJECT-COORDS!
+  TRUE FIRST-GOAL-OAM-OBJECT R> + OAM-OBJECT-LARGE!
 ;
 
-: DRAW-BALLS
-  MAX-BALLS 0 DO
-    I DRAW-BALL
+: DRAW-GOALS
+  MAX-GOALS 0 DO
+    I DRAW-GOAL
   LOOP
 ;
 
 0x0400 CONSTANT WALL-TILE
-0x0402 CONSTANT HOLE-TILE
+0x0402 CONSTANT BALL-TILE
 0x0404 CONSTANT EMPTY-TILE
 
 ( y x -- )
 : SET-PLAYER-COORDS
-  2* 2* 2* 2* PLAYER-X !
-  2* 2* 2* 2* PLAYER-Y !
+  PLAYER-X !
+  PLAYER-Y !
+;
+
+( y x -- &tile )
+: TILE-ADDR
+  SWAP 32 PPU-MULT DROP + CELLS
+  BG1-SHADOW-TILEMAP +
+;
+
+( y x -- tile )
+: TILE-AT
+  TILE-ADDR @
 ;
 
 ( addr u )
 : LOAD-LEVEL-STRING
-  CLEAR-BALLS
+  CLEAR-GOALS
 
   DROP 0 0 ROT BG1-SHADOW-TILEMAP TILEMAP-TILE-COUNT CELLS EACH DO
     BEGIN
@@ -346,8 +353,8 @@ BANK!
     CASE
       [CHAR]   OF                              EMPTY-TILE I ! ENDOF
       [CHAR] # OF                              WALL-TILE  I ! ENDOF
-      [CHAR] r OF                              HOLE-TILE  I ! ENDOF
-      [CHAR] R OF >R 2DUP ADD-BALL          R> EMPTY-TILE I ! ENDOF
+      [CHAR] R OF                              BALL-TILE  I ! ENDOF
+      [CHAR] r OF >R 2DUP ADD-GOAL          R> EMPTY-TILE I ! ENDOF
       [CHAR] @ OF >R 2DUP SET-PLAYER-COORDS R> EMPTY-TILE I ! ENDOF
       >R EMPTY-TILE I ! R>
     ENDCASE
@@ -363,11 +370,12 @@ BANK!
 : LOAD-LEVEL-1
   S"                                |
       #####                    |
+      #   #                    |
       #rR #                    |
       ## @#                    |
-       ####                    |
+                               |
        R                       |
-       R                       |
+       R  ##                   |
        R                       |
        R                       |
  # # ### # #                   |
@@ -375,7 +383,6 @@ BANK!
  ###  #  # #                   |
  # #  #                        |
  # # ### # #                   |
-                               |
                                |
                                |
                                |
@@ -402,17 +409,20 @@ BANK!
 3 CONSTANT PLAYER-OAM-OBJECT
 
 : DRAW-PLAYER
-  (
-  PLAYER-X @ 0xFF AND
-  PLAYER-Y @ 0xFF AND SWAPBYTES OR
-  SHADOW-OAM-LOWER PLAYER-OAM-OBJECT OAM-LOWER-OBJECTS OAM-COORDINATES + !
-  )
-  PLAYER-Y @ PLAYER-X @ PLAYER-OAM-OBJECT OAM-OBJECT-COORDS!
+  PLAYER-Y @ 16* PLAYER-X @ 16* PLAYER-OAM-OBJECT OAM-OBJECT-COORDS!
   TRUE PLAYER-OAM-OBJECT OAM-OBJECT-LARGE!
+;
 
-  \ TODO: Find a nice way to index into upper OAM entries so we can use
-  \ PLAYER-OAM-OBJECT here instead of a baked-in bitmask.
-  \ PLAYER-X @ 0x100 AND LSR LSR 0x80 OR 0xC0 SHADOW-OAM-UPPER MASK!
+\ Move ball at (x, y) to (nx, ny)
+( y x ny nx -- moved )
+: MOVE-BALL
+  2DUP TILE-AT EMPTY-TILE = IF
+    TILE-ADDR BALL-TILE SWAP !
+    TILE-ADDR EMPTY-TILE SWAP !
+    TRUE EXIT
+  THEN
+  2DROP 2DROP
+  FALSE
 ;
 
 : SNES-MAIN
@@ -426,7 +436,7 @@ BANK!
   0 PLAYER-X !
   0 PLAYER-Y !
 
-  CLEAR-BALLS
+  CLEAR-GOALS
 
   BG1-SHADOW-TILEMAP ZERO-TILEMAP
   BG3-SHADOW-TILEMAP ZERO-TILEMAP
@@ -451,7 +461,7 @@ cool, if a bit slow...
   0x02   SHADOW-OAM-LOWER 2 OAM-LOWER-OBJECTS OAM-TILE-NUMBER + C!
   0x30   SHADOW-OAM-LOWER 2 OAM-LOWER-OBJECTS OAM-ATTRIBUTES + C!
 
-  DRAW-BALLS
+  DRAW-GOALS
 
   0
   BEGIN
@@ -484,18 +494,65 @@ cool, if a bit slow...
 
     READ-JOY1
 
-    JOY1-HELD @ BUTTON-UP AND 0<> IF
-      PLAYER-Y @ 1 - PLAYER-Y !
-    THEN
-    JOY1-HELD @ BUTTON-DOWN AND 0<> IF
-      PLAYER-Y @ 1 + PLAYER-Y !
-    THEN
-    JOY1-HELD @ BUTTON-LEFT AND 0<> IF
-      PLAYER-X @ 1 - PLAYER-X !
-    THEN
-    JOY1-HELD @ BUTTON-RIGHT AND 0<> IF
-      PLAYER-X @ 1 + PLAYER-X !
-    THEN
+    TRUE CASE
+      JOY1-PRESSED @ BUTTON-UP AND 0<> OF
+        \ TODO: Pull out all this common logic.
+        PLAYER-Y @ 1- PLAYER-X @
+        2DUP TILE-AT CASE
+          EMPTY-TILE OF PLAYER-X ! PLAYER-Y ! ENDOF
+          BALL-TILE OF
+            2DUP OVER 1- OVER MOVE-BALL IF
+              PLAYER-X ! PLAYER-Y !
+            ELSE
+              2DROP
+            THEN
+          ENDOF
+          >R 2DROP R>
+        ENDCASE
+      ENDOF
+      JOY1-PRESSED @ BUTTON-DOWN AND 0<> OF
+        PLAYER-Y @ 1+ PLAYER-X @
+        2DUP TILE-AT CASE
+          EMPTY-TILE OF PLAYER-X ! PLAYER-Y ! ENDOF
+          BALL-TILE OF
+            2DUP OVER 1+ OVER MOVE-BALL IF
+              PLAYER-X ! PLAYER-Y !
+            ELSE
+              2DROP
+            THEN
+          ENDOF
+          >R 2DROP R>
+        ENDCASE
+      ENDOF
+      JOY1-PRESSED @ BUTTON-LEFT AND 0<> OF
+        PLAYER-Y @ PLAYER-X @ 1-
+        2DUP TILE-AT CASE
+          EMPTY-TILE OF PLAYER-X ! PLAYER-Y ! ENDOF
+          BALL-TILE OF
+            2DUP 2DUP 1- MOVE-BALL IF
+              PLAYER-X ! PLAYER-Y !
+            ELSE
+              2DROP
+            THEN
+          ENDOF
+          >R 2DROP R>
+        ENDCASE
+      ENDOF
+      JOY1-PRESSED @ BUTTON-RIGHT AND 0<> OF
+        PLAYER-Y @ PLAYER-X @ 1+
+        2DUP TILE-AT CASE
+          EMPTY-TILE OF PLAYER-X ! PLAYER-Y ! ENDOF
+          BALL-TILE OF
+            2DUP 2DUP 1+ MOVE-BALL IF
+              PLAYER-X ! PLAYER-Y !
+            ELSE
+              2DROP
+            THEN
+          ENDOF
+          >R 2DROP R>
+        ENDCASE
+      ENDOF
+    ENDCASE
 
     DRAW-PLAYER
   FALSE UNTIL

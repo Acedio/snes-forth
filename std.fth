@@ -58,6 +58,7 @@
 
 : 2>R R> -ROT SWAP >R >R >R ;
 : 2R> R> R> R> ROT >R SWAP ;
+: 2R@ R> R@ SWAP >R R@ ; LABEL _2R_FETCH
 
 \ Push control vars onto the return stack.
 ( TO FROM -- r: TO FROM )

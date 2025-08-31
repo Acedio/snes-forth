@@ -17,3 +17,5 @@ CODE NMI-WAIT
   wai
   rts
 END-CODE
+
+: 16* 2* 2* 2* 2* ;
