@@ -413,7 +413,13 @@ cool, if a bit slow...
     HIBYTE 0x02 OR 2* 2* 0x0C SHADOW-OAM-UPPER MASK!
 
     DUP LSR
-    DUP 0xFF AND 0x4000 OR SHADOW-OAM-LOWER 8 + !
+    \ X
+    DUP 0xFF AND
+    \ Y
+    DUP 2* 2* 2* 0xFF AND SIN-LUT
+      0x7FFF + LSR LSR LSR LSR 0xFF00 AND 0x4000 +
+    \ Combine
+    OR SHADOW-OAM-LOWER 8 + !
     HIBYTE 0x02 OR 2* 2* 2* 2* 0x30 SHADOW-OAM-UPPER MASK!
 
     TRUE NMI-READY !

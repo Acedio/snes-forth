@@ -1243,8 +1243,13 @@ binaryOpWithLabel("+", "_PLUS", function(a,b)
   return a + b
 end, "clc\n  adc")
 
+addNative{name="SIN", label="_SIN", runtime=function()
+  dataStack:push(math.floor(0x7FFF * math.sin(dataStack:pop() * 2 * math.pi / 0x10000)) & 0xFFFF)
+  rts()
+end}
+
 addNative{name="*", label="_MULTIPLY", runtime=function()
-  dataStack.push((dataStack:pop() * dataStack:pop()) & 0xFFFF)
+  dataStack:push((dataStack:pop() * dataStack:pop()) & 0xFFFF)
   rts()
 end}
 

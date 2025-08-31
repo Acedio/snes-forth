@@ -22,7 +22,7 @@ snes-forth.lua: bytestack.lua  cellstack.lua  dataspace.lua  dictionary.lua  inp
 tests.out.fth: std.fth snes-std.fth tests/tests.fth
 	cat $^ > $@
 
-game.out.fth: std.fth snes-std.fth joypad.fth maptiles.tiles.fth cat.sprites.fth font.fth game.fth 
+game.out.fth: std.fth snes-std.fth joypad.fth sin-lut.fth maptiles.tiles.fth cat.sprites.fth font.fth game.fth 
 	cat $^ > $@
 
 tests: tests.smc tests.mlb

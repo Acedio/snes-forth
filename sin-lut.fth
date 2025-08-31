@@ -1,0 +1,15 @@
+: POPULATE-SIN-TABLE
+  256 0 DO
+    I SWAPBYTES SIN ,
+  LOOP
+;
+
+CREATE SIN-TABLE
+
+POPULATE-SIN-TABLE
+
+\ x -- sin(x)
+\ Output ranges from 0x8001 to 0x7FFF.
+: SIN-LUT
+  CELLS SIN-TABLE + @
+;
