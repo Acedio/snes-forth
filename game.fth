@@ -171,12 +171,6 @@ BANK!
   SET-BACKDROP-COLOR
   ;
 
-BANK@
-LOWRAM BANK!
-CREATE PLAYER-X 1 CELLS ALLOT
-CREATE PLAYER-Y 1 CELLS ALLOT
-BANK!
-
 : SNES-NMI
   NMI-READY @ 0= IF
     \ TODO: We missed a frame. Find a way to track/signal this.
@@ -264,41 +258,83 @@ BANK!
   1 CELLS +LOOP DROP ;
 ;
 
-: INIT-LEVEL-TILEMAP
-  S"                                 
-      #####                     
-      #Rr #                     
-      ## @#                     
-       ####                     
-       R                        
-       R                        
-       R                        
-       R                        
- # # ### # #                    
- # #  #RR#R#                    
- ###  #  # #                    
- # #  #                         
- # # ### # #                    
-                                
-                                
-                                
-                                
-                                
-                                
-                                
-                                
-                                
-                                
-                                
-                                
-                                
-                                
-                                
-                                
-                                
-                                "
-  ( addr u )
-  DROP BG1-SHADOW-TILEMAP TILEMAP-TILE-COUNT CELLS EACH DO
+: BALL-ENABLED ; \ First cell.
+: BALL-Y 1 CELLS + ;
+: BALL-X 2 CELLS + ;
+: BALLS DUP 2* + CELLS ;
+
+8 CONSTANT MAX-BALLS
+
+BANK@
+LOWRAM BANK!
+CREATE PLAYER-X 1 CELLS ALLOT
+CREATE PLAYER-Y 1 CELLS ALLOT
+CREATE BALL-ARRAY MAX-BALLS BALLS ALLOT
+BANK!
+
+: CLEAR-BALLS
+  BALL-ARRAY MAX-BALLS BALLS EACH DO
+    FALSE I BALL-ENABLED !
+  1 BALLS +LOOP
+;
+
+( y x -- )
+: ADD-BALL
+  BALL-ARRAY MAX-BALLS BALLS EACH DO
+    I BALL-ENABLED @ 0= IF
+      TRUE I BALL-ENABLED !
+      I BALL-X !
+      I BALL-Y !
+      UNLOOP EXIT
+    THEN
+  1 BALLS +LOOP
+  BREAKPOINT
+;
+
+4 CONSTANT FIRST-BALL-OAM-OBJECT
+
+: DRAW-BALL
+  >R
+  SHADOW-OAM-LOWER FIRST-BALL-OAM-OBJECT R@ + OAM-LOWER-OBJECTS +
+  \ 0x02 = ball sprite
+  0x02 OVER OAM-TILE-NUMBER C!
+  0x00 SWAP OAM-ATTRIBUTES C!
+
+  BALL-ARRAY R@ BALLS +
+
+  DUP BALL-ENABLED @ IF
+    DUP BALL-Y @ 2* 2* 2* 2*
+    SWAP BALL-X @ 2* 2* 2* 2*
+  ELSE
+    DROP
+    \ Hide the ball.
+    -32 -32
+  THEN
+  FIRST-BALL-OAM-OBJECT R@ + OAM-OBJECT-COORDS!
+  TRUE FIRST-BALL-OAM-OBJECT R> + OAM-OBJECT-LARGE!
+;
+
+: DRAW-BALLS
+  MAX-BALLS 0 DO
+    I DRAW-BALL
+  LOOP
+;
+
+0x0400 CONSTANT WALL-TILE
+0x0402 CONSTANT HOLE-TILE
+0x0404 CONSTANT EMPTY-TILE
+
+( y x -- )
+: SET-PLAYER-COORDS
+  2* 2* 2* 2* PLAYER-X !
+  2* 2* 2* 2* PLAYER-Y !
+;
+
+( addr u )
+: LOAD-LEVEL-STRING
+  CLEAR-BALLS
+
+  DROP 0 0 ROT BG1-SHADOW-TILEMAP TILEMAP-TILE-COUNT CELLS EACH DO
     BEGIN
       DUP 1+ SWAP
       C@
@@ -308,20 +344,76 @@ BANK!
     REPEAT
     \ Convert to text tile offset (missing the first 0x20 control characters).
     CASE
-      [CHAR] # OF 0x0400 ENDOF
-      [CHAR] R OF 0x0402 ENDOF
-      [CHAR] r OF 0x0402 ENDOF
-      [CHAR] @ OF 0x0402 ENDOF
-      [CHAR]   OF 0x0404 ENDOF
-      >R 0x0404 R>
+      [CHAR]   OF                              EMPTY-TILE I ! ENDOF
+      [CHAR] # OF                              WALL-TILE  I ! ENDOF
+      [CHAR] r OF                              HOLE-TILE  I ! ENDOF
+      [CHAR] R OF >R 2DUP ADD-BALL          R> EMPTY-TILE I ! ENDOF
+      [CHAR] @ OF >R 2DUP SET-PLAYER-COORDS R> EMPTY-TILE I ! ENDOF
+      >R EMPTY-TILE I ! R>
     ENDCASE
-    I !
+    \ Increment X, then overflow to Y and reset if necessary.
+    >R 1+ DUP 32 >= IF
+      DROP 1+ 0
+    THEN R>
   1 CELLS +LOOP
-  \ Drop the string indexing address.
-  DROP ;
+  \ Drop the string indexing address, X, and Y
+  DROP DROP DROP
+;
+
+: LOAD-LEVEL-1
+  S"                                |
+      #####                    |
+      #rR #                    |
+      ## @#                    |
+       ####                    |
+       R                       |
+       R                       |
+       R                       |
+       R                       |
+ # # ### # #                   |
+ # #  #  # #                   |
+ ###  #  # #                   |
+ # #  #                        |
+ # # ### # #                   |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |"
+  LOAD-LEVEL-STRING
+;
 
 : TILEMAP-XY
   32 PPU-MULT DROP + ;
+
+3 CONSTANT PLAYER-OAM-OBJECT
+
+: DRAW-PLAYER
+  (
+  PLAYER-X @ 0xFF AND
+  PLAYER-Y @ 0xFF AND SWAPBYTES OR
+  SHADOW-OAM-LOWER PLAYER-OAM-OBJECT OAM-LOWER-OBJECTS OAM-COORDINATES + !
+  )
+  PLAYER-Y @ PLAYER-X @ PLAYER-OAM-OBJECT OAM-OBJECT-COORDS!
+  TRUE PLAYER-OAM-OBJECT OAM-OBJECT-LARGE!
+
+  \ TODO: Find a nice way to index into upper OAM entries so we can use
+  \ PLAYER-OAM-OBJECT here instead of a baked-in bitmask.
+  \ PLAYER-X @ 0x100 AND LSR LSR 0x80 OR 0xC0 SHADOW-OAM-UPPER MASK!
+;
 
 : SNES-MAIN
   FALSE NMI-READY !
@@ -333,6 +425,8 @@ BANK!
 
   0 PLAYER-X !
   0 PLAYER-Y !
+
+  CLEAR-BALLS
 
   BG1-SHADOW-TILEMAP ZERO-TILEMAP
   BG3-SHADOW-TILEMAP ZERO-TILEMAP
@@ -349,13 +443,15 @@ cool, if a bit slow...
         :D :D :D :D             "
   DROP [ 32 2* 2* 2* COMPILE-LIT ] BG3-SHADOW-TILEMAP 0 10 TILEMAP-XY CELLS + COPY-STRING-TO-TILES
 
-  INIT-LEVEL-TILEMAP
+  LOAD-LEVEL-1
 
   0x7000 SHADOW-OAM-LOWER 0 OAM-LOWER-OBJECTS OAM-COORDINATES + !
   0x02   SHADOW-OAM-UPPER 0 OAM-UPPER-OBJECTS MASK!
 
   0x02   SHADOW-OAM-LOWER 2 OAM-LOWER-OBJECTS OAM-TILE-NUMBER + C!
   0x30   SHADOW-OAM-LOWER 2 OAM-LOWER-OBJECTS OAM-ATTRIBUTES + C!
+
+  DRAW-BALLS
 
   0
   BEGIN
@@ -401,10 +497,6 @@ cool, if a bit slow...
       PLAYER-X @ 1 + PLAYER-X !
     THEN
 
-    PLAYER-X @ 0xFF AND
-    PLAYER-Y @ 0xFF AND SWAPBYTES OR
-    SHADOW-OAM-LOWER 3 OAM-LOWER-OBJECTS OAM-COORDINATES + !
-
-    PLAYER-X @ 0x100 AND LSR LSR 0x80 OR 0xC0 SHADOW-OAM-UPPER MASK!
+    DRAW-PLAYER
   FALSE UNTIL
 ;

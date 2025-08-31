@@ -64,3 +64,48 @@ BANK!
   \ Start DMA transfer.
   0x01 0x420B C!
 ;
+
+( is-set oam-index -- )
+: OAM-OBJECT-LARGE!
+  >R
+  0x02 AND \ Value to set
+  0x02     \ Mask
+  R@ 0x03 AND \ Find the number of shifts needed
+  BEGIN
+    DUP 0 <>
+  WHILE
+    >R
+      2* 2* SWAP 2* 2* SWAP
+    R> 1-
+  REPEAT
+  DROP
+  \ ( value mask -- )
+  SHADOW-OAM-UPPER R> OAM-UPPER-OBJECTS + MASK!
+;
+
+( is-set oam-index -- )
+: OAM-OBJECT-NEGATIVE-X!
+  >R
+  0x01 AND \ Value to set
+  0x01     \ Mask
+  R@ 0x03 AND \ Find the number of shifts needed
+  BEGIN
+    DUP 0 <>
+  WHILE
+    >R
+      2* 2* SWAP 2* 2* SWAP
+    R> 1-
+  REPEAT
+  DROP
+  \ ( value mask -- )
+  SHADOW-OAM-UPPER R> OAM-UPPER-OBJECTS + MASK!
+;
+
+( y x oam-index -- )
+: OAM-OBJECT-COORDS!
+  >R
+  DUP 0x0100 AND 0<> R@ OAM-OBJECT-NEGATIVE-X!
+  0xFF AND SWAP
+  SWAPBYTES 0xFF00 AND OR
+  SHADOW-OAM-LOWER R> OAM-LOWER-OBJECTS + OAM-COORDINATES !
+;
