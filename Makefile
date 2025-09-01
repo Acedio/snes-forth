@@ -22,23 +22,22 @@ snes-forth.lua: bytestack.lua  cellstack.lua  dataspace.lua  dictionary.lua  inp
 tests.out.fth: std.fth snes-std.fth tests/tests.fth
 	cat $^ > $@
 
-game.out.fth: std.fth snes-std.fth joypad.fth sin-lut.fth oam.fth maptiles.tiles.fth sprites.sprites.fth font.fth levels.fth game.fth 
+game.out.fth: std.fth snes-std.fth joypad.fth sin-lut.fth oam.fth maptiles.tiles.fth pal1sprites.tiles.fth pal2sprites.tiles.fth font.fth levels.fth game.fth 
 	cat $^ > $@
 
 tests: tests.smc tests.mlb
 	echo tests
 
-%.sprites.pal.out %.sprites.tiles.out %.sprites.map.out: %.png
-	superfamiconv -i $^ -p $*.sprites.pal.out -t $*.sprites.tiles.out -m $*.sprites.map.out -S -W 8 -H 8 -B 4 --no-discard --no-flip --color-zero FF00FF
+%.pal.out: %.png 
+	superfamiconv palette -i $^ -d $*.pal.out -W 16 -H 16 -S
 
-# TODO: Do sprites and tiles actually need to be separated?
-%.tiles.pal.out %.tiles.tiles.out %.tiles.map.out: %.png
-	superfamiconv -i $^ -p $*.tiles.pal.out -t $*.tiles.tiles.out -m $*.tiles.map.out -S -W 8 -H 8 -B 4 --no-discard --no-flip --color-zero FF00FF
+%.tiles.out: %.pal.out %.png
+	superfamiconv tiles -i $*.png -p $*.pal.out -d $*.tiles.out -S
 
-%.tiles.fth: %.tiles.pal.out %.tiles.tiles.out %.tiles.map.out
-	./tiles-to-forth.lua $(shell echo '$*' | tr '[:lower:]' '[:upper:]') $^ > $@
+%.map.out: %.tiles.out %.pal.out %.png
+	superfamiconv map -i $*.png -p $*.pal.out -t $*.tiles.out -d $*.map.out
 
-%.sprites.fth: %.sprites.pal.out %.sprites.tiles.out %.sprites.map.out
+%.tiles.fth: %.pal.out %.tiles.out %.map.out
 	./tiles-to-forth.lua $(shell echo '$*' | tr '[:lower:]' '[:upper:]') $^ > $@
 
 clean:
