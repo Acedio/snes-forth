@@ -338,11 +338,11 @@ BANK!
   TILE-ADDR @
 ;
 
-( addr u )
-: LOAD-LEVEL-STRING
+( addr -- )
+: LOAD-LEVEL-FROM-STRING
   CLEAR-GOALS
 
-  DROP 0 0 ROT BG1-SHADOW-TILEMAP TILEMAP-TILE-COUNT CELLS EACH DO
+  0 0 ROT BG1-SHADOW-TILEMAP TILEMAP-TILE-COUNT CELLS EACH DO
     BEGIN
       DUP 1+ SWAP
       C@
@@ -368,114 +368,9 @@ BANK!
   DROP DROP DROP
 ;
 
-(
-: LOAD-LEVEL-X
-  S"                                |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |"
-  LOAD-LEVEL-STRING
-;
-)
-
-: LOAD-LEVEL-1
-  S"                                |
- #######                       |
- # @ Rr#                       |
- #######                       |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |"
-  LOAD-LEVEL-STRING
-;
-
-: LOAD-LEVEL-2
-  S"                                |
-                               |
-    #####                      |
-  ###   #                      |
-  #   R ####                   |
-  # ## ## r#                   |
-  # R  R @r#                   |
-  ###   # r#                   |
-    ########                   |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |
-                               |"
-  LOAD-LEVEL-STRING
+( level-id -- )
+: LOAD-LEVEL
+  LEVEL-STRING LOAD-LEVEL-FROM-STRING
 ;
 
 : CHECK-WIN
@@ -605,7 +500,7 @@ cool, if a bit slow...
   DROP [ 32 2* 2* 2* COMPILE-LIT ] BG3-SHADOW-TILEMAP 0 10 TILEMAP-XY CELLS + COPY-STRING-TO-TILES
   )
 
-  LOAD-LEVEL-1
+  LEVEL @ LOAD-LEVEL
 
   0x7000 SHADOW-OAM-LOWER 0 OAM-LOWER-OBJECTS OAM-COORDINATES + !
   0x02   SHADOW-OAM-UPPER 0 OAM-UPPER-OBJECTS MASK!
@@ -649,12 +544,10 @@ cool, if a bit slow...
     PLAYER-MOVEMENT
 
     CHECK-WIN IF
-      LEVEL @ 1+ LEVEL !
-      LEVEL 0x01 AND IF
-        LOAD-LEVEL-2
-      ELSE
-        LOAD-LEVEL-1
-      THEN
+      LEVEL @ 1+ DUP NUM-LEVELS >= IF
+        DROP 0
+      THEN LEVEL !
+      LEVEL @ LOAD-LEVEL
     THEN
 
     DRAW-PLAYER
