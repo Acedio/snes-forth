@@ -357,7 +357,9 @@ BANK!
       [CHAR] R OF                              BALL-TILE  I ! ENDOF
       [CHAR] r OF >R 2DUP ADD-GOAL          R> EMPTY-TILE I ! ENDOF
       [CHAR] @ OF >R 2DUP SET-PLAYER-COORDS R> EMPTY-TILE I ! ENDOF
-      >R EMPTY-TILE I ! R>
+      \ Don't need to use >R for the default case here because we don't care
+      \ about what is on the stack (and we need to access I).
+      EMPTY-TILE I !
     ENDCASE
     \ Increment X, then overflow to Y and reset if necessary.
     >R 1+ DUP 32 >= IF
@@ -371,6 +373,7 @@ BANK!
 ( level-id -- )
 : LOAD-LEVEL
   LEVEL-STRING LOAD-LEVEL-FROM-STRING
+  DRAW-GOALS
 ;
 
 : CHECK-WIN
@@ -508,8 +511,6 @@ cool, if a bit slow...
   0x02   SHADOW-OAM-LOWER 2 OAM-LOWER-OBJECTS OAM-TILE-NUMBER + C!
   0x30   SHADOW-OAM-LOWER 2 OAM-LOWER-OBJECTS OAM-ATTRIBUTES + C!
 
-  DRAW-GOALS
-
   0
   BEGIN
     1+
@@ -542,6 +543,10 @@ cool, if a bit slow...
     READ-JOY1
 
     PLAYER-MOVEMENT
+
+    JOY1-PRESSED @ BUTTON-SELECT AND 0<> IF
+      LEVEL @ LOAD-LEVEL
+    THEN
 
     CHECK-WIN IF
       LEVEL @ 1+ DUP NUM-LEVELS >= IF
