@@ -263,6 +263,7 @@ BANK!
 
 BANK@
 LOWRAM BANK!
+CREATE LEVEL 1 CELLS ALLOT
 CREATE PLAYER-X 1 CELLS ALLOT
 CREATE PLAYER-Y 1 CELLS ALLOT
 CREATE GOAL-ARRAY MAX-GOALS GOALS ALLOT
@@ -367,22 +368,23 @@ BANK!
   DROP DROP DROP
 ;
 
-: LOAD-LEVEL-1
+(
+: LOAD-LEVEL-X
   S"                                |
-      #####                    |
-      #   #                    |
-      #rR #                    |
-      ## @#                    |
                                |
-       R                       |
-       R  ##                   |
-       R                       |
-       R                       |
- # # ### # #                   |
- # #  #  # #                   |
- ###  #  # #                   |
- # #  #                        |
- # # ### # #                   |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
                                |
                                |
                                |
@@ -401,6 +403,90 @@ BANK!
                                |
                                |"
   LOAD-LEVEL-STRING
+;
+)
+
+: LOAD-LEVEL-1
+  S"                                |
+ #######                       |
+ # @ Rr#                       |
+ #######                       |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |"
+  LOAD-LEVEL-STRING
+;
+
+: LOAD-LEVEL-2
+  S"                                |
+                               |
+    #####                      |
+  ###   #                      |
+  #   R ####                   |
+  # ## ## r#                   |
+  # R  R @r#                   |
+  ###   # r#                   |
+    ########                   |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |
+                               |"
+  LOAD-LEVEL-STRING
+;
+
+: CHECK-WIN
+  GOAL-ARRAY MAX-GOALS GOALS EACH DO
+    I GOAL-ENABLED @ IF
+      I GOAL-Y @ I GOAL-X @ TILE-AT BALL-TILE <> IF
+        FALSE UNLOOP EXIT
+      THEN
+    THEN
+  1 GOALS +LOOP
+  TRUE
 ;
 
 : TILEMAP-XY
@@ -425,6 +511,68 @@ BANK!
   FALSE
 ;
 
+: PLAYER-MOVEMENT
+  TRUE CASE
+    JOY1-PRESSED @ BUTTON-UP AND 0<> OF
+      \ TODO: Pull out all this common logic.
+      PLAYER-Y @ 1- PLAYER-X @
+      2DUP TILE-AT CASE
+        EMPTY-TILE OF PLAYER-X ! PLAYER-Y ! ENDOF
+        BALL-TILE OF
+          2DUP OVER 1- OVER MOVE-BALL IF
+            PLAYER-X ! PLAYER-Y !
+          ELSE
+            2DROP
+          THEN
+        ENDOF
+        >R 2DROP R>
+      ENDCASE
+    ENDOF
+    JOY1-PRESSED @ BUTTON-DOWN AND 0<> OF
+      PLAYER-Y @ 1+ PLAYER-X @
+      2DUP TILE-AT CASE
+        EMPTY-TILE OF PLAYER-X ! PLAYER-Y ! ENDOF
+        BALL-TILE OF
+          2DUP OVER 1+ OVER MOVE-BALL IF
+            PLAYER-X ! PLAYER-Y !
+          ELSE
+            2DROP
+          THEN
+        ENDOF
+        >R 2DROP R>
+      ENDCASE
+    ENDOF
+    JOY1-PRESSED @ BUTTON-LEFT AND 0<> OF
+      PLAYER-Y @ PLAYER-X @ 1-
+      2DUP TILE-AT CASE
+        EMPTY-TILE OF PLAYER-X ! PLAYER-Y ! ENDOF
+        BALL-TILE OF
+          2DUP 2DUP 1- MOVE-BALL IF
+            PLAYER-X ! PLAYER-Y !
+          ELSE
+            2DROP
+          THEN
+        ENDOF
+        >R 2DROP R>
+      ENDCASE
+    ENDOF
+    JOY1-PRESSED @ BUTTON-RIGHT AND 0<> OF
+      PLAYER-Y @ PLAYER-X @ 1+
+      2DUP TILE-AT CASE
+        EMPTY-TILE OF PLAYER-X ! PLAYER-Y ! ENDOF
+        BALL-TILE OF
+          2DUP 2DUP 1+ MOVE-BALL IF
+            PLAYER-X ! PLAYER-Y !
+          ELSE
+            2DROP
+          THEN
+        ENDOF
+        >R 2DROP R>
+      ENDCASE
+    ENDOF
+  ENDCASE
+;
+
 : SNES-MAIN
   FALSE NMI-READY !
   0 NMI-STATE !
@@ -432,6 +580,8 @@ BANK!
 
   0 JOY1-HELD !
   0 JOY1-PRESSED !
+
+  0 LEVEL !
 
   0 PLAYER-X !
   0 PLAYER-Y !
@@ -443,6 +593,7 @@ BANK!
 
   ZERO-OAM
 
+(
   S"   Testing out this fanciness!   
                                 
 We're not interpreting Forth    
@@ -452,6 +603,7 @@ cool, if a bit slow...
                                 
         :D :D :D :D             "
   DROP [ 32 2* 2* 2* COMPILE-LIT ] BG3-SHADOW-TILEMAP 0 10 TILEMAP-XY CELLS + COPY-STRING-TO-TILES
+  )
 
   LOAD-LEVEL-1
 
@@ -494,65 +646,16 @@ cool, if a bit slow...
 
     READ-JOY1
 
-    TRUE CASE
-      JOY1-PRESSED @ BUTTON-UP AND 0<> OF
-        \ TODO: Pull out all this common logic.
-        PLAYER-Y @ 1- PLAYER-X @
-        2DUP TILE-AT CASE
-          EMPTY-TILE OF PLAYER-X ! PLAYER-Y ! ENDOF
-          BALL-TILE OF
-            2DUP OVER 1- OVER MOVE-BALL IF
-              PLAYER-X ! PLAYER-Y !
-            ELSE
-              2DROP
-            THEN
-          ENDOF
-          >R 2DROP R>
-        ENDCASE
-      ENDOF
-      JOY1-PRESSED @ BUTTON-DOWN AND 0<> OF
-        PLAYER-Y @ 1+ PLAYER-X @
-        2DUP TILE-AT CASE
-          EMPTY-TILE OF PLAYER-X ! PLAYER-Y ! ENDOF
-          BALL-TILE OF
-            2DUP OVER 1+ OVER MOVE-BALL IF
-              PLAYER-X ! PLAYER-Y !
-            ELSE
-              2DROP
-            THEN
-          ENDOF
-          >R 2DROP R>
-        ENDCASE
-      ENDOF
-      JOY1-PRESSED @ BUTTON-LEFT AND 0<> OF
-        PLAYER-Y @ PLAYER-X @ 1-
-        2DUP TILE-AT CASE
-          EMPTY-TILE OF PLAYER-X ! PLAYER-Y ! ENDOF
-          BALL-TILE OF
-            2DUP 2DUP 1- MOVE-BALL IF
-              PLAYER-X ! PLAYER-Y !
-            ELSE
-              2DROP
-            THEN
-          ENDOF
-          >R 2DROP R>
-        ENDCASE
-      ENDOF
-      JOY1-PRESSED @ BUTTON-RIGHT AND 0<> OF
-        PLAYER-Y @ PLAYER-X @ 1+
-        2DUP TILE-AT CASE
-          EMPTY-TILE OF PLAYER-X ! PLAYER-Y ! ENDOF
-          BALL-TILE OF
-            2DUP 2DUP 1+ MOVE-BALL IF
-              PLAYER-X ! PLAYER-Y !
-            ELSE
-              2DROP
-            THEN
-          ENDOF
-          >R 2DROP R>
-        ENDCASE
-      ENDOF
-    ENDCASE
+    PLAYER-MOVEMENT
+
+    CHECK-WIN IF
+      LEVEL @ 1+ LEVEL !
+      LEVEL 0x01 AND IF
+        LOAD-LEVEL-2
+      ELSE
+        LOAD-LEVEL-1
+      THEN
+    THEN
 
     DRAW-PLAYER
   FALSE UNTIL
