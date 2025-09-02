@@ -58,7 +58,7 @@
 
 : 2>R R> -ROT SWAP >R >R >R ;
 : 2R> R> R> R> ROT >R SWAP ;
-: 2R@ R> R@ SWAP >R R@ ; LABEL _2R_FETCH
+: 2R@ R> R> R@ SWAP >R R@ ROT >R ; LABEL _2R_FETCH
 
 \ Push control vars onto the return stack.
 ( TO FROM -- r: TO FROM )
@@ -114,9 +114,9 @@
 ( &c1 &c2 -- )
 \ Swaps the characters at the given addrs.
 : CSWAP!
-  OVER @ OVER @ SWAP
-  ROT !
-  SWAP !
+  OVER C@ OVER C@ SWAP
+  ROT C!
+  SWAP C!
 ;
 
 ( y1 x1 y2 x2 -- y1+y2 x1+x2 )

@@ -300,18 +300,21 @@ BANK!
 : ADD-BALL
   MAX-BALLS 0 DO
     BALL-ARRAY I BALLS +
+    ( y x &ball )
     DUP BALL-ENABLED @ 0= IF
       TRUE OVER BALL-ENABLED !
       ROT OVER BALL-Y !
       BALL-X !
       I UNLOOP EXIT
     THEN
-  1 BALLS +LOOP
+    DROP
+  LOOP
   BREAKPOINT
 ;
 
 4 CONSTANT FIRST-BALL-OAM-OBJECT
 
+( ball-id -- )
 : DRAW-BALL
   >R
   SHADOW-OAM-LOWER FIRST-BALL-OAM-OBJECT R@ + OAM-LOWER-OBJECTS +
@@ -339,6 +342,70 @@ BANK!
   LOOP
 ;
 
+: GOAL-ENABLED ; \ First cell.
+: GOAL-Y 1 CELLS + ;
+: GOAL-X 2 CELLS + ;
+: GOALS DUP 2* + CELLS ;
+
+8 CONSTANT MAX-GOALS
+
+BANK@
+LOWRAM BANK!
+CREATE GOAL-ARRAY MAX-GOALS GOALS ALLOT
+BANK!
+
+: CLEAR-GOALS
+  GOAL-ARRAY MAX-GOALS GOALS EACH DO
+    FALSE I GOAL-ENABLED !
+  1 GOALS +LOOP
+;
+
+( y x -- )
+: ADD-GOAL
+  MAX-GOALS 0 DO
+    GOAL-ARRAY I GOALS +
+    ( y x &goal )
+    DUP GOAL-ENABLED @ 0= IF
+      TRUE OVER GOAL-ENABLED !
+      ROT OVER GOAL-Y !
+      GOAL-X !
+      UNLOOP EXIT
+    THEN
+    DROP
+  LOOP
+  BREAKPOINT
+;
+
+0x14 CONSTANT FIRST-GOAL-OAM-OBJECT
+
+: DRAW-GOAL
+  >R
+  SHADOW-OAM-LOWER FIRST-GOAL-OAM-OBJECT R@ + OAM-LOWER-OBJECTS +
+  \ 0x08 = goal sprite (TODO: is it?)
+  0x08 OVER OAM-TILE-NUMBER C!
+  \ TODO: Priority
+  0x00 SWAP OAM-ATTRIBUTES C!
+
+  GOAL-ARRAY R@ GOALS +
+
+  DUP GOAL-ENABLED @ IF
+    DUP GOAL-Y @ 16*
+    SWAP GOAL-X @ 16*
+  ELSE
+    DROP
+    \ Hide the goal
+    -32 -32
+  THEN
+  FIRST-GOAL-OAM-OBJECT R@ + OAM-OBJECT-COORDS!
+  TRUE FIRST-GOAL-OAM-OBJECT R> + OAM-OBJECT-LARGE!
+;
+
+: DRAW-GOALS
+  MAX-GOALS 0 DO
+    I DRAW-GOAL
+  LOOP
+;
+
 ( y x -- )
 : SET-PLAYER-COORDS
   PLAYER-X !
@@ -355,7 +422,6 @@ BANK!
 \ These are word constants, but will be stored as bytes in the level map.
 0x0000 CONSTANT EMPTY-TILE
 0x0001 CONSTANT WALL-TILE
-0x0010 CONSTANT GOAL-RED-TILE
 \ TODO: Other goal tiles.
 0x0020 CONSTANT BALL-0-TILE \ Ball 1 is BALL-0-TILE 1+, etc
 
@@ -387,7 +453,6 @@ BANK!
   LEVEL-MAP MAP-TILES-COUNT MAP-TILES EACH DO
     I C@ CASE
       EMPTY-TILE OF 0x0400 ENDOF
-      GOAL-RED-TILE OF 0x0804 ENDOF
       WALL-TILE OF 0x0420 ENDOF
       >R 0x0400 R>
     ENDCASE
@@ -411,6 +476,7 @@ BANK!
 ( addr -- )
 : LOAD-LEVEL-FROM-STRING
   CLEAR-BALLS
+  CLEAR-GOALS
 
   \ Keep track of Y and X
   0 0 ROT
@@ -420,7 +486,8 @@ BANK!
     CASE
       [CHAR]   OF                                   EMPTY-TILE    ENDOF
       [CHAR] # OF                                   WALL-TILE     ENDOF
-      [CHAR] r OF                                   GOAL-RED-TILE ENDOF
+      \ TODO: Set goal color.
+      [CHAR] r OF >R 2DUP R> -ROT ADD-GOAL          EMPTY-TILE    ENDOF
       \ TODO: Set ball color.
       \ Set the ball tile based on the index returned by ADD-BALL.
       [CHAR] R OF >R 2DUP R> -ROT ADD-BALL          BALL-0-TILE + ENDOF
@@ -443,17 +510,7 @@ BANK!
   LEVEL-STRING LOAD-LEVEL-FROM-STRING
   DRAW-LEVEL
   DRAW-BALLS
-;
-
-: CHECK-WIN
-  BALL-ARRAY MAX-BALLS BALLS EACH DO
-    I BALL-ENABLED @ IF
-      I BALL-Y @ I BALL-X @ TILE-AT GOAL-RED-TILE <> IF
-        FALSE UNLOOP EXIT
-      THEN
-    THEN
-  1 BALLS +LOOP
-  TRUE
+  DRAW-GOALS
 ;
 
 : TILEMAP-XY
@@ -465,12 +522,11 @@ BANK!
   SWAP BALL-0-TILE MAX-BALLS + < AND
 ;
 
-( dy dx ball-id -- can-move )
+( dy dx &ball -- can-move )
 : BALL-CAN-MOVE?
-  BALLS BALL-ARRAY +
-  SWAP OVER
-  BALL-Y @ + -ROT
-  BALL-X @ +
+  >R
+  R@ BALL-X @ + SWAP
+  R> BALL-Y @ + SWAP
   TILE-AT EMPTY-TILE =
 ;
 
@@ -484,17 +540,19 @@ BANK!
 
 ( dy dx ball-id -- moved )
 : MOVE-BALL
-  >R
+  DUP >R
+  BALLS BALL-ARRAY + >R
+  ( dy dx )
   2DUP R@ BALL-CAN-MOVE? 0= IF
-    2DROP R> DROP
+    2DROP R> R> DROP DROP
     FALSE EXIT
   THEN
   \ Update tilemap and array.
   2DUP
-  R@ BALL-X @ R@ BALL-Y @ MOVE-TILEMAP-BALL
+  R@ BALL-Y @ R@ BALL-X @ MOVE-TILEMAP-BALL
   R@ BALL-X +!
-  R@ BALL-Y +!
-  R> DROP
+  R> BALL-Y +!
+  R> DRAW-BALL
   TRUE
 ;
 
@@ -549,6 +607,18 @@ BANK!
   \ TODO: Can make a sound here?
 ;
 
+: CHECK-WIN
+  GOAL-ARRAY MAX-GOALS GOALS EACH DO
+    I GOAL-ENABLED @ IF
+      \ TODO: Care about colors.
+      I GOAL-Y @ I GOAL-X @ TILE-AT IS-BALL-TILE? 0= IF
+        FALSE UNLOOP EXIT
+      THEN
+    THEN
+  1 GOALS +LOOP
+  TRUE
+;
+
 : SNES-MAIN
   FALSE NMI-READY !
   0 NMI-STATE !
@@ -561,8 +631,6 @@ BANK!
 
   0 PLAYER-X !
   0 PLAYER-Y !
-
-  CLEAR-BALLS
 
   BG1-SHADOW-TILEMAP ZERO-BGTILEMAP
   BG3-SHADOW-TILEMAP ZERO-BGTILEMAP
