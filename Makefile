@@ -28,16 +28,11 @@ game.out.fth: std.fth snes-std.fth joypad.fth sin-lut.fth oam.fth maptiles.tiles
 tests: tests.smc tests.mlb
 	echo tests
 
-%.pal.out: %.png 
-	superfamiconv palette -i $^ -d $*.pal.out -W 16 -H 16 -S
 
-%.tiles.out: %.pal.out %.png
-	superfamiconv tiles -i $*.png -p $*.pal.out -d $*.tiles.out -S
+%.tiles.pal.out %.tiles.tiles.out %.tiles.map.out: %.png
+	superfamiconv -i $^ -p $*.tiles.pal.out -t $*.tiles.tiles.out -m $*.tiles.map.out -S
 
-%.map.out: %.tiles.out %.pal.out %.png
-	superfamiconv map -i $*.png -p $*.pal.out -t $*.tiles.out -d $*.map.out
-
-%.tiles.fth: %.pal.out %.tiles.out %.map.out
+%.tiles.fth: %.tiles.pal.out %.tiles.tiles.out %.tiles.map.out
 	./tiles-to-forth.lua $(shell echo '$*' | tr '[:lower:]' '[:upper:]') $^ > $@
 
 clean:

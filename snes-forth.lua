@@ -1048,6 +1048,7 @@ asm=function() return [[
 ]] end}
 
 -- Inlines a literal into dataspace (e.g. calls LDA #x instead of a word).
+-- TODO: LITERAL is the immediate version of this.
 addNative{name="COMPILE-LIT", runtime=function()
   compileLit(dataStack:pop())
   rts()

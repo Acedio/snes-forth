@@ -27,26 +27,34 @@ BANK!
   16*
 ;
 
-32 2* 2* 2* 2* 2* CONSTANT TILEMAP-TILE-COUNT
+: 4BIT-16X16-TILES
+  [ 16 16 * 2/ COMPILE-LIT ] PPU-MULT DROP
+;
 
-: TILEMAP-ENTRIES
+32 2* 2* 2* 2* 2* CONSTANT BGTILEMAP-TILE-COUNT
+
+: BGTILEMAP-ENTRIES
   CELLS
 ;
 
+( addr bytes -- )
+: ZERO-FILL
+  EACH DO
+    0 I C!
+  LOOP
+;
+
 ( tilemap-addr -- )
-: ZERO-TILEMAP
-  \ TODO: Use DMA for this.
-  TILEMAP-TILE-COUNT TILEMAP-ENTRIES EACH DO
-    0 I !
-  1 CELLS +LOOP
+: ZERO-BGTILEMAP
+  BGTILEMAP-TILE-COUNT BGTILEMAP-ENTRIES ZERO-FILL
 ;
 
 BANK@
 LOWRAM BANK!
 CREATE NMI-READY 1 CELLS ALLOT
 CREATE NMI-STATE 1 CELLS ALLOT
-CREATE BG1-SHADOW-TILEMAP TILEMAP-TILE-COUNT TILEMAP-ENTRIES ALLOT
-CREATE BG3-SHADOW-TILEMAP TILEMAP-TILE-COUNT TILEMAP-ENTRIES ALLOT
+CREATE BG1-SHADOW-TILEMAP BGTILEMAP-TILE-COUNT BGTILEMAP-ENTRIES ALLOT
+CREATE BG3-SHADOW-TILEMAP BGTILEMAP-TILE-COUNT BGTILEMAP-ENTRIES ALLOT
 BANK!
 
 ( from bytes to -- )
@@ -80,11 +88,17 @@ BANK!
   DMA0-VRAM-TRANSFER
 ;
 
-: COPY-PAL1SPRITES
-  \ The bottom two tiles are 16 tiles ahead (1 row below) the first tile.
+: COPY-SPRITES
+  \ The bottom two 8x8 tiles of a 16x16 tile are 16 8x8 tiles ahead (1 row
+  \ below) the first 8x8 tile.
   PAL1SPRITES-TILES
   PAL1SPRITES-TILES-BYTES
   0x2000
+
+  PAL2SPRITES-TILES
+  PAL2SPRITES-TILES-BYTES
+  \ Both sprite sheets are 128x16 4bpp pixels, so 1024 bytes or 512 words.
+  0x2000 8 4BIT-16X16-TILES +
   DMA0-VRAM-TRANSFER
 ;
 
@@ -92,7 +106,6 @@ BANK!
 \ TODO: Store details about VRAM locations all in the same place.
 
 : COPY-MAPTILES
-  \ TODO: What does maptile data look like?
   MAPTILES-TILES
   MAPTILES-TILES-BYTES
   0x4000
@@ -128,10 +141,15 @@ BANK!
   Cat is using 16 color obj palette 0 = CGRAM @ 0x80
 )
 
-: COPY-PAL1SPRITES-PALETTE
+: COPY-SPRITES-PALETTE
   PAL1SPRITES-PAL
   PAL1SPRITES-PAL-BYTES
   0x80
+  COPY-CGRAM-PALETTE
+
+  PAL2SPRITES-PAL
+  PAL2SPRITES-PAL-BYTES
+  0x90
   COPY-CGRAM-PALETTE
 ;
 
@@ -144,7 +162,7 @@ BANK!
 
 : COPY-BG1
   BG1-SHADOW-TILEMAP
-  TILEMAP-TILE-COUNT TILEMAP-ENTRIES
+  BGTILEMAP-TILE-COUNT BGTILEMAP-ENTRIES
   \ Start at the tilemap data area (1kth word).
   0x0400 \ word-indexed
   DMA0-VRAM-TRANSFER
@@ -152,7 +170,7 @@ BANK!
 
 : COPY-BG3
   BG3-SHADOW-TILEMAP
-  TILEMAP-TILE-COUNT TILEMAP-ENTRIES
+  BGTILEMAP-TILE-COUNT BGTILEMAP-ENTRIES
   \ Start at the tilemap data area (0th word).
   0x0000
   DMA0-VRAM-TRANSFER
@@ -197,8 +215,8 @@ BANK!
     0 OF
       COPY-FONT
 
-      COPY-PAL1SPRITES
-      COPY-PAL1SPRITES-PALETTE
+      COPY-SPRITES
+      COPY-SPRITES-PALETTE
 
       TEXT-PALETTE
 
@@ -254,141 +272,74 @@ BANK!
   1 CELLS +LOOP DROP
 ;
 
-: GOAL-ENABLED ; \ First cell.
-: GOAL-Y 1 CELLS + ;
-: GOAL-X 2 CELLS + ;
-: GOALS DUP 2* + CELLS ;
+: BALL-ENABLED ; \ First cell.
+: BALL-Y 1 CELLS + ;
+: BALL-X 2 CELLS + ;
+: BALLS DUP 2* + CELLS ;
 
-8 CONSTANT MAX-GOALS
+8 CONSTANT MAX-BALLS
 
 BANK@
 LOWRAM BANK!
 CREATE LEVEL 1 CELLS ALLOT
 CREATE PLAYER-X 1 CELLS ALLOT
 CREATE PLAYER-Y 1 CELLS ALLOT
-CREATE GOAL-ARRAY MAX-GOALS GOALS ALLOT
+CREATE BALL-ARRAY MAX-BALLS BALLS ALLOT
 BANK!
 
-: CLEAR-GOALS
-  GOAL-ARRAY MAX-GOALS GOALS EACH DO
-    FALSE I GOAL-ENABLED !
-  1 GOALS +LOOP
+: CLEAR-BALLS
+  BALL-ARRAY MAX-BALLS BALLS EACH DO
+    FALSE I BALL-ENABLED !
+  1 BALLS +LOOP
 ;
 
-( y x -- )
-: ADD-GOAL
-  GOAL-ARRAY MAX-GOALS GOALS EACH DO
-    I GOAL-ENABLED @ 0= IF
-      TRUE I GOAL-ENABLED !
-      I GOAL-X !
-      I GOAL-Y !
+( y x -- ball-index )
+: ADD-BALL
+  BALL-ARRAY MAX-BALLS BALLS EACH DO
+    I BALL-ENABLED @ 0= IF
+      TRUE I BALL-ENABLED !
+      I BALL-X !
+      I BALL-Y !
       UNLOOP EXIT
     THEN
-  1 GOALS +LOOP
+  1 BALLS +LOOP
   BREAKPOINT
 ;
 
-4 CONSTANT FIRST-GOAL-OAM-OBJECT
+4 CONSTANT FIRST-BALL-OAM-OBJECT
 
-: DRAW-GOAL
+: DRAW-BALL
   >R
-  SHADOW-OAM-LOWER FIRST-GOAL-OAM-OBJECT R@ + OAM-LOWER-OBJECTS +
-  \ 0x22 = goal sprite
-  0x22 OVER OAM-TILE-NUMBER C!
+  SHADOW-OAM-LOWER FIRST-BALL-OAM-OBJECT R@ + OAM-LOWER-OBJECTS +
+  \ 0x02 = ball sprite (TODO: is it?)
+  0x02 OVER OAM-TILE-NUMBER C!
   0x00 SWAP OAM-ATTRIBUTES C!
 
-  GOAL-ARRAY R@ GOALS +
+  BALL-ARRAY R@ BALLS +
 
-  DUP GOAL-ENABLED @ IF
-    DUP GOAL-Y @ 16*
-    SWAP GOAL-X @ 16*
+  DUP BALL-ENABLED @ IF
+    DUP BALL-Y @ 16*
+    SWAP BALL-X @ 16*
   ELSE
     DROP
     \ Hide the ball.
     -32 -32
   THEN
-  FIRST-GOAL-OAM-OBJECT R@ + OAM-OBJECT-COORDS!
-  TRUE FIRST-GOAL-OAM-OBJECT R> + OAM-OBJECT-LARGE!
+  FIRST-BALL-OAM-OBJECT R@ + OAM-OBJECT-COORDS!
+  TRUE FIRST-BALL-OAM-OBJECT R> + OAM-OBJECT-LARGE!
 ;
 
-: DRAW-GOALS
-  MAX-GOALS 0 DO
-    I DRAW-GOAL
+: DRAW-BALLS
+  MAX-BALLS 0 DO
+    I DRAW-BALL
   LOOP
 ;
-
-0x0400 CONSTANT EMPTY-TILE
-0x0402 CONSTANT BALL-TILE
-0x0420 CONSTANT WALL-TILE
 
 ( y x -- )
 : SET-PLAYER-COORDS
   PLAYER-X !
   PLAYER-Y !
 ;
-
-( y x -- &tile )
-: TILE-ADDR
-  SWAP 32 PPU-MULT DROP + CELLS
-  BG1-SHADOW-TILEMAP +
-;
-
-( y x -- tile )
-: TILE-AT
-  TILE-ADDR @
-;
-
-( addr -- )
-: LOAD-LEVEL-FROM-STRING
-  CLEAR-GOALS
-
-  0 0 ROT BG1-SHADOW-TILEMAP TILEMAP-TILE-COUNT CELLS EACH DO
-    BEGIN
-      DUP 1+ SWAP
-      C@
-      DUP 0x0A =
-    WHILE
-      DROP
-    REPEAT
-    \ Convert to text tile offset (missing the first 0x20 control characters).
-    CASE
-      [CHAR]   OF                              EMPTY-TILE I ! ENDOF
-      [CHAR] # OF                              WALL-TILE  I ! ENDOF
-      [CHAR] R OF                              BALL-TILE  I ! ENDOF
-      [CHAR] r OF >R 2DUP ADD-GOAL          R> EMPTY-TILE I ! ENDOF
-      [CHAR] @ OF >R 2DUP SET-PLAYER-COORDS R> EMPTY-TILE I ! ENDOF
-      \ Don't need to use >R for the default case here because we don't care
-      \ about what is on the stack (and we need to access I).
-      EMPTY-TILE I !
-    ENDCASE
-    \ Increment X, then overflow to Y and reset if necessary.
-    >R 1+ DUP 32 >= IF
-      DROP 1+ 0
-    THEN R>
-  1 CELLS +LOOP
-  \ Drop the string indexing address, X, and Y
-  DROP DROP DROP
-;
-
-( level-id -- )
-: LOAD-LEVEL
-  LEVEL-STRING LOAD-LEVEL-FROM-STRING
-  DRAW-GOALS
-;
-
-: CHECK-WIN
-  GOAL-ARRAY MAX-GOALS GOALS EACH DO
-    I GOAL-ENABLED @ IF
-      I GOAL-Y @ I GOAL-X @ TILE-AT BALL-TILE <> IF
-        FALSE UNLOOP EXIT
-      THEN
-    THEN
-  1 GOALS +LOOP
-  TRUE
-;
-
-: TILEMAP-XY
-  32 PPU-MULT DROP + ;
 
 3 CONSTANT PLAYER-OAM-OBJECT
 
@@ -397,78 +348,211 @@ BANK!
   TRUE PLAYER-OAM-OBJECT OAM-OBJECT-LARGE!
 ;
 
-\ Move ball at (x, y) to (nx, ny)
-( y x ny nx -- moved )
+\ These are word constants, but will be stored as bytes in the level map.
+0x0000 CONSTANT EMPTY-TILE
+0x0001 CONSTANT WALL-TILE
+0x0010 CONSTANT GOAL-RED-TILE
+\ TODO: Other goal tiles.
+0x0020 CONSTANT BALL-0-TILE \ Ball 1 is BALL-0-TILE 1+, etc
+
+: MAP-TILES
+  \ 1 byte per entry
+;
+
+\ For now we're limited to one BGTILEMAP's-worth of tiles in a map.
+BGTILEMAP-TILE-COUNT CONSTANT MAP-TILES-COUNT
+
+BANK@
+LOWRAM BANK!
+CREATE LEVEL-MAP MAP-TILES-COUNT MAP-TILES ALLOT
+BANK!
+
+( y x -- &tile )
+: TILE-ADDR
+  SWAP 32 PPU-MULT DROP + MAP-TILES
+  LEVEL-MAP +
+;
+
+( y x -- tile )
+: TILE-AT
+  TILE-ADDR @
+;
+
+: DRAW-LEVEL
+  BG3-SHADOW-TILEMAP
+  LEVEL-MAP MAP-TILES-COUNT MAP-TILES DO
+    I @ CASE
+      EMPTY-TILE OF 0x0400 ENDOF
+      GOAL-RED-TILE OF 0x0402 ENDOF
+      WALL-TILE OF 0x0420 ENDOF
+      >R 0x0400 R>
+    ENDCASE
+    OVER !
+    1 BGTILEMAP-ENTRIES +
+  1 MAP-TILES +LOOP
+  DROP \ Drop the BGTILEMAP pointer
+;
+
+( addr -- )
+: LOAD-LEVEL-FROM-STRING
+  CLEAR-BALLS
+
+  0 0 ROT LEVEL-MAP MAP-TILES-COUNT MAP-TILES EACH DO
+    BEGIN
+      DUP 1+ SWAP
+      C@
+      DUP 0x0A =
+    WHILE
+      DROP
+    REPEAT
+    ( y x &str char -- )
+    CASE
+      [CHAR]   OF                                   EMPTY-TILE    ENDOF
+      [CHAR] # OF                                   WALL-TILE     ENDOF
+      [CHAR] r OF                                   GOAL-RED-TILE ENDOF
+      \ TODO: Set ball color.
+      \ Set the ball tile based on the index returned by ADD-BALL.
+      [CHAR] R OF >R 2DUP R> -ROT ADD-BALL          BALL-0-TILE + ENDOF
+      [CHAR] @ OF >R 2DUP R> -ROT SET-PLAYER-COORDS EMPTY-TILE    ENDOF
+      \ Don't need to use >R for the default case here because we don't care
+      \ about what is on the stack (and we need to access I).
+      EMPTY-TILE
+    ENDCASE
+    \ Store the tile.
+    I C!
+    \ Increment X, then overflow to Y and reset if necessary.
+    >R 1+ DUP 32 >= IF
+      DROP 1+ 0
+    THEN R>
+  1 MAP-TILES +LOOP
+  \ Drop the string indexing address, X, and Y
+  DROP DROP DROP
+;
+
+( level-id -- )
+: LOAD-LEVEL
+  LEVEL-STRING LOAD-LEVEL-FROM-STRING
+  DRAW-LEVEL
+  DRAW-BALLS
+;
+
+: CHECK-WIN
+  BALL-ARRAY MAX-BALLS BALLS EACH DO
+    I BALL-ENABLED @ IF
+      I BALL-Y @ I BALL-X @ TILE-AT GOAL-RED-TILE <> IF
+        FALSE UNLOOP EXIT
+      THEN
+    THEN
+  1 BALLS +LOOP
+  TRUE
+;
+
+: TILEMAP-XY
+  32 PPU-MULT DROP + ;
+
+( tile-id -- is-ball )
+: IS-BALL-TILE?
+  DUP BALL-0-TILE >=
+  SWAP BALL-0-TILE MAX-BALLS + < AND
+;
+
+( dy dx ball-id -- can-move )
+: BALL-CAN-MOVE?
+  BALLS BALL-ARRAY +
+  SWAP OVER
+  BALL-Y @ + -ROT
+  BALL-X @ +
+  TILE-AT EMPTY-TILE =
+;
+
+( addend addr -- )
+: +!
+  TUCK @ +
+  SWAP !
+;
+
+( &c1 &c2 -- )
+\ Swaps the characters at the given addrs.
+: CSWAP!
+  OVER @ OVER @ SWAP
+  ROT !
+  SWAP !
+;
+
+( y1 x1 y2 x2 -- y1+y2 x1+x2 )
+: ADD-COORDS
+  ROT + -ROT + SWAP
+;
+
+( dy dx y x -- )
+: MOVE-TILEMAP-BALL
+  2>R 2R@ ADD-COORDS TILE-ADDR
+  2R> TILE-ADDR
+  ( &tile1 &tile2 )
+  CSWAP!
+;
+
+( dy dx ball-id -- moved )
 : MOVE-BALL
-  2DUP TILE-AT EMPTY-TILE = IF
-    TILE-ADDR BALL-TILE SWAP !
-    TILE-ADDR EMPTY-TILE SWAP !
+  >R
+  2DUP R@ BALL-CAN-MOVE? 0= IF
+    2DROP R> DROP
+    FALSE EXIT
+  THEN
+  \ Update tilemap and array.
+  2DUP
+  R@ BALL-X @ R@ BALL-Y @ MOVE-TILEMAP-BALL
+  R@ BALL-X +!
+  R@ BALL-Y +!
+  R> DROP
+  TRUE
+;
+
+( tile-id -- ball-id )
+: BALL-INDEX
+  BALL-0-TILE -
+;
+
+( dy dx -- moved )
+: MOVE-PLAYER
+  OVER PLAYER-Y @ +
+  OVER PLAYER-X @ +
+  2DUP TILE-AT
+  ( dy dx npy npx tile-id )
+  DUP EMPTY-TILE = IF
+    DROP PLAYER-X ! PLAYER-Y !
+    2DROP
     TRUE EXIT
   THEN
-  2DROP 2DROP
+  DUP IS-BALL-TILE? IF
+    BALL-INDEX >R
+    2SWAP R>
+    ( npy npx dy dx ball-id )
+    MOVE-BALL IF 
+      PLAYER-X ! PLAYER-Y !
+      TRUE EXIT
+    THEN
+    2DROP
+  THEN
   FALSE
 ;
 
 : PLAYER-MOVEMENT
   TRUE CASE
     JOY1-PRESSED @ BUTTON-UP AND 0<> OF
-      \ TODO: Pull out all this common logic.
-      PLAYER-Y @ 1- PLAYER-X @
-      2DUP TILE-AT CASE
-        EMPTY-TILE OF PLAYER-X ! PLAYER-Y ! ENDOF
-        BALL-TILE OF
-          2DUP OVER 1- OVER MOVE-BALL IF
-            PLAYER-X ! PLAYER-Y !
-          ELSE
-            2DROP
-          THEN
-        ENDOF
-        >R 2DROP R>
-      ENDCASE
+      -1 0 MOVE-PLAYER
     ENDOF
     JOY1-PRESSED @ BUTTON-DOWN AND 0<> OF
-      PLAYER-Y @ 1+ PLAYER-X @
-      2DUP TILE-AT CASE
-        EMPTY-TILE OF PLAYER-X ! PLAYER-Y ! ENDOF
-        BALL-TILE OF
-          2DUP OVER 1+ OVER MOVE-BALL IF
-            PLAYER-X ! PLAYER-Y !
-          ELSE
-            2DROP
-          THEN
-        ENDOF
-        >R 2DROP R>
-      ENDCASE
+      1 0 MOVE-PLAYER
     ENDOF
     JOY1-PRESSED @ BUTTON-LEFT AND 0<> OF
-      PLAYER-Y @ PLAYER-X @ 1-
-      2DUP TILE-AT CASE
-        EMPTY-TILE OF PLAYER-X ! PLAYER-Y ! ENDOF
-        BALL-TILE OF
-          2DUP 2DUP 1- MOVE-BALL IF
-            PLAYER-X ! PLAYER-Y !
-          ELSE
-            2DROP
-          THEN
-        ENDOF
-        >R 2DROP R>
-      ENDCASE
+      0 -1 MOVE-PLAYER
     ENDOF
     JOY1-PRESSED @ BUTTON-RIGHT AND 0<> OF
-      PLAYER-Y @ PLAYER-X @ 1+
-      2DUP TILE-AT CASE
-        EMPTY-TILE OF PLAYER-X ! PLAYER-Y ! ENDOF
-        BALL-TILE OF
-          2DUP 2DUP 1+ MOVE-BALL IF
-            PLAYER-X ! PLAYER-Y !
-          ELSE
-            2DROP
-          THEN
-        ENDOF
-        >R 2DROP R>
-      ENDCASE
+      0 1 MOVE-PLAYER
     ENDOF
   ENDCASE
+  DROP \ TODO: Can make a sound here?
 ;
 
 : SNES-MAIN
@@ -484,10 +568,10 @@ BANK!
   0 PLAYER-X !
   0 PLAYER-Y !
 
-  CLEAR-GOALS
+  CLEAR-BALLS
 
-  BG1-SHADOW-TILEMAP ZERO-TILEMAP
-  BG3-SHADOW-TILEMAP ZERO-TILEMAP
+  BG1-SHADOW-TILEMAP ZERO-BGTILEMAP
+  BG3-SHADOW-TILEMAP ZERO-BGTILEMAP
 
   ZERO-OAM
 
