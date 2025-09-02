@@ -94,6 +94,7 @@ BANK!
   PAL1SPRITES-TILES
   PAL1SPRITES-TILES-BYTES
   0x2000
+  DMA0-VRAM-TRANSFER
 
   PAL2SPRITES-TILES
   PAL2SPRITES-TILES-BYTES
@@ -214,21 +215,23 @@ BANK!
   NMI-STATE @ CASE
     0 OF
       COPY-FONT
+      TEXT-PALETTE
 
+      1 NMI-STATE +!
+    ENDOF
+    1 OF
       COPY-SPRITES
       COPY-SPRITES-PALETTE
 
-      TEXT-PALETTE
-
-      1 NMI-STATE !
+      1 NMI-STATE +!
     ENDOF
-    1 OF
+    2 OF
       COPY-MAPTILES
       COPY-MAPTILES-PALETTE
 
-      2 NMI-STATE !
+      1 NMI-STATE +!
     ENDOF
-    2 OF
+    3 OF
       \ Zero shift for BG1
       0x00 0x210D C!
       0x00 0x210D C!
@@ -238,9 +241,9 @@ BANK!
 
       COPY-BG3
 
-      3 NMI-STATE !
+      1 NMI-STATE +!
     ENDOF
-    3 OF
+    4 OF
       COPY-BG1
       COPY-OAM
 
@@ -295,12 +298,13 @@ BANK!
 
 ( y x -- ball-index )
 : ADD-BALL
-  BALL-ARRAY MAX-BALLS BALLS EACH DO
-    I BALL-ENABLED @ 0= IF
-      TRUE I BALL-ENABLED !
-      I BALL-X !
-      I BALL-Y !
-      UNLOOP EXIT
+  MAX-BALLS 0 DO
+    BALL-ARRAY I BALLS +
+    DUP BALL-ENABLED @ 0= IF
+      TRUE OVER BALL-ENABLED !
+      ROT OVER BALL-Y !
+      BALL-X !
+      I UNLOOP EXIT
     THEN
   1 BALLS +LOOP
   BREAKPOINT
@@ -375,15 +379,15 @@ BANK!
 
 ( y x -- tile )
 : TILE-AT
-  TILE-ADDR @
+  TILE-ADDR C@
 ;
 
 : DRAW-LEVEL
-  BG3-SHADOW-TILEMAP
-  LEVEL-MAP MAP-TILES-COUNT MAP-TILES DO
-    I @ CASE
+  BG1-SHADOW-TILEMAP
+  LEVEL-MAP MAP-TILES-COUNT MAP-TILES EACH DO
+    I C@ CASE
       EMPTY-TILE OF 0x0400 ENDOF
-      GOAL-RED-TILE OF 0x0402 ENDOF
+      GOAL-RED-TILE OF 0x0804 ENDOF
       WALL-TILE OF 0x0420 ENDOF
       >R 0x0400 R>
     ENDCASE
@@ -393,18 +397,25 @@ BANK!
   DROP \ Drop the BGTILEMAP pointer
 ;
 
+( addr -- non-lf-addr )
+: SKIP-LINEFEEDS
+  BEGIN
+    DUP 1+ SWAP
+    C@
+    DUP 0x0A =
+  WHILE
+    DROP
+  REPEAT
+;
+
 ( addr -- )
 : LOAD-LEVEL-FROM-STRING
   CLEAR-BALLS
 
-  0 0 ROT LEVEL-MAP MAP-TILES-COUNT MAP-TILES EACH DO
-    BEGIN
-      DUP 1+ SWAP
-      C@
-      DUP 0x0A =
-    WHILE
-      DROP
-    REPEAT
+  \ Keep track of Y and X
+  0 0 ROT
+  LEVEL-MAP MAP-TILES-COUNT MAP-TILES EACH DO
+    SKIP-LINEFEEDS
     ( y x &str char -- )
     CASE
       [CHAR]   OF                                   EMPTY-TILE    ENDOF
@@ -413,10 +424,8 @@ BANK!
       \ TODO: Set ball color.
       \ Set the ball tile based on the index returned by ADD-BALL.
       [CHAR] R OF >R 2DUP R> -ROT ADD-BALL          BALL-0-TILE + ENDOF
-      [CHAR] @ OF >R 2DUP R> -ROT SET-PLAYER-COORDS EMPTY-TILE    ENDOF
-      \ Don't need to use >R for the default case here because we don't care
-      \ about what is on the stack (and we need to access I).
-      EMPTY-TILE
+      [CHAR] @ OF -ROT 2DUP SET-PLAYER-COORDS ROT   EMPTY-TILE    ENDOF
+      >R EMPTY-TILE R>
     ENDCASE
     \ Store the tile.
     I C!
@@ -465,28 +474,9 @@ BANK!
   TILE-AT EMPTY-TILE =
 ;
 
-( addend addr -- )
-: +!
-  TUCK @ +
-  SWAP !
-;
-
-( &c1 &c2 -- )
-\ Swaps the characters at the given addrs.
-: CSWAP!
-  OVER @ OVER @ SWAP
-  ROT !
-  SWAP !
-;
-
-( y1 x1 y2 x2 -- y1+y2 x1+x2 )
-: ADD-COORDS
-  ROT + -ROT + SWAP
-;
-
 ( dy dx y x -- )
 : MOVE-TILEMAP-BALL
-  2>R 2R@ ADD-COORDS TILE-ADDR
+  2>R 2R@ 2+2 TILE-ADDR
   2R> TILE-ADDR
   ( &tile1 &tile2 )
   CSWAP!
@@ -517,42 +507,46 @@ BANK!
 : MOVE-PLAYER
   OVER PLAYER-Y @ +
   OVER PLAYER-X @ +
+  ( dy dx ny nx )
   2DUP TILE-AT
-  ( dy dx npy npx tile-id )
+  ( dy dx ny nx tile-id )
   DUP EMPTY-TILE = IF
     DROP PLAYER-X ! PLAYER-Y !
     2DROP
     TRUE EXIT
   THEN
+
+  ( dy dx ny nx tile-id )
   DUP IS-BALL-TILE? IF
     BALL-INDEX >R
     2SWAP R>
-    ( npy npx dy dx ball-id )
+    ( ny nx dy dx ball-id )
     MOVE-BALL IF 
       PLAYER-X ! PLAYER-Y !
       TRUE EXIT
     THEN
-    2DROP
+    2DROP FALSE EXIT
   THEN
-  FALSE
+  \ Wasn't empty or a ball, so no bueno.
+  DROP 2DROP 2DROP FALSE
 ;
 
 : PLAYER-MOVEMENT
   TRUE CASE
     JOY1-PRESSED @ BUTTON-UP AND 0<> OF
-      -1 0 MOVE-PLAYER
+      -1 0 MOVE-PLAYER DROP
     ENDOF
     JOY1-PRESSED @ BUTTON-DOWN AND 0<> OF
-      1 0 MOVE-PLAYER
+      1 0 MOVE-PLAYER DROP
     ENDOF
     JOY1-PRESSED @ BUTTON-LEFT AND 0<> OF
-      0 -1 MOVE-PLAYER
+      0 -1 MOVE-PLAYER DROP
     ENDOF
     JOY1-PRESSED @ BUTTON-RIGHT AND 0<> OF
-      0 1 MOVE-PLAYER
+      0 1 MOVE-PLAYER DROP
     ENDOF
   ENDCASE
-  DROP \ TODO: Can make a sound here?
+  \ TODO: Can make a sound here?
 ;
 
 : SNES-MAIN

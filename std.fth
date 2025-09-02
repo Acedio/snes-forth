@@ -104,3 +104,22 @@
 
 ( addr length -- end begin )
 : EACH OVER + SWAP ;
+
+( addend addr -- )
+: +!
+  TUCK @ +
+  SWAP !
+;
+
+( &c1 &c2 -- )
+\ Swaps the characters at the given addrs.
+: CSWAP!
+  OVER @ OVER @ SWAP
+  ROT !
+  SWAP !
+;
+
+( y1 x1 y2 x2 -- y1+y2 x1+x2 )
+: 2+2
+  ROT + -ROT + SWAP
+;
