@@ -23,10 +23,12 @@ LOWRAM BANK!
 CREATE BG-TICKS 1 CELLS ALLOT
 BANK!
 
-: 2BIT-TILES
+( tiles -- bytes )
+: 2BIT-8X8-TILES
   16*
 ;
 
+( tiles -- bytes )
 : 4BIT-16X16-TILES
   [ 16 16 * 2/ COMPILE-LIT ] PPU-MULT DROP
 ;
@@ -82,7 +84,7 @@ BANK!
 
 : COPY-FONT
   FONT
-  FONT-CHARS 2BIT-TILES
+  FONT-CHARS 2BIT-8X8-TILES
   \ Start at the character data area (4Kth word).
   0x1000
   DMA0-VRAM-TRANSFER
@@ -278,7 +280,8 @@ BANK!
 : BALL-ENABLED ; \ First cell.
 : BALL-Y 1 CELLS + ;
 : BALL-X 2 CELLS + ;
-: BALLS DUP 2* + CELLS ;
+: BALL-COLOR 3 CELLS + ;
+: BALLS 2* 2* CELLS ;
 
 8 CONSTANT MAX-BALLS
 
@@ -296,20 +299,27 @@ BANK!
   1 BALLS +LOOP
 ;
 
-( y x -- ball-index )
-: ADD-BALL
+: NEXT-FREE-BALL-ID
   MAX-BALLS 0 DO
     BALL-ARRAY I BALLS +
-    ( y x &ball )
-    DUP BALL-ENABLED @ 0= IF
-      TRUE OVER BALL-ENABLED !
-      ROT OVER BALL-Y !
-      BALL-X !
+    ( &ball )
+    BALL-ENABLED @ 0= IF
       I UNLOOP EXIT
     THEN
-    DROP
   LOOP
+  \ TODO: ABORT?
   BREAKPOINT
+;
+
+( y x color -- ball-index )
+: ADD-BALL
+  NEXT-FREE-BALL-ID
+  >R R@ BALLS BALL-ARRAY +
+  TRUE OVER BALL-ENABLED !
+  TUCK BALL-COLOR !
+  TUCK BALL-Y !
+  BALL-X !
+  R>
 ;
 
 4 CONSTANT FIRST-BALL-OAM-OBJECT
@@ -345,7 +355,8 @@ BANK!
 : GOAL-ENABLED ; \ First cell.
 : GOAL-Y 1 CELLS + ;
 : GOAL-X 2 CELLS + ;
-: GOALS DUP 2* + CELLS ;
+: GOAL-COLOR 3 CELLS + ;
+: GOALS 2* 2* CELLS ;
 
 8 CONSTANT MAX-GOALS
 
@@ -360,20 +371,28 @@ BANK!
   1 GOALS +LOOP
 ;
 
-( y x -- )
-: ADD-GOAL
+( -- &goal )
+: NEXT-FREE-GOAL
   MAX-GOALS 0 DO
     GOAL-ARRAY I GOALS +
-    ( y x &goal )
+    ( &goal )
     DUP GOAL-ENABLED @ 0= IF
-      TRUE OVER GOAL-ENABLED !
-      ROT OVER GOAL-Y !
-      GOAL-X !
       UNLOOP EXIT
     THEN
     DROP
   LOOP
+  \ TODO: ABORT?
   BREAKPOINT
+;
+
+( y x color -- )
+: ADD-GOAL
+  NEXT-FREE-GOAL
+  ( y x color &goal )
+  TRUE OVER GOAL-ENABLED !
+  TUCK GOAL-COLOR !
+  TUCK GOAL-X !
+  GOAL-Y !
 ;
 
 0x14 CONSTANT FIRST-GOAL-OAM-OBJECT
@@ -473,6 +492,14 @@ BANK!
   REPEAT
 ;
 
+0 CONSTANT RED
+1 CONSTANT YELLOW
+2 CONSTANT GREEN
+3 CONSTANT CYAN
+4 CONSTANT BLUE
+5 CONSTANT MAGENTA
+6 CONSTANT WHITE
+
 ( addr -- )
 : LOAD-LEVEL-FROM-STRING
   CLEAR-BALLS
@@ -484,14 +511,24 @@ BANK!
     SKIP-LINEFEEDS
     ( y x &str char -- )
     CASE
-      [CHAR]   OF                                   EMPTY-TILE    ENDOF
-      [CHAR] # OF                                   WALL-TILE     ENDOF
-      \ TODO: Set goal color.
-      [CHAR] r OF >R 2DUP R> -ROT ADD-GOAL          EMPTY-TILE    ENDOF
-      \ TODO: Set ball color.
+      [CHAR]   OF                                  EMPTY-TILE    ENDOF
+      [CHAR] # OF                                  WALL-TILE     ENDOF
+      [CHAR] r OF >R 2DUP R> -ROT RED     ADD-GOAL EMPTY-TILE    ENDOF
+      [CHAR] y OF >R 2DUP R> -ROT YELLOW  ADD-GOAL EMPTY-TILE    ENDOF
+      [CHAR] g OF >R 2DUP R> -ROT GREEN   ADD-GOAL EMPTY-TILE    ENDOF
+      [CHAR] c OF >R 2DUP R> -ROT CYAN    ADD-GOAL EMPTY-TILE    ENDOF
+      [CHAR] b OF >R 2DUP R> -ROT BLUE    ADD-GOAL EMPTY-TILE    ENDOF
+      [CHAR] m OF >R 2DUP R> -ROT MAGENTA ADD-GOAL EMPTY-TILE    ENDOF
+      [CHAR] w OF >R 2DUP R> -ROT WHITE   ADD-GOAL EMPTY-TILE    ENDOF
       \ Set the ball tile based on the index returned by ADD-BALL.
-      [CHAR] R OF >R 2DUP R> -ROT ADD-BALL          BALL-0-TILE + ENDOF
-      [CHAR] @ OF -ROT 2DUP SET-PLAYER-COORDS ROT   EMPTY-TILE    ENDOF
+      [CHAR] R OF >R 2DUP R> -ROT RED     ADD-BALL BALL-0-TILE + ENDOF
+      [CHAR] Y OF >R 2DUP R> -ROT YELLOW  ADD-BALL BALL-0-TILE + ENDOF
+      [CHAR] G OF >R 2DUP R> -ROT GREEN   ADD-BALL BALL-0-TILE + ENDOF
+      [CHAR] C OF >R 2DUP R> -ROT CYAN    ADD-BALL BALL-0-TILE + ENDOF
+      [CHAR] B OF >R 2DUP R> -ROT BLUE    ADD-BALL BALL-0-TILE + ENDOF
+      [CHAR] M OF >R 2DUP R> -ROT MAGENTA ADD-BALL BALL-0-TILE + ENDOF
+      [CHAR] W OF >R 2DUP R> -ROT WHITE   ADD-BALL BALL-0-TILE + ENDOF
+      [CHAR] @ OF -ROT 2DUP SET-PLAYER-COORDS ROT  EMPTY-TILE    ENDOF
       >R EMPTY-TILE R>
     ENDCASE
     \ Store the tile.
