@@ -17,6 +17,11 @@
   3 +
 ;
 
+( palette-id -- oam-attributes )
+: OAM-PALETTE
+  2* 0x0E AND
+;
+
 \ 2 bits per object
 : OAM-UPPER-OBJECTS
   LSR LSR
