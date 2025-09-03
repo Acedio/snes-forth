@@ -41,13 +41,24 @@ local dumpFile = assert(io.open("dataspace.dump", "w"))
 
 local dictionary = Dictionary:new()
 local dataspace = Dataspace:new()
+  
+local running = true
+local ip = 0
 
 local function assertAddr(cond, message, addr)
   dataspace:assertAddr(dumpFile, cond, message, addr)
 end
-  
-local running = true
-local ip = 0
+
+local function toSigned(unsignedWord)
+  if unsignedWord > 0x7FFF then
+    return unsignedWord - 0x10000
+  end
+  return unsignedWord
+end
+
+local function toUnsigned(signedWord)
+  return signedWord & 0xFFFF
+end
 
 local Call = Dataspace.Native:new()
 
@@ -102,6 +113,127 @@ end
 local function compileCall(addr)
   dataspace:compile(Call:new())
   dataspace:compileWord(addr)
+end
+
+local Branch0 = Dataspace.Native:new()
+
+function Branch0:size()
+  return 7
+end
+
+-- Closes over ip
+function Branch0:runtime(dataspace, opAddr)
+  ip = ip + self:size()
+  local offset = self:offset(dataspace, opAddr)
+  if dataStack:pop() == 0 then
+    ip = dataspace:fromRelativeAddress(ip, offset)
+  end
+end
+
+function Branch0:offset(dataspace, opAddr)
+  return toSigned(dataspace:getWord(opAddr + 5))
+end
+
+-- Closes over dictionary
+function Branch0:toString(dataspace, opAddr)
+  local offset = self:offset(dataspace, opAddr)
+  return string.format("Branch0 $%04X", offset)
+end
+
+-- Closes over dictionary
+function Branch0:asm(dataspace, opAddr)
+  local branchOffset = self:offset(dataspace, opAddr)
+  return string.format([[
+    lda z:1, X     ; 2 bytes
+    bne :+         ; 2 bytes
+    brl (:+)+%d    ; 1 byte prior to branch offset ($%04X)
+  :
+  ]], branchOffset, toUnsigned(branchOffset))
+end
+
+local function compileBranch0(offset)
+  dataspace:compile(Branch0:new())
+  -- A couple of filler words so addresses stay correct.
+  dataspace:allotCodeBytes(2 + 2)
+  local offsetAddr = dataspace:getCodeHere()
+  dataspace:compileWord(offset)
+  return offsetAddr
+end
+
+local function compileBranch0To(addr)
+  local offsetAddr = compileBranch0(0x9999)
+  dataspace:setWord(
+    offsetAddr,
+    toUnsigned(dataspace:getRelativeAddr(dataspace:getCodeHere(), addr)))
+end
+
+local function compileForwardBranch0()
+  local branchOffsetAddr = compileBranch0(0x9999)
+  return {
+    toHere = function()
+      local branchOffset = toUnsigned(
+        dataspace:getRelativeAddr(branchOffsetAddr + 2, dataspace:getCodeHere()))
+      dataspace:setWord(branchOffsetAddr, branchOffset)
+    end
+  }
+end
+
+local Branch = Dataspace.Native:new()
+
+function Branch:size()
+  return 3
+end
+
+-- Closes over ip
+function Branch:runtime(dataspace, opAddr)
+  -- Branch location is an offset from the beginning of the next instruction.
+  ip = ip + self:size()
+  local offset = self:offset(dataspace, opAddr)
+  ip = dataspace:fromRelativeAddress(ip, offset)
+end
+
+function Branch:offset(dataspace, opAddr)
+  return toSigned(dataspace:getWord(opAddr + 1))
+end
+
+-- Closes over dictionary
+function Branch:toString(dataspace, opAddr)
+  local offset = self:offset(dataspace, opAddr)
+  return string.format("Branch $%04X", offset)
+end
+
+-- Closes over dictionary
+function Branch:asm(dataspace, opAddr)
+  local branchOffset = self:offset(dataspace, opAddr)
+  return string.format([[
+    brl (:+)+%d    ; branch offset = $%04X
+  :
+  ]], branchOffset, toUnsigned(branchOffset))
+end
+
+local function compileBranch(offset)
+  dataspace:compile(Branch:new())
+  local offsetAddr = dataspace:getCodeHere()
+  dataspace:compileWord(offset)
+  return offsetAddr
+end
+
+local function compileBranchTo(addr)
+  local offsetAddr = compileBranch(0x9999)
+  dataspace:setWord(
+    offsetAddr,
+    toUnsigned(dataspace:getRelativeAddr(dataspace:getCodeHere(), addr)))
+end
+
+local function compileForwardBranch()
+  local branchOffsetAddr = compileBranch(0x9999)
+  return {
+    toHere = function()
+      local branchOffset = toUnsigned(
+        dataspace:getRelativeAddr(branchOffsetAddr + 2, dataspace:getCodeHere()))
+      dataspace:setWord(branchOffsetAddr, branchOffset)
+    end
+  }
 end
 
 local Lit = Dataspace.Native:new()
@@ -204,17 +336,6 @@ local function addNative(entry)
   -- Native fns are unsized, so they don't affect/use HERE.
   local addr = dataspace:compileUnsized(Dataspace.Native:new(entry))
   dictionary:add(entry.name, entry.label, addr)
-end
-
-local function toSigned(unsigned)
-  if unsigned > 0x7FFF then
-    return unsigned - 0x10000
-  end
-  return unsigned
-end
-
-local function toUnsigned(signed)
-  return signed & 0xFFFF
 end
 
 -- Make a variable that is easily accessible to Lua and the SNES.
@@ -846,39 +967,6 @@ asm=function() return [[
   rts
 ]] end}
 
--- Branch based on the relative offset stored in front of the called branch fn.
-local function branch()
-  local retAddr = returnStack:popWord()
-  ip = dataspace:fromRelativeAddress(retAddr, toSigned(dataspace:getWord(retAddr)))
-end
-
-addNative{name="BRANCH0", runtime=function()
-  if dataStack:pop() == 0 then
-    branch()
-  else
-    -- Skip past the relative address.
-    ip = returnStack:popWord() + 2
-  end
-end,
-asm=function() return [[
-  lda z:1, X
-  bne @notzero
-  ; Equals zero, we branch!
-  inx
-  inx
-
-  jmp _BRANCH
-
-@notzero:
-  inx
-  inx
-  lda #2
-  clc
-  adc 1, S
-  sta 1, S
-  rts
-]] end}
-
 addNative{name="ADDRESS-OFFSET", runtime=function()
   local from = dataStack:pop()
   local to = dataStack:pop()
@@ -888,20 +976,15 @@ addNative{name="ADDRESS-OFFSET", runtime=function()
   rts()
 end}
 
--- Can we do this in Forth based on BRANCH0?
-addNative{name="BRANCH", runtime=function()
-  branch()
-end,
-asm=function() return [[
-  ldy #1
-  lda (1,S),Y ; Grab the relative branch pointer
+addNative{name="COMPILE-BRANCH", runtime=function()
+  compileBranch(dataStack:pop())
+  rts()
+end}
 
-  clc
-  adc 1, S
-  sta 1, S
-
-  rts ; "return" to the branch point
-]] end}
+addNative{name="COMPILE-BRANCH0", runtime=function()
+  compileBranch0(dataStack:pop())
+  rts()
+end}
 
 -- Takes a local address (2 bytes) off the stack and pushes a 2 byte word.
 addNative{name="@", label="_FETCH", runtime=function()
@@ -1380,16 +1463,19 @@ do
   local loop = dataspace:getCodeHere()
   compile("KEY DUP")
   compileLit(string.byte('"'))
-  compile("<> BRANCH0")
-  local exitBranchAddr = dataspace:getCodeHere()
-  dataspace:compileWord(2000)
-  compile("C, 1+ BRANCH")
-  dataspace:compileWord(toUnsigned(dataspace:getRelativeAddr(dataspace:getCodeHere(), loop)))
-  dataspace:setWord(exitBranchAddr, toUnsigned(dataspace:getRelativeAddr(exitBranchAddr, dataspace:getCodeHere())))
+  compile("<>")
+  local exitBranch = compileForwardBranch0()
+  compile("C, 1+")
+  compileBranchTo(loop)
+  exitBranch.toHere()
   compile("DROP SWAP !") -- Drop the " and fill in the length
   compileRts()
 end
 dictionary:latest().immediate = true
+
+local function branchToHereFrom(addr)
+  dataspace:setWord(addr, toUnsigned(dataspace:getRelativeAddr(addr + 2, dataspace:getCodeHere())))
+end
 
 do
   -- TODO: Can we define a simpler QUIT here and then define the real QUIT in
@@ -1397,68 +1483,63 @@ do
   addColon("QUIT")
   local loop = dataspace:getCodeHere()
   -- Grab the length of the counted string with @.
-  compile("WORD DUP @ BRANCH0")
-  local eofBranchAddr = dataspace:getCodeHere()
-  dataspace:compileWord(2000)
+  compile("WORD DUP @")
+  local eofBranch = compileForwardBranch0()
 
   compile("FIND")
 
   compile("DUP")
   compileLit(0)
-  compile("= BRANCH0")
-  local wordFoundBranchAddr = dataspace:getCodeHere()
-  dataspace:compileWord(2000) -- will be replaced later
+  compile("=")
+  local wordFoundBranch = compileForwardBranch0()
     -- Not found, try and parse as a number.
-    compile("DROP DUP >NUMBER BRANCH0")
-    local numberParseErrorAddr = dataspace:getCodeHere()
-    dataspace:compileWord(2000)
+    compile("DROP DUP >NUMBER")
+    local numberParseErrorBranch = compileForwardBranch0()
     -- String is no longer needed, drop it.
     compile(">R DROP R>")
     -- If we're compiling, compile TOS as a literal.
-    compile("STATE @ BRANCH0")
-    dataspace:compileWord(toUnsigned(dataspace:getRelativeAddr(dataspace:getCodeHere(), loop)))
-    -- Compile LIT and then the number.
-    compile("COMPILE-LIT BRANCH")
-    dataspace:compileWord(toUnsigned(dataspace:getRelativeAddr(dataspace:getCodeHere(), loop)))
+    compile("STATE @")
+    compileBranch0To(loop)
+    -- We're compiling, so compile the LITERAL.
+    compile("COMPILE-LIT")
+    compileBranchTo(loop)
 
-    dataspace:setWord(numberParseErrorAddr, toUnsigned(dataspace:getRelativeAddr(numberParseErrorAddr, dataspace:getCodeHere())))
-    compile("DROP DUP >ADDRESS BRANCH0")
-    local addressParseErrorAddr = dataspace:getCodeHere()
-    dataspace:compileWord(2000)
+    numberParseErrorBranch.toHere()
+    compile("DROP DUP >ADDRESS")
+    local addressParseErrorBranch = compileForwardBranch0()
     -- String is no longer needed, drop it.
     compile(">R >R DROP R> R>")
     -- If we're compiling, compile TOS as a literal.
-    compile("STATE @ BRANCH0")
-    dataspace:compileWord(toUnsigned(dataspace:getRelativeAddr(dataspace:getCodeHere(), loop)))
+    compile("STATE @")
+    compileBranch0To(loop)
     -- LIT the A.LIT so we can A.LIT while we LIT.
     compileXtLit("A.LIT")
     -- Compile A.LIT and then the number.
-    compile("COMPILE, A., BRANCH")
-    dataspace:compileWord(toUnsigned(dataspace:getRelativeAddr(dataspace:getCodeHere(), loop)))
-  dataspace:setWord(wordFoundBranchAddr, toUnsigned(dataspace:getRelativeAddr(wordFoundBranchAddr, dataspace:getCodeHere())))
+    compile("COMPILE, A.,")
+    compileBranchTo(loop)
+  wordFoundBranch.toHere()
 
   -- Word found, see if we're compiling or interpreting.
   compileLit(0)
-  compile("> STATE @ INVERT OR BRANCH0")
-  local branchAddrIfNotImmediate = dataspace:getCodeHere()
-  dataspace:compileWord(2000) -- will be replaced later
+  compile("> STATE @ INVERT OR")
+  local notImmediateBranch = compileForwardBranch0()
     -- Interpreting, just run the word.
-    compile("EXECUTE BRANCH")
-    dataspace:compileWord(toUnsigned(dataspace:getRelativeAddr(dataspace:getCodeHere(), loop)))
-  dataspace:setWord(branchAddrIfNotImmediate, toUnsigned(dataspace:getRelativeAddr(branchAddrIfNotImmediate, dataspace:getCodeHere())))
+    compile("EXECUTE")
+    compileBranchTo(loop)
+  notImmediateBranch.toHere()
 
   -- else, compiling
-  compile("COMPILE, BRANCH")
-  dataspace:compileWord(toUnsigned(dataspace:getRelativeAddr(dataspace:getCodeHere(), loop)))
+  compile("COMPILE,")
+  compileBranchTo(loop)
 
-  dataspace:setWord(addressParseErrorAddr, toUnsigned(dataspace:getRelativeAddr(addressParseErrorAddr, dataspace:getCodeHere())))
+  addressParseErrorBranch.toHere()
   compile("2DROP DUP COUNT TYPE")
   compile("DOS\"")
   dataspace:compileWord(2)
   dataspace:compileByte(string.byte("?"))
   dataspace:compileByte(string.byte("\n"))
   compile("TYPE ABORT")
-  dataspace:setWord(eofBranchAddr, toUnsigned(dataspace:getRelativeAddr(eofBranchAddr, dataspace:getCodeHere())))
+  eofBranch.toHere()
   compile("DROP")
   compileRts()
 end
