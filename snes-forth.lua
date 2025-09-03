@@ -118,7 +118,7 @@ end
 local Branch0 = Dataspace.Native:new()
 
 function Branch0:size()
-  return 7
+  return 10
 end
 
 -- Closes over ip
@@ -131,7 +131,7 @@ function Branch0:runtime(dataspace, opAddr)
 end
 
 function Branch0:offset(dataspace, opAddr)
-  return toSigned(dataspace:getWord(opAddr + 5))
+  return toSigned(dataspace:getWord(opAddr + 8))
 end
 
 -- Closes over dictionary
@@ -145,6 +145,9 @@ function Branch0:asm(dataspace, opAddr)
   local branchOffset = self:offset(dataspace, opAddr)
   return string.format([[
     lda z:1, X     ; 2 bytes
+    inx            ; 1 byte
+    inx            ; 1 byte
+    tay            ; 1 byte
     bne :+         ; 2 bytes
     brl (:+)+%d    ; 1 byte prior to branch offset ($%04X)
   :
@@ -152,9 +155,11 @@ function Branch0:asm(dataspace, opAddr)
 end
 
 local function compileBranch0(offset)
-  dataspace:compile(Branch0:new())
-  -- A couple of filler words so addresses stay correct.
-  dataspace:allotCodeBytes(2 + 2)
+  local branchEntry = Branch0:new()
+  dataspace:compile(branchEntry)
+  -- A couple of filler words so addresses stay correct. Other than this space
+  -- we compile 3 bytes of code (the op above and the offset below).
+  dataspace:allotCodeBytes(branchEntry:size() - 2 - 1)
   local offsetAddr = dataspace:getCodeHere()
   dataspace:compileWord(offset)
   return offsetAddr
