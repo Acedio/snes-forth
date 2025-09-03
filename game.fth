@@ -589,11 +589,65 @@ BANK!
   TILE-AT EMPTY-TILE =
 ;
 
+( ball-tile-id -- ball-id )
+: BALL-FOR-TILE
+  BALL-0-TILE -
+;
+
+( dy dx &ball -- merged )
+: TRY-MERGE
+  \ TODO: Refactor this, this is long and gross.
+  >R
+  R@ BALL-X @ + SWAP
+  R@ BALL-Y @ + SWAP
+  TILE-ADDR
+  ( &target-tile R: &merging-ball )
+  DUP @ IS-BALL-TILE? 0= IF
+    DROP R> DROP FALSE EXIT
+  THEN
+  ( &target-tile R: &merging-ball )
+  \ Use ball tile as index into ball array
+  DUP @ BALL-FOR-TILE DUP BALLS BALL-ARRAY +
+  ( &target-tile target-ball-id &target-ball R: &merging-ball )
+  DUP BALL-COLOR @ DUP
+  ( &target-tile target-ball-id &target-ball target-color target-color )
+  R@ BALL-COLOR @ AND 0<> IF
+    \ If the colors overlap in one or more bits, they are not mergeable.
+    DROP DROP DROP DROP R> DROP FALSE EXIT
+  THEN
+  ( &target-tile target-ball-id &target-ball target-color R: &merging-ball )
+  \ Update current ball color.
+  R@ BALL-COLOR TUCK @ OR SWAP !
+
+  ( &target-tile target-ball-id &target-ball R: &merging-ball )
+  \ Disable target ball and draw it to hide it.
+  FALSE OVER BALL-ENABLED !
+  SWAP DRAW-BALL
+
+  ( &target-tile &target-ball R: &merging-ball )
+  \ Save the tile address of the merging ball.
+  R@ BALL-Y @ R@ BALL-X @ TILE-ADDR SWAP
+  ( &target-tile &merging-tile &target-ball R: &merging-ball )
+  \ Take the target balls position.
+  DUP BALL-Y @ R@ BALL-Y !
+  BALL-X @ R@ BALL-X !
+
+  ( &target-tile &merging-tile R: &merging-ball )
+  DUP @ SWAP \ Save the merging ball tile ID
+  EMPTY-TILE SWAP C! \ Erase the merging position.
+  SWAP C! \ Overwrite the target ball position.
+
+  R> DROP
+
+  TRUE EXIT
+;
+
 ( dy dx y x -- )
 : MOVE-TILEMAP-BALL
   2>R 2R@ 2+2 TILE-ADDR
   2R> TILE-ADDR
   ( &tile1 &tile2 )
+  \ TODO: This is silly, should just set EMPTY-TILE behind us.
   CSWAP!
 ;
 
@@ -602,17 +656,23 @@ BANK!
   DUP >R
   BALLS BALL-ARRAY + >R
   ( dy dx )
-  2DUP R@ BALL-CAN-MOVE? 0= IF
-    2DROP R> R> DROP DROP
-    FALSE EXIT
+  2DUP R@ BALL-CAN-MOVE? IF
+    \ Update tilemap and array.
+    2DUP
+    R@ BALL-Y @ R@ BALL-X @ MOVE-TILEMAP-BALL
+    R@ BALL-X +!
+    R> BALL-Y +!
+    R> DRAW-BALL
+    TRUE EXIT
   THEN
-  \ Update tilemap and array.
-  2DUP
-  R@ BALL-Y @ R@ BALL-X @ MOVE-TILEMAP-BALL
-  R@ BALL-X +!
-  R> BALL-Y +!
-  R> DRAW-BALL
-  TRUE
+  ( dy dx )
+  R@ TRY-MERGE IF
+    R> DROP
+    R> DRAW-BALL
+    TRUE EXIT
+  THEN
+  R> R> DROP DROP
+  FALSE
 ;
 
 ( tile-id -- ball-id )
