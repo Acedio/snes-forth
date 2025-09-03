@@ -268,13 +268,15 @@ BANK!
   1 CELLS +LOOP DROP
 ;
 
-0 CONSTANT RED
-1 CONSTANT YELLOW
+\ These are in order such that 3 bits indicate color combinations, e.g. a color
+\ with bit 1 set always has red in it, bit 2 for green, and bit 3 for blue.
+1 CONSTANT RED
 2 CONSTANT GREEN
-3 CONSTANT CYAN
+3 CONSTANT YELLOW
 4 CONSTANT BLUE
 5 CONSTANT MAGENTA
-6 CONSTANT WHITE
+6 CONSTANT CYAN
+7 CONSTANT WHITE
 
 : BALL-ENABLED ; \ First cell.
 : BALL-Y 1 CELLS + ;
@@ -324,8 +326,8 @@ BANK!
 4 CONSTANT FIRST-BALL-OAM-OBJECT
 
 : BALL-COLOR-TILE
-  \ Red ball at 0x02, in color order to the right.
-  2* 0x02 +
+  \ Red is color 1 and red ball at 0x02, in color order to the right.
+  2*
 ;
 
 ( ball-id -- )
@@ -405,8 +407,8 @@ BANK!
 0x14 CONSTANT FIRST-GOAL-OAM-OBJECT
 
 : GOAL-COLOR-TILE
-  \ Red goal at 0x02, in color order to the right.
-  2* 0x22 +
+  \ Red is color 1 and red goal at 0x22, in color order to the right.
+  2* 0x20 +
 ;
 
 ( goal-id )
