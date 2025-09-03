@@ -21,6 +21,7 @@
 BANK@
 LOWRAM BANK!
 CREATE BG-TICKS 1 CELLS ALLOT
+CREATE MISSED-FRAMES 1 CELLS ALLOT
 BANK!
 
 : 2BIT-TILES
@@ -192,7 +193,8 @@ BANK!
 
 : SNES-NMI
   NMI-READY @ 0= IF
-    \ TODO: We missed a frame. Find a way to track/signal this.
+    \ We missed a frame.
+    1 MISSED-FRAMES +!
     EXIT
   THEN
 
@@ -623,6 +625,7 @@ BANK!
   FALSE NMI-READY !
   0 NMI-STATE !
   0 BG-TICKS !
+  0 MISSED-FRAMES !
 
   0 JOY1-HELD !
   0 JOY1-PRESSED !
