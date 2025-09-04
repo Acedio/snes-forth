@@ -56,6 +56,8 @@ not_implemented:
   jmp not_implemented
 
 nmi:
+  jml nmiFast
+nmiFast:
 ; Thanks to Oziphantom (https://www.youtube.com/watch?v=rPcwGeX_hLs) for the NMI overview :)
 
 ; = Save registers =
