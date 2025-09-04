@@ -32,3 +32,14 @@ CODE AUDIO-PLAY-SONG
   plx
   rts
 END-CODE
+
+CODE AUDIO-PLAY-SFX
+  phx
+  A8
+  lda #SFX::menu_select
+  jsr Tad_QueueSoundEffect
+  A16
+  plx
+  rts
+END-CODE
+

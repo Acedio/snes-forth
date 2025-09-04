@@ -1,0 +1,7 @@
+=== menu_select ===
+    set_instrument  FM_Harp
+
+    play_note       c4  $0C
+    play_note       g4  $0C
+    play_note       c5  $0C
+    play_note       b5  $60

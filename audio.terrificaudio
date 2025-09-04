@@ -23,9 +23,11 @@
     "interruptible": true
   },
   "high_priority_sound_effects": [],
-  "sound_effects": [],
+  "sound_effects": [
+    "menu_select"
+  ],
   "low_priority_sound_effects": [],
-  "sound_effect_file": null,
+  "sound_effect_file": "sound_effects.txt",
   "songs": [
     {
       "name": "song",

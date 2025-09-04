@@ -28,13 +28,13 @@ snes-forth.lua: bytestack.lua  cellstack.lua  dataspace.lua  dictionary.lua  inp
 tests.out.fth: std.fth snes-std.fth tests/tests.fth
 	cat $^ > $@
 
-game.out.fth: std.fth snes-std.fth joypad.fth sin-lut.fth oam.fth vram.fth cgram.fth maptiles.tiles.fth sprites.tiles.fth font.fth levels.fth level.fth audio.fth game.fth 
+game.out.fth: std.fth snes-std.fth joypad.fth sin-lut.fth oam.fth vram.fth cgram.fth maptiles.tiles.fth sprites.tiles.fth font.fth audio.fth levels.fth level.fth game.fth 
 	cat $^ > $@
 
 tests: tests.smc tests.mlb
 	echo tests
 
-audio.terrificaudio: song.mml FM_Harp.brr
+audio.terrificaudio: song.mml FM_Harp.brr sound_effects.txt
 
 audio.s audio.bin: audio.terrificaudio
 	tad-compiler ca65-export audio.terrificaudio --output-asm audio.s --output-bin audio.bin --segment BANK1 --lorom
