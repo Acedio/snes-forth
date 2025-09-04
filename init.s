@@ -34,16 +34,16 @@ fastrom:
   stz $4200,x
   dex
   bpl @loop
+  lda #$8F
+  sta $4100
 
   ldx #RETURN_STACK_ADDR
   txs
   ldx #DATA_STACK_ADDR
 
-  ; Enable NMI and automatic controller reading.
-  A8
-  lda #$81
-  sta $4200
-  A16
+  ; Set Data Bank to the current (fast) Program Bank.
+  phk
+  plb
 
 .import _SNES_MAIN
   jsr _SNES_MAIN

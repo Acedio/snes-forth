@@ -106,6 +106,13 @@ BANK!
   0 NMI-STATE !
   0 MISSED-FRAMES !
 
+  \ TODO: Needed prior to AUDIO-INIT?
+  0x400 0 DO LOOP
+
+  AUDIO-INIT
+
+  NMI-ENABLE
+
   0 JOY1-HELD !
   0 JOY1-PRESSED !
 
@@ -127,6 +134,8 @@ cool, if a bit slow...
   )
 
   LEVEL-INIT
+
+  AUDIO-PLAY-SONG
 
   0x7000 SHADOW-OAM-LOWER 0 OAM-LOWER-OBJECTS OAM-COORDINATES + !
   0x02   SHADOW-OAM-UPPER 0 OAM-UPPER-OBJECTS MASK!
@@ -162,6 +171,8 @@ cool, if a bit slow...
     BEGIN
       NMI-WAIT
     NMI-READY @ 0= UNTIL
+
+    AUDIO-UPDATE
 
     READ-JOY1
 

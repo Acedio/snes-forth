@@ -11,3 +11,6 @@ dataspace.dump
 *.map.out
 *.tiles.fth
 *.sprites.fth
+audio.inc
+audio.bin
+audio.s

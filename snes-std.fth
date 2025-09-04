@@ -13,6 +13,15 @@ CODE BREAKPOINT
   rts
 END-CODE
 
+CODE NMI-ENABLE
+  ; Enable NMI and automatic controller reading.
+  A8
+  lda #$81
+  sta $4200
+  A16
+  rts
+END-CODE
+
 CODE NMI-WAIT
   wai
   rts
