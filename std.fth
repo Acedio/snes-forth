@@ -124,3 +124,10 @@
 : 2+2
   ROT + -ROT + SWAP
 ;
+
+( addr bytes -- )
+: ZERO-FILL
+  EACH DO
+    0 I C!
+  LOOP
+;
