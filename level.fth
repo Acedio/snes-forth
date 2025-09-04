@@ -331,12 +331,12 @@ BANK!
   R@ BALL-Y @ + SWAP
   TILE-ADDR
   ( &target-tile R: &merging-ball )
-  DUP @ IS-BALL-TILE? 0= IF
+  DUP C@ IS-BALL-TILE? 0= IF
     DROP R> DROP FALSE EXIT
   THEN
   ( &target-tile R: &merging-ball )
   \ Use ball tile as index into ball array
-  DUP @ BALL-FOR-TILE DUP BALLS BALL-ARRAY +
+  DUP C@ BALL-FOR-TILE DUP BALLS BALL-ARRAY +
   ( &target-tile target-ball-id &target-ball R: &merging-ball )
   DUP BALL-COLOR @ DUP
   ( &target-tile target-ball-id &target-ball target-color target-color )
@@ -362,13 +362,13 @@ BANK!
   BALL-X @ R@ BALL-X !
 
   ( &target-tile &merging-tile R: &merging-ball )
-  DUP @ SWAP \ Save the merging ball tile ID
+  DUP C@ SWAP \ Save the merging ball tile ID
   EMPTY-TILE SWAP C! \ Erase the merging position.
   SWAP C! \ Overwrite the target ball position.
 
   R> DROP
 
-  TRUE EXIT
+  TRUE
 ;
 
 ( dy dx y x -- )
@@ -463,8 +463,8 @@ BANK!
         DROP FALSE UNLOOP EXIT
       THEN
       \ Check for color match.
-      BALL-FOR-TILE BALLS BALL-ARRAY + BALL-COLOR
-      I GOAL-COLOR <> IF
+      BALL-FOR-TILE BALLS BALL-ARRAY + BALL-COLOR @
+      I GOAL-COLOR @ <> IF
         FALSE UNLOOP EXIT
       THEN
     THEN
@@ -568,7 +568,7 @@ BANK!
 
   0 LEVEL-TICKS !
 
-  0 LEVEL !
+  2 LEVEL !
 
   0 PLAYER-X !
   0 PLAYER-Y !
