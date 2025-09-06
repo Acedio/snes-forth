@@ -77,7 +77,7 @@ BANK!
     SHADOW-OAM-LOWER R@ OAM-LOWER-OBJECTS +
     TUCK OAM-TILE-NUMBER C!
     \ TODO: Priority
-    0x00 SWAP OAM-ATTRIBUTES C!
+    0x30 SWAP OAM-ATTRIBUTES C!
   ELSE
     DROP
     \ Hide the ball
@@ -194,7 +194,7 @@ BANK!
     0x40 OVER OAM-ATTRIBUTES C!
   THEN
   JOY1-PRESSED @ BUTTON-LEFT AND 0<> IF
-    0x00 OVER OAM-ATTRIBUTES C!
+    0x30 OVER OAM-ATTRIBUTES C!
   THEN
   DROP
   PLAYER-Y @ 16* PLAYER-X @ 16* PLAYER-OAM-OBJECT OAM-OBJECT-COORDS!
@@ -533,17 +533,19 @@ BANK!
   COPY-BG-TO-VRAM
 ;
 
-: PULSE-BG
+: SHIFT-STARFIELD
   LEVEL-TICKS @
-  0xFF AND SIN-LUT 0x7FFF + \ Sine between 0x0000 and 0xFFFF
-  \ Blue component
-  DUP LSR LSR LSR 0x7C00 AND SWAP
-  \ Green component
-  HIBYTE 2* 0x03E0 AND
-  \ Combine
-  OR
-  SET-BACKDROP-COLOR
+  LSR LSR LSR
+  \ X for BG2
+  DUP 0x210F C!
+  DUP HIBYTE 0x210F C!
+  \ Y for BG2
+  LSR LSR
+  DUP 0x2110 C!
+  HIBYTE 0x2110 C!
 ;
+
+4 CONSTANT LEVEL-LOAD-NMI-STATE
 
 : LEVEL-NMI
   \ Character data area (BG1 4*4K words = 16K words start, BG3 1*4K words = 4K words start)
@@ -571,9 +573,19 @@ BANK!
     3 OF
       COPY-BG2
 
+      0x1460 SET-BACKDROP-COLOR
+
       1 LEVEL-NMI-STATE +!
     ENDOF
-    4 OF
+    LEVEL-LOAD-NMI-STATE OF
+      COPY-BG1
+
+      \ Layers 1, 2, 3, and OBJ
+      0x07 0x212C C!
+
+      1 LEVEL-NMI-STATE +!
+    ENDOF
+    5 OF
       \ Layers 1, 2, 3, and OBJ
       0x17 0x212C C!
 
@@ -586,14 +598,12 @@ BANK!
       0x00 0x210D C!
       0x00 0x210D C!
 
-      COPY-BG1
+      SHIFT-STARFIELD
 
       \ Small sprites, OBJ tile base at VRAM 0x2000 (8Kth word)
       1 0x2101 C!
 
       COPY-OAM
-
-      PULSE-BG
     ENDOF
   ENDCASE
 
@@ -641,6 +651,7 @@ BANK!
         DROP 0
       THEN LEVEL !
       LEVEL @ LOAD-LEVEL
+      LEVEL-LOAD-NMI-STATE LEVEL-NMI-STATE !
       LEVEL-PLAYING LEVEL-STATE !
     ENDOF
   ENDCASE
