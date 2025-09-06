@@ -39,7 +39,6 @@
 ;
 )
 
-(
 : LEVEL-1-STRING
   S"
 ||||||||||||||||||||||||||||||||
@@ -76,7 +75,6 @@
 ||||||||||||||||||||||||||||||||"
   DROP
 ;
-)
 
 : LEVEL-2-STRING
   S"
@@ -191,7 +189,7 @@
 
 0 \ Track the number of levels.
 CREATE LEVELS-ARRAY
-\  LEVEL-1-STRING , 1+
+  LEVEL-1-STRING , 1+
   LEVEL-2-STRING , 1+
   LEVEL-3-STRING , 1+
   LEVEL-4-STRING , 1+

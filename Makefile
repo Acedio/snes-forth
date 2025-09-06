@@ -51,13 +51,13 @@ audio.fth: tad-audio.inc audio.inc
 	superfamiconv -i $^ -p $*.tiles.pal.out -t $*.tiles.tiles.out -S
 
 %.tiles.fth: %.tiles.pal.out %.tiles.tiles.out
-	./tiles-to-forth.lua $(shell echo '$*' | tr '[:lower:]' '[:upper:]') $^ > $@
+	./tiles-to-forth.lua $(shell echo '$*' | tr '[:lower:]' '[:upper:]') $^ BANK2 > $@
 
 %.tiles2b.pal.out %.tiles2b.tiles.out: %.png
 	superfamiconv -i $^ -p $*.tiles2b.pal.out -t $*.tiles2b.tiles.out -S -B 2
 
 %.tiles2b.fth: %.tiles2b.pal.out %.tiles2b.tiles.out
-	./tiles-to-forth.lua $(shell echo '$*' | tr '[:lower:]' '[:upper:]') $^ > $@
+	./tiles-to-forth.lua $(shell echo '$*' | tr '[:lower:]' '[:upper:]') $^ BANK2 > $@
 
 %.map.csv: %.tmx
 	tiled --export-map csv $< $@

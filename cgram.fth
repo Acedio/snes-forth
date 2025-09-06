@@ -10,16 +10,16 @@
   SET-PALETTE-ENTRY
 ;
 
-( from bytes to-word-index -- )
-: COPY-CGRAM-PALETTE
+( from from-page bytes to-word-index -- )
+: COPY-CGRAM-PALETTE-LONG
   \ Which word-indexed entry to transfer to.
   0x2121 C!
   \ Number of copies (bytes)
   0x4305 !
+  \ Page
+  0x4304 C!
   \ Transfer from
   0x4302 !
-  \ Page (TODO: This shouldn't always be 0)
-  0 0x4304 C!
   \ Always copy byte-by-byte to the same address.
   0x0 0x4300 C!
   \ Copy to CGRAM reg
@@ -27,6 +27,12 @@
 
   \ Start DMA transfer.
   0x01 0x420B C!
+;
+
+\ Assumes page 0.
+( from bytes to-word-index -- )
+: COPY-CGRAM-PALETTE
+  0 -ROT COPY-CGRAM-PALETTE-LONG
 ;
 
 ( CGRAM organization

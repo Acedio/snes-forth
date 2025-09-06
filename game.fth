@@ -18,10 +18,11 @@ BANK!
 (
 : COPY-FONT
   FONT
+  FONT-BANK
   FONT-CHARS 2BIT-8X8-TILES
   \ Start at the character data area, 4Kth word.
   0x1000
-  DMA0-VRAM-TRANSFER
+  DMA0-VRAM-LONG-TRANSFER
 ;
 
 : TEXT-PALETTE

@@ -1,5 +1,5 @@
 ( from from-page bytes to -- )
-: DMA-VRAM-LONG-TRANSFER
+: DMA0-VRAM-LONG-TRANSFER
   \ Set up VRAM reg.
   \ Increment after writing high byte
   0x80 0x2115 C!
@@ -24,7 +24,7 @@
 \ Assumes page 0.
 ( from bytes to -- )
 : DMA0-VRAM-TRANSFER
-  0 -ROT DMA-VRAM-LONG-TRANSFER
+  0 -ROT DMA0-VRAM-LONG-TRANSFER
 ;
 
 32 2* 2* 2* 2* 2* CONSTANT BGTILEMAP-TILE-COUNT
@@ -73,7 +73,7 @@ BANK!
   [ 16 16 * 2/ COMPILE-LIT ] PPU-MULT DROP
 ;
 
-( shadow-tilemap &vram -- )
+( &shadow-tilemap &vram -- )
 \ vram address is word-indexed.
 : COPY-BG-TO-VRAM
   BGTILEMAP-TILE-COUNT BGTILEMAP-ENTRIES SWAP

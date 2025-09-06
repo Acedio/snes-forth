@@ -3,6 +3,7 @@
 local name = arg[1]
 local palFile = assert(io.open(arg[2], "rb"))
 local tileFile = assert(io.open(arg[3], "rb"))
+local segment = arg[4] or "UNSIZED"
 
 function toWords(str)
   local wordStrings = {}
@@ -36,12 +37,25 @@ CODE %s
   sta z:1, X
   rts
 
+.pushseg
+.segment "%s"
+
 %s_DATA:
 %s
+
+.popseg
 END-CODE
 
-: %s-BYTES 0x%04X ;
-  ]], name, label, label, toWordRows(data), name, #data)
+0x%04X CONSTANT %s-BYTES
+
+CODE %s-BANK
+  dex
+  dex
+  lda #.BANKBYTE(%s_DATA)
+  sta z:1, X
+  rts
+END-CODE
+  ]], name, label, segment, label, toWordRows(data), #data, name, name, label)
 end
 
 print(makeDataWords(name .. "-PAL", name .. "_PAL", palFile:read("*all")))
