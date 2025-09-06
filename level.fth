@@ -527,6 +527,13 @@ BANK!
   COPY-CGRAM-PALETTE
 ;
 
+: COPY-FARSTARS-PALETTE
+  FARSTARS-PAL
+  FARSTARS-PAL-BYTES
+  0x00
+  COPY-CGRAM-PALETTE
+;
+
 : COPY-BG1
   BG1-SHADOW-TILEMAP
   \ Start at the tilemap data area (1kth word).
@@ -546,7 +553,7 @@ BANK!
   COPY-BG-TO-VRAM
 ;
 
-: SHIFT-STARFIELD
+: SCROLL-STARFIELD
   LEVEL-TICKS @
   LSR LSR LSR
   \ X for BG2
@@ -555,7 +562,17 @@ BANK!
   \ Y for BG2
   LSR LSR
   DUP 0x2110 C!
-  HIBYTE 0x2110 C!
+  DUP HIBYTE 0x2110 C!
+
+  \ Y for BG3
+  LSR
+  DUP 0x2112 C!
+  DUP HIBYTE 0x2112 C!
+
+  \ X for BG3
+  LSR
+  DUP 0x2111 C!
+  HIBYTE 0x2111 C!
 ;
 
 6 CONSTANT LEVEL-LOAD-NMI-STATE
@@ -589,6 +606,7 @@ BANK!
     ENDOF
     3 OF
       COPY-FARSTARS
+      COPY-FARSTARS-PALETTE
 
       1 LEVEL-NMI-STATE +!
     ENDOF
@@ -630,7 +648,7 @@ BANK!
       0x00 0x210D C!
       0x00 0x210D C!
 
-      SHIFT-STARFIELD
+      SCROLL-STARFIELD
 
       \ Small sprites, OBJ tile base at VRAM 0x2000 (8Kth word)
       1 0x2101 C!

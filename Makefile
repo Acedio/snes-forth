@@ -48,13 +48,13 @@ audio.inc: audio.terrificaudio
 audio.fth: tad-audio.inc audio.inc
 
 %.tiles.pal.out %.tiles.tiles.out: %.png
-	superfamiconv -i $^ -p $*.tiles.pal.out -t $*.tiles.tiles.out -m $*.tiles.map.out -S
+	superfamiconv -i $^ -p $*.tiles.pal.out -t $*.tiles.tiles.out -S
 
 %.tiles.fth: %.tiles.pal.out %.tiles.tiles.out
 	./tiles-to-forth.lua $(shell echo '$*' | tr '[:lower:]' '[:upper:]') $^ > $@
 
 %.tiles2b.pal.out %.tiles2b.tiles.out: %.png
-	superfamiconv -i $^ -p $*.tiles2b.pal.out -t $*.tiles2b.tiles.out -m $*.tiles2b.map.out -S -B 2
+	superfamiconv -i $^ -p $*.tiles2b.pal.out -t $*.tiles2b.tiles.out -S -B 2
 
 %.tiles2b.fth: %.tiles2b.pal.out %.tiles2b.tiles.out
 	./tiles-to-forth.lua $(shell echo '$*' | tr '[:lower:]' '[:upper:]') $^ > $@
