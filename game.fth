@@ -49,8 +49,8 @@ BANK!
     0 OF
       \ Disable all layers initially.
       0x00 0x212C C!
-      \ Set Mode 1 BG3 high priority (0x.9), BG1 tile size 16x16 (0x1.), other BGs 8x8
-      0x19 0x2105 C!
+      \ Set Mode 1 BG3 high priority (0x.9), BG1 and BG2 tile size 16x16 (0x3.), other BGs 8x8
+      0x39 0x2105 C!
 
       COPY-FONT
       TEXT-PALETTE
@@ -64,9 +64,6 @@ BANK!
       \ Set BG3 base (VRAM @ 0)
       0 0x2109 C!
 
-      \ Zero shift for BG1
-      0x00 0x210D C!
-      0x00 0x210D C!
       \ Shift BG3 right by 4 pixels to center text.
       0xFC 0x2111 C!
       0xFF 0x2111 C!

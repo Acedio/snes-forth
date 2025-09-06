@@ -28,7 +28,7 @@ snes-forth.lua: bytestack.lua  cellstack.lua  dataspace.lua  dictionary.lua  inp
 tests.out.fth: std.fth snes-std.fth tests/tests.fth
 	cat $^ > $@
 
-game.out.fth: std.fth snes-std.fth joypad.fth sin-lut.fth oam.fth vram.fth cgram.fth maptiles.tiles.fth sprites.tiles.fth font.fth audio.fth levels.fth level.fth game.fth 
+game.out.fth: std.fth snes-std.fth joypad.fth sin-lut.fth oam.fth vram.fth cgram.fth maptiles.tiles.fth sprites.tiles.fth stars.tiles.fth starfield.map.fth font.fth audio.fth levels.fth level.fth game.fth 
 	cat $^ > $@
 
 tests: tests.smc tests.mlb
@@ -50,5 +50,11 @@ audio.fth: tad-audio.inc audio.inc
 %.tiles.fth: %.tiles.pal.out %.tiles.tiles.out %.tiles.map.out
 	./tiles-to-forth.lua $(shell echo '$*' | tr '[:lower:]' '[:upper:]') $^ > $@
 
+%.map.csv: %.tmx
+	tiled --export-map csv $< $@
+
+%.map.fth: %.map.csv
+	./csv-to-tilemap.sh $(shell echo '$*' | tr '[:lower:]' '[:upper:]') $< > $@
+
 clean:
-	rm *.smc *.labels *.dbg *.o *.mlb *.out.s *.out.fth dataspace.dump *.pal.out *.tiles.out *.map.out *.tiles.fth *.sprites.fth audio.inc audio.bin audio.s
+	rm *.smc *.labels *.dbg *.o *.mlb *.out.s *.out.fth dataspace.dump *.pal.out *.tiles.out *.map.out *.tiles.fth *.sprites.fth audio.inc audio.bin audio.s *.map.csv *.map.fth

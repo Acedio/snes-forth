@@ -492,6 +492,13 @@ BANK!
   DMA0-VRAM-TRANSFER
 ;
 
+: COPY-STARS
+  STARS-TILES
+  STARS-TILES-BYTES
+  0x5000
+  DMA0-VRAM-TRANSFER
+;
+
 : COPY-SPRITES-PALETTE
   SPRITES-PAL
   SPRITES-PAL-BYTES
@@ -506,10 +513,23 @@ BANK!
   COPY-CGRAM-PALETTE
 ;
 
+: COPY-STARS-PALETTE
+  STARS-PAL
+  STARS-PAL-BYTES
+  0x20
+  COPY-CGRAM-PALETTE
+;
+
 : COPY-BG1
   BG1-SHADOW-TILEMAP
   \ Start at the tilemap data area (1kth word).
   0x0400 \ word-indexed
+  COPY-BG-TO-VRAM
+;
+
+: COPY-BG2
+  STARFIELD-MAP
+  0x0800
   COPY-BG-TO-VRAM
 ;
 
@@ -527,7 +547,7 @@ BANK!
 
 : LEVEL-NMI
   \ Character data area (BG1 4*4K words = 16K words start, BG3 1*4K words = 4K words start)
-  0x0104 0x210B !
+  0x0154 0x210B !
 
   LEVEL-NMI-STATE @ CASE
     0 OF
@@ -543,11 +563,28 @@ BANK!
       1 LEVEL-NMI-STATE +!
     ENDOF
     2 OF
-      \ Layers 1, 3, and OBJ
-      0x15 0x212C C!
+      COPY-STARS
+      COPY-STARS-PALETTE
 
-      \ Set BG1 base (VRAM @ 0x800)
+      1 LEVEL-NMI-STATE +!
+    ENDOF
+    3 OF
+      COPY-BG2
+
+      1 LEVEL-NMI-STATE +!
+    ENDOF
+    4 OF
+      \ Layers 1, 2, 3, and OBJ
+      0x17 0x212C C!
+
+      \ Set BG1 base (VRAM @ 0x800 (0x400.w))
       4 0x2107 C!
+      \ Set BG2 base (VRAM @ 0x1000 (0x800.w))
+      8 0x2108 C!
+
+      \ Zero shift for BG1
+      0x00 0x210D C!
+      0x00 0x210D C!
 
       COPY-BG1
 

@@ -14,3 +14,6 @@ dataspace.dump
 audio.inc
 audio.bin
 audio.s
+*.tiled-session
+*.map.csv
+*.map.fth
