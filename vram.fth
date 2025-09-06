@@ -1,5 +1,5 @@
-( from bytes to -- )
-: DMA0-VRAM-TRANSFER
+( from from-page bytes to -- )
+: DMA-VRAM-LONG-TRANSFER
   \ Set up VRAM reg.
   \ Increment after writing high byte
   0x80 0x2115 C!
@@ -8,10 +8,10 @@
 
   \ Number of copies (bytes)
   0x4305 !
+  \ Page
+  0x4304 C!
   \ Transfer from
   0x4302 !
-  \ Page (TODO: This shouldn't always be 0)
-  0 0x4304 C!
   \ Copy to addr (2118), then addr+1 (2119).
   0x1 0x4300 C!
   \ Copy to VRAM reg
@@ -19,6 +19,12 @@
 
   \ Start DMA transfer.
   0x01 0x420B C!
+;
+
+\ Assumes page 0.
+( from bytes to -- )
+: DMA0-VRAM-TRANSFER
+  0 -ROT DMA-VRAM-LONG-TRANSFER
 ;
 
 32 2* 2* 2* 2* 2* CONSTANT BGTILEMAP-TILE-COUNT

@@ -28,7 +28,7 @@ snes-forth.lua: bytestack.lua  cellstack.lua  dataspace.lua  dictionary.lua  inp
 tests.out.fth: std.fth snes-std.fth tests/tests.fth
 	cat $^ > $@
 
-game.out.fth: std.fth snes-std.fth joypad.fth sin-lut.fth oam.fth vram.fth cgram.fth maptiles.tiles.fth sprites.tiles.fth stars.tiles.fth starfield.map.fth farstars.tiles2b.fth farstars.map.fth font.fth audio.fth stars.fth levels.fth level.fth game.fth 
+game.out.fth: std.fth snes-std.fth joypad.fth sin-lut.fth oam.fth vram.fth cgram.fth maptiles.tiles.fth sprites.tiles.fth stars.tiles.fth starfield.p2.map.fth farstars.tiles2b.fth farstars.p0.map.fth title.tiles.fth title.p1.map.fth audio.fth stars.fth levels.fth level.fth title.fth game.fth 
 	cat $^ > $@
 
 tests: tests.smc tests.mlb
@@ -62,8 +62,15 @@ audio.fth: tad-audio.inc audio.inc
 %.map.csv: %.tmx
 	tiled --export-map csv $< $@
 
-%.map.fth: %.map.csv
-	./csv-to-tilemap.sh $(shell echo '$*' | tr '[:lower:]' '[:upper:]') $< > $@
+# These have .pX in their filename to indicate which palette they use.
+%.p0.map.fth: %.map.csv
+	./csv-to-tilemap.sh $(shell echo '$*' | tr '[:lower:]' '[:upper:]') $< 0 > $@
+
+%.p1.map.fth: %.map.csv
+	./csv-to-tilemap.sh $(shell echo '$*' | tr '[:lower:]' '[:upper:]') $< 1024 > $@
+
+%.p2.map.fth: %.map.csv
+	./csv-to-tilemap.sh $(shell echo '$*' | tr '[:lower:]' '[:upper:]') $< 2048 > $@
 
 clean:
 	rm *.smc *.labels *.dbg *.o *.mlb *.out.s *.out.fth dataspace.dump *.pal.out *.tiles.out *.tiles.fth *.tiles2b.fth *.sprites.fth audio.inc audio.bin audio.s *.map.csv *.map.fth

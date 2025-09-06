@@ -15,6 +15,7 @@
 : COPY-STARS-PALETTE
   STARS-PAL
   STARS-PAL-BYTES
+  \ TODO: This is never actually used, the tilemap defaults to the 0th palette.
   0x20
   COPY-CGRAM-PALETTE
 ;

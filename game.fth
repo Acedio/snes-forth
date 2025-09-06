@@ -9,12 +9,17 @@ BANK@
 LOWRAM BANK!
 CREATE NMI-READY 1 CELLS ALLOT
 CREATE NMI-STATE 1 CELLS ALLOT
+CREATE GAME-STATE 1 CELLS ALLOT
 BANK!
 
+0 CONSTANT GAME-STATE-TITLE
+1 CONSTANT GAME-STATE-LEVEL
+
+(
 : COPY-FONT
   FONT
   FONT-CHARS 2BIT-8X8-TILES
-  \ Start at the character data area (4Kth word).
+  \ Start at the character data area, 4Kth word.
   0x1000
   DMA0-VRAM-TRANSFER
 ;
@@ -27,10 +32,11 @@ BANK!
 
 : FONT-COPY-BG3
   BG3-SHADOW-TILEMAP
-  \ Start at the tilemap data area (0th word).
+  \ Start at the tilemap data area, 0th word.
   0x0000
   COPY-BG-TO-VRAM
 ;
+)
 
 : SNES-NMI
   NMI-READY @ 0= IF
@@ -48,8 +54,10 @@ BANK!
       \ Set Mode 1 BG3 high priority (0x.9), BG1 BG2 BG3 tile size 16x16 (0x7.)
       0x79 BG-MODE C!
 
+      (
       COPY-FONT
       TEXT-PALETTE
+      )
 
       \ Maximum screen brightness
       0x0F 0x2100 C!
@@ -64,12 +72,19 @@ BANK!
       0xFC 0x2111 C!
       0xFF 0x2111 C!
 
-      FONT-COPY-BG3
+      \ FONT-COPY-BG3
 
       1 NMI-STATE +!
     ENDOF
     2 OF
-      LEVEL-NMI
+      GAME-STATE @ CASE
+        GAME-STATE-TITLE OF
+          TITLE-NMI
+        ENDOF
+        GAME-STATE-LEVEL OF
+          LEVEL-NMI
+        ENDOF
+      ENDCASE
     ENDOF
   ENDCASE
 
@@ -100,6 +115,7 @@ BANK!
 : SNES-MAIN
   FALSE NMI-READY !
   0 NMI-STATE !
+  GAME-STATE-TITLE GAME-STATE !
   0 MISSED-FRAMES !
 
   0 JOY1-HELD !
@@ -125,7 +141,7 @@ cool, if a bit slow...
   DROP [ 32 2* 2* 2* COMPILE-LIT ] BG3-SHADOW-TILEMAP 0 10 TILEMAP-XY CELLS + COPY-STRING-TO-TILES
   )
 
-  LEVEL-INIT
+  TITLE-INIT
 
   AUDIO-PLAY-SONG
 
@@ -135,7 +151,17 @@ cool, if a bit slow...
 
     READ-JOY1
 
-    LEVEL-MAIN
+    GAME-STATE @ CASE
+      GAME-STATE-TITLE OF
+        TITLE-MAIN IF
+          LEVEL-INIT
+          GAME-STATE-LEVEL GAME-STATE !
+        THEN
+      ENDOF
+      GAME-STATE-LEVEL OF
+        LEVEL-MAIN
+      ENDOF
+    ENDCASE
 
     AUDIO-UPDATE
 

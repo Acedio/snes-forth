@@ -543,12 +543,6 @@ BANK!
       \ Set Mode 1 BG3 high priority (0x.9), BG1 BG2 BG3 tile size 16x16 (0x7.)
       0x11 0x11 BG-MODE MASK!
 
-      1 LEVEL-NMI-STATE +!
-    ENDOF
-    4 OF
-      \ Layers 1 and OBJ
-      0x11 0x11 BG-LAYER-ENABLE MASK!
-
       \ Set BG1 base (VRAM @ 0x800 (0x400.w))
       4 0x2107 C!
 
@@ -556,12 +550,19 @@ BANK!
       0x00 0x210D C!
       0x00 0x210D C!
 
-      STARS-NMI
+      1 LEVEL-NMI-STATE +!
+    ENDOF
+    4 OF
+      \ Layers 1 and OBJ
+      0x11 0x11 BG-LAYER-ENABLE MASK!
 
       \ Small sprites, OBJ tile base at VRAM 0x2000 (8Kth word)
       1 0x2101 C!
 
+      \ TODO: Copying this below STARS-NMI causes issues.
       COPY-OAM
+
+      STARS-NMI
     ENDOF
   ENDCASE
 

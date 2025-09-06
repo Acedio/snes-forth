@@ -1,0 +1,112 @@
+BANK@
+LOWRAM BANK!
+CREATE TITLE-TICKS 1 CELLS ALLOT
+CREATE TITLE-NMI-STATE 1 CELLS ALLOT
+BANK!
+
+: COPY-TITLE-TILES-1
+  TITLE-TILES
+  TITLE-TILES-BYTES 2/
+  0x4000
+  DMA0-VRAM-TRANSFER
+;
+
+: COPY-TITLE-TILES-2
+  TITLE-TILES TITLE-TILES-BYTES 2/ +
+  TITLE-TILES-BYTES 2/
+  0x4000 TITLE-TILES-BYTES 2/ 2/ +
+  DMA0-VRAM-TRANSFER
+;
+
+: COPY-TITLE-PALETTE
+  TITLE-PAL
+  TITLE-PAL-BYTES
+  0x10
+  COPY-CGRAM-PALETTE
+;
+
+: TITLE-COPY-BG1
+  TITLE-MAP
+  \ Start at the tilemap data area (1kth word).
+  0x0400 \ word-indexed
+  COPY-BG-TO-VRAM
+;
+
+: TITLE-NMI
+  \ TODO: Text is at 1*4K words = starts at 4K.w
+  \ Character data areas 
+  \ - BG1 4*4K words = 16K.w start
+  \ - BG2 5*4K words = 20K.w start
+  \ - BG3 6*4K words = 24K.w start
+  0x0004 0x000F BG-BASE-ADDRESSES MASK!
+  0x11   0x11   BG-MODE           MASK!
+
+  TITLE-NMI-STATE @ CASE
+    0 OF
+      COPY-TITLE-TILES-1
+
+      1 TITLE-NMI-STATE +!
+    ENDOF
+    1 OF
+      COPY-TITLE-TILES-2
+
+      1 TITLE-NMI-STATE +!
+    ENDOF
+    2 OF
+      COPY-TITLE-PALETTE
+
+      1 TITLE-NMI-STATE +!
+    ENDOF
+    3 OF
+      STARS-NMI IF
+        1 TITLE-NMI-STATE +!
+      THEN
+    ENDOF
+    4 OF
+      TITLE-COPY-BG1
+
+      \ Set Mode 1 BG3 high priority (0x.9), BG1 BG2 BG3 tile size 16x16 (0x7.)
+      0x11 0x11 BG-MODE MASK!
+
+      1 TITLE-NMI-STATE +!
+    ENDOF
+    5 OF
+      \ Layers 1 and OBJ
+      0x01 0x01 BG-LAYER-ENABLE MASK!
+
+      \ Set BG1 base (VRAM @ 0x800 (0x400.w))
+      4 0x2107 C!
+
+      \ Zero shift for BG1
+      0x00 0x210D C!
+      0x00 0x210D C!
+
+      STARS-NMI
+    ENDOF
+  ENDCASE
+
+  \ Maximum screen brightness
+  0x0F 0x2100 C!
+;
+
+: TITLE-INIT
+  0 TITLE-NMI-STATE !
+  0 TITLE-TICKS !
+
+  STARS-INIT
+;
+
+\ Returns TRUE when done with title.
+: TITLE-MAIN
+  1 TITLE-TICKS +!
+
+  STARS-MAIN
+
+  JOY1-PRESSED @ BUTTON-START AND 0<> IF
+    AUDIO-PLAY-SFX
+    TRUE
+    EXIT
+  THEN
+
+  FALSE
+;
