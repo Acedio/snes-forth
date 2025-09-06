@@ -41,16 +41,12 @@ BANK!
 
   FALSE NMI-READY !
 
-  \ TODO: Shadow this so we can modify it per BG easily.
-  \ Character data area (BG1 4*4K words = 16K words start, BG3 1*4K words = 4K words start)
-  0x0104 0x210B !
-
   NMI-STATE @ CASE
     0 OF
       \ Disable all layers initially.
-      0x00 0x212C C!
-      \ Set Mode 1 BG3 high priority (0x.9), BG1 and BG2 tile size 16x16 (0x3.), other BGs 8x8
-      0x39 0x2105 C!
+      0x00 BG-LAYER-ENABLE C!
+      \ Set Mode 1 BG3 high priority (0x.9), BG1 BG2 BG3 tile size 16x16 (0x7.)
+      0x79 BG-MODE C!
 
       COPY-FONT
       TEXT-PALETTE
@@ -76,6 +72,9 @@ BANK!
       LEVEL-NMI
     ENDOF
   ENDCASE
+
+  \ Wait for copying until the subcomponents had a chance to modify.
+  COPY-BASE-REGISTERS
 ;
 
 \ Converts ASCII string (bytes) to tile references (words where 0 = space, 1 =

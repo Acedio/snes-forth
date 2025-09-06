@@ -492,20 +492,6 @@ BANK!
   DMA0-VRAM-TRANSFER
 ;
 
-: COPY-STARS
-  STARS-TILES
-  STARS-TILES-BYTES
-  0x5000
-  DMA0-VRAM-TRANSFER
-;
-
-: COPY-FARSTARS
-  FARSTARS-TILES
-  FARSTARS-TILES-BYTES
-  0x6000
-  DMA0-VRAM-TRANSFER
-;
-
 : COPY-SPRITES-PALETTE
   SPRITES-PAL
   SPRITES-PAL-BYTES
@@ -520,71 +506,19 @@ BANK!
   COPY-CGRAM-PALETTE
 ;
 
-: COPY-STARS-PALETTE
-  STARS-PAL
-  STARS-PAL-BYTES
-  0x20
-  COPY-CGRAM-PALETTE
-;
-
-: COPY-FARSTARS-PALETTE
-  FARSTARS-PAL
-  FARSTARS-PAL-BYTES
-  0x00
-  COPY-CGRAM-PALETTE
-;
-
-: COPY-BG1
+: LEVEL-COPY-BG1
   BG1-SHADOW-TILEMAP
   \ Start at the tilemap data area (1kth word).
   0x0400 \ word-indexed
   COPY-BG-TO-VRAM
 ;
 
-: COPY-BG2
-  STARFIELD-MAP
-  0x0800
-  COPY-BG-TO-VRAM
-;
-
-: COPY-BG3
-  FARSTARS-MAP
-  0x0C00
-  COPY-BG-TO-VRAM
-;
-
-: SCROLL-STARFIELD
-  LEVEL-TICKS @
-  LSR LSR LSR
-  \ X for BG2
-  DUP 0x210F C!
-  DUP HIBYTE 0x210F C!
-  \ Y for BG2
-  LSR LSR
-  DUP 0x2110 C!
-  DUP HIBYTE 0x2110 C!
-
-  \ Y for BG3
-  LSR
-  DUP 0x2112 C!
-  DUP HIBYTE 0x2112 C!
-
-  \ X for BG3
-  LSR
-  DUP 0x2111 C!
-  HIBYTE 0x2111 C!
-;
-
-6 CONSTANT LEVEL-LOAD-NMI-STATE
+3 CONSTANT LEVEL-LOAD-NMI-STATE
 
 : LEVEL-NMI
   \ TODO: Text is at 1*4K words = starts at 4K.w
   \ Character data areas 
   \ - BG1 4*4K words = 16K.w start
-  \ - BG2 5*4K words = 20K.w start
-  \ - BG3 6*4K words = 24K.w start
-  0x0654 0x210B !
-
   LEVEL-NMI-STATE @ CASE
     0 OF
       COPY-SPRITES
@@ -599,56 +533,30 @@ BANK!
       1 LEVEL-NMI-STATE +!
     ENDOF
     2 OF
-      COPY-STARS
-      COPY-STARS-PALETTE
-
-      1 LEVEL-NMI-STATE +!
+      STARS-NMI IF
+        1 LEVEL-NMI-STATE +!
+      THEN
     ENDOF
-    3 OF
-      COPY-FARSTARS
-      COPY-FARSTARS-PALETTE
+    LEVEL-LOAD-NMI-STATE OF
+      LEVEL-COPY-BG1
+
+      \ Set Mode 1 BG3 high priority (0x.9), BG1 BG2 BG3 tile size 16x16 (0x7.)
+      0x11 0x11 BG-MODE MASK!
 
       1 LEVEL-NMI-STATE +!
     ENDOF
     4 OF
-      COPY-BG2
-
-      0x1460 SET-BACKDROP-COLOR
-
-      1 LEVEL-NMI-STATE +!
-    ENDOF
-    5 OF
-      COPY-BG3
-
-      1 LEVEL-NMI-STATE +!
-    ENDOF
-    LEVEL-LOAD-NMI-STATE OF
-      COPY-BG1
-
-      \ Set Mode 1 BG3 high priority (0x.9), BG1 BG2 BG3 tile size 16x16 (0x7.)
-      0x71 0x2105 C!
-
-      \ Layers 1, 2, 3, and OBJ
-      0x07 0x212C C!
-
-      1 LEVEL-NMI-STATE +!
-    ENDOF
-    7 OF
-      \ Layers 1, 2, 3, and OBJ
-      0x17 0x212C C!
+      \ Layers 1 and OBJ
+      0x11 0x11 BG-LAYER-ENABLE MASK!
 
       \ Set BG1 base (VRAM @ 0x800 (0x400.w))
       4 0x2107 C!
-      \ Set BG2 base (VRAM @ 0x1000 (0x800.w))
-      8 0x2108 C!
-      \ Set BG3 base (VRAM @ 0x1800 (0xC00.w))
-      12 0x2109 C!
 
       \ Zero shift for BG1
       0x00 0x210D C!
       0x00 0x210D C!
 
-      SCROLL-STARFIELD
+      STARS-NMI
 
       \ Small sprites, OBJ tile base at VRAM 0x2000 (8Kth word)
       1 0x2101 C!
@@ -675,11 +583,18 @@ BANK!
   0 PLAYER-X !
   0 PLAYER-Y !
 
+  STARS-INIT
+
+  0x0004 0x000F BG-BASE-ADDRESSES MASK!
+  0x11   0x11   BG-MODE           MASK!
+
   LEVEL @ LOAD-LEVEL
 ;
 
 : LEVEL-MAIN
   1 LEVEL-TICKS +!
+
+  STARS-MAIN
 
   LEVEL-STATE @ CASE
     LEVEL-PLAYING OF
