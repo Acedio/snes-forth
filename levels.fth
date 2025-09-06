@@ -187,12 +187,50 @@
   DROP
 ;
 
+: LEVEL-5-STRING
+  S"
+||||#|#|#|#|||||||||||||||||||||
+|              |               |
+|   #  w  #    |               |
+|              |               |
+|   # #G# #    |               |
+|     # #      |               |
+|     #B#      |               |
+|     # #      |               |
+|     #R#      |               |
+|     # #      |               |
+|     # #      |               |
+|     #@#      |               |
+|     ###      |               |
+||||||||||||||||               |
+|                              |
+|                              |
+|                              |
+|                              |
+|                              |
+|                              |
+|                              |
+|                              |
+|                              |
+|                              |
+|                              |
+|                              |
+|                              |
+|                              |
+|                              |
+|                              |
+|                              |
+||||||||||||||||||||||||||||||||"
+  DROP
+;
+
 0 \ Track the number of levels.
 CREATE LEVELS-ARRAY
   LEVEL-1-STRING , 1+
   LEVEL-2-STRING , 1+
   LEVEL-3-STRING , 1+
   LEVEL-4-STRING , 1+
+  LEVEL-5-STRING , 1+
 CONSTANT NUM-LEVELS
 
 ( level-id -- level-addr )

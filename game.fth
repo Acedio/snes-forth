@@ -14,30 +14,7 @@ BANK!
 
 0 CONSTANT GAME-STATE-TITLE
 1 CONSTANT GAME-STATE-LEVEL
-
-(
-: COPY-FONT
-  FONT
-  FONT-BANK
-  FONT-CHARS 2BIT-8X8-TILES
-  \ Start at the character data area, 4Kth word.
-  0x1000
-  DMA0-VRAM-LONG-TRANSFER
-;
-
-: TEXT-PALETTE
-  0 0x2121 C!
-  0 SET-PALETTE-ENTRY
-  0x7FFF SET-PALETTE-ENTRY
-;
-
-: FONT-COPY-BG3
-  BG3-SHADOW-TILEMAP
-  \ Start at the tilemap data area, 0th word.
-  0x0000
-  COPY-BG-TO-VRAM
-;
-)
+2 CONSTANT GAME-STATE-END
 
 : SNES-NMI
   NMI-READY @ 0= IF
@@ -55,35 +32,21 @@ BANK!
       \ Set Mode 1 BG3 high priority (0x.9), BG1 BG2 BG3 tile size 16x16 (0x7.)
       0x79 BG-MODE C!
 
-      (
-      COPY-FONT
-      TEXT-PALETTE
-      )
-
       \ Maximum screen brightness
       0x0F 0x2100 C!
 
       1 NMI-STATE +!
     ENDOF
     1 OF
-      \ Set BG3 base (VRAM @ 0)
-      0 0x2109 C!
-
-      \ Shift BG3 right by 4 pixels to center text.
-      0xFC 0x2111 C!
-      0xFF 0x2111 C!
-
-      \ FONT-COPY-BG3
-
-      1 NMI-STATE +!
-    ENDOF
-    2 OF
       GAME-STATE @ CASE
         GAME-STATE-TITLE OF
           TITLE-NMI
         ENDOF
         GAME-STATE-LEVEL OF
           LEVEL-NMI
+        ENDOF
+        GAME-STATE-END OF
+          END-NMI
         ENDOF
       ENDCASE
     ENDOF
@@ -93,31 +56,13 @@ BANK!
   COPY-BASE-REGISTERS
 ;
 
-\ Converts ASCII string (bytes) to tile references (words where 0 = space, 1 =
-\ !, etc). Ignores 0x0A (line feed?) characters.
-( addr u tilemap-addr -- )
-: COPY-STRING-TO-TILES
-  SWAP CELLS OVER + SWAP DO
-    BEGIN
-      DUP 1+ SWAP
-      C@
-      DUP 0x0A =
-    WHILE
-      DROP
-    REPEAT
-    \ Convert to text tile offset (missing the first 0x20 control characters).
-    0x20 -
-    \ Give text tiles priority over others. (bit 5 of $2105 ensures they show
-    \ over other backgrounds).
-    0x2000 OR I !
-  1 CELLS +LOOP DROP
-;
-
 : SNES-MAIN
   FALSE NMI-READY !
   0 NMI-STATE !
   GAME-STATE-TITLE GAME-STATE !
   0 MISSED-FRAMES !
+
+  INIT-BASE-REGISTERS
 
   0 JOY1-HELD !
   0 JOY1-PRESSED !
@@ -129,18 +74,6 @@ BANK!
   NMI-ENABLE
 
   ZERO-OAM
-
-(
-  S"   Testing out this fanciness!   
-                                
-We're not interpreting Forth    
-here, but we are indeed running 
-compiled Forth code! Pretty     
-cool, if a bit slow...          
-                                
-        :D :D :D :D             "
-  DROP [ 32 2* 2* 2* COMPILE-LIT ] BG3-SHADOW-TILEMAP 0 10 TILEMAP-XY CELLS + COPY-STRING-TO-TILES
-  )
 
   TITLE-INIT
 
@@ -160,7 +93,16 @@ cool, if a bit slow...
         THEN
       ENDOF
       GAME-STATE-LEVEL OF
-        LEVEL-MAIN
+        LEVEL-MAIN IF
+          END-INIT
+          GAME-STATE-END GAME-STATE !
+        THEN
+      ENDOF
+      GAME-STATE-END OF
+        END-MAIN IF
+          TITLE-INIT
+          GAME-STATE-TITLE GAME-STATE !
+        THEN
       ENDOF
     ENDCASE
 

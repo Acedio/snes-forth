@@ -28,7 +28,7 @@ snes-forth.lua: bytestack.lua  cellstack.lua  dataspace.lua  dictionary.lua  inp
 tests.out.fth: std.fth snes-std.fth tests/tests.fth
 	cat $^ > $@
 
-game.out.fth: std.fth snes-std.fth joypad.fth sin-lut.fth oam.fth vram.fth cgram.fth maptiles.tiles.fth sprites.tiles.fth stars.tiles.fth starfield.p2.map.fth farstars.tiles2b.fth farstars.p0.map.fth title.tiles.fth title.p1.map.fth audio.fth stars.fth levels.fth level.fth title.fth game.fth 
+game.out.fth: std.fth snes-std.fth joypad.fth sin-lut.fth oam.fth vram.fth cgram.fth maptiles.tiles.fth sprites.tiles.fth stars.tiles.fth starfield.p2.map.fth farstars.tiles2b.fth farstars.p0.map.fth title.tiles.fth title.p1.map.fth font.fth audio.fth stars.fth levels.fth level.fth title.fth end.fth game.fth 
 	cat $^ > $@
 
 tests: tests.smc tests.mlb

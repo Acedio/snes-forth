@@ -566,7 +566,7 @@ BANK!
       \ TODO: Copying this below STARS-NMI causes issues.
       COPY-OAM
 
-      STARS-NMI
+      STARS-NMI DROP
     ENDOF
   ENDCASE
 
@@ -605,7 +605,7 @@ BANK!
     LEVEL-PLAYING OF
       PLAYER-MOVEMENT
 
-      JOY1-PRESSED @ BUTTON-SELECT AND 0<> IF
+      JOY1-PRESSED @ BUTTON-START AND 0<> IF
         LEVEL @ LOAD-LEVEL
       THEN
 
@@ -618,7 +618,7 @@ BANK!
       \ Separate win state so we get a frame to update the player and ball
       \ positions, as well as let the SFX play.
       LEVEL @ 1+ DUP NUM-LEVELS >= IF
-        DROP 0
+        DROP TRUE EXIT
       THEN LEVEL !
       LEVEL @ LOAD-LEVEL
       LEVEL-LOAD-NMI-STATE LEVEL-NMI-STATE !
@@ -627,4 +627,6 @@ BANK!
   ENDCASE
 
   LEVEL-TICKS @ DRAW-PLAYER
+
+  FALSE \ Still running.
 ;
