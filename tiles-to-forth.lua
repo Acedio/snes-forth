@@ -3,7 +3,6 @@
 local name = arg[1]
 local palFile = assert(io.open(arg[2], "rb"))
 local tileFile = assert(io.open(arg[3], "rb"))
-local mapFile = assert(io.open(arg[4], "rb"))
 
 function toWords(str)
   local wordStrings = {}
@@ -47,4 +46,3 @@ end
 
 print(makeDataWords(name .. "-PAL", name .. "_PAL", palFile:read("*all")))
 print(makeDataWords(name .. "-TILES", name .. "_TILES", tileFile:read("*all")))
-print(makeDataWords(name .. "-MAP", name .. "_MAP", mapFile:read("*all")))

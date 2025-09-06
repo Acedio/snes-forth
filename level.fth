@@ -499,6 +499,13 @@ BANK!
   DMA0-VRAM-TRANSFER
 ;
 
+: COPY-FARSTARS
+  FARSTARS-TILES
+  FARSTARS-TILES-BYTES
+  0x6000
+  DMA0-VRAM-TRANSFER
+;
+
 : COPY-SPRITES-PALETTE
   SPRITES-PAL
   SPRITES-PAL-BYTES
@@ -533,6 +540,12 @@ BANK!
   COPY-BG-TO-VRAM
 ;
 
+: COPY-BG3
+  FARSTARS-MAP
+  0x0C00
+  COPY-BG-TO-VRAM
+;
+
 : SHIFT-STARFIELD
   LEVEL-TICKS @
   LSR LSR LSR
@@ -545,11 +558,15 @@ BANK!
   HIBYTE 0x2110 C!
 ;
 
-4 CONSTANT LEVEL-LOAD-NMI-STATE
+6 CONSTANT LEVEL-LOAD-NMI-STATE
 
 : LEVEL-NMI
-  \ Character data area (BG1 4*4K words = 16K words start, BG3 1*4K words = 4K words start)
-  0x0154 0x210B !
+  \ TODO: Text is at 1*4K words = starts at 4K.w
+  \ Character data areas 
+  \ - BG1 4*4K words = 16K.w start
+  \ - BG2 5*4K words = 20K.w start
+  \ - BG3 6*4K words = 24K.w start
+  0x0654 0x210B !
 
   LEVEL-NMI-STATE @ CASE
     0 OF
@@ -571,21 +588,34 @@ BANK!
       1 LEVEL-NMI-STATE +!
     ENDOF
     3 OF
+      COPY-FARSTARS
+
+      1 LEVEL-NMI-STATE +!
+    ENDOF
+    4 OF
       COPY-BG2
 
       0x1460 SET-BACKDROP-COLOR
 
       1 LEVEL-NMI-STATE +!
     ENDOF
+    5 OF
+      COPY-BG3
+
+      1 LEVEL-NMI-STATE +!
+    ENDOF
     LEVEL-LOAD-NMI-STATE OF
       COPY-BG1
+
+      \ Set Mode 1 BG3 high priority (0x.9), BG1 BG2 BG3 tile size 16x16 (0x7.)
+      0x71 0x2105 C!
 
       \ Layers 1, 2, 3, and OBJ
       0x07 0x212C C!
 
       1 LEVEL-NMI-STATE +!
     ENDOF
-    5 OF
+    7 OF
       \ Layers 1, 2, 3, and OBJ
       0x17 0x212C C!
 
@@ -593,6 +623,8 @@ BANK!
       4 0x2107 C!
       \ Set BG2 base (VRAM @ 0x1000 (0x800.w))
       8 0x2108 C!
+      \ Set BG3 base (VRAM @ 0x1800 (0xC00.w))
+      12 0x2109 C!
 
       \ Zero shift for BG1
       0x00 0x210D C!

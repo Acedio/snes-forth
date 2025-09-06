@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <map version="1.10" tiledversion="1.11.2" orientation="orthogonal" renderorder="right-down" width="32" height="32" tilewidth="16" tileheight="16" infinite="0" backgroundcolor="#002f4d" nextlayerid="2" nextobjectid="1">
  <editorsettings>
-  <export target="starfield.csv" format="csv"/>
+  <export target="starfield.lua" format="lua"/>
  </editorsettings>
  <tileset firstgid="1" source="stars.tsx"/>
  <layer id="1" name="Tile Layer 1" width="32" height="32">

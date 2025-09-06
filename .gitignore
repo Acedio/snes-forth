@@ -8,8 +8,8 @@
 dataspace.dump
 *.pal.out
 *.tiles.out
-*.map.out
 *.tiles.fth
+*.tiles2b.fth
 *.sprites.fth
 audio.inc
 audio.bin
@@ -17,3 +17,4 @@ audio.s
 *.tiled-session
 *.map.csv
 *.map.fth
+farstars.png

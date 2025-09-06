@@ -25,7 +25,7 @@ BANK!
   0x7FFF SET-PALETTE-ENTRY
 ;
 
-: COPY-BG3
+: FONT-COPY-BG3
   BG3-SHADOW-TILEMAP
   \ Start at the tilemap data area (0th word).
   0x0000
@@ -68,7 +68,7 @@ BANK!
       0xFC 0x2111 C!
       0xFF 0x2111 C!
 
-      COPY-BG3
+      FONT-COPY-BG3
 
       1 NMI-STATE +!
     ENDOF
