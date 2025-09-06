@@ -33,14 +33,6 @@ BANK!
 ;
 
 : TITLE-NMI
-  \ TODO: Text is at 1*4K words = starts at 4K.w
-  \ Character data areas 
-  \ - BG1 4*4K words = 16K.w start
-  \ - BG2 5*4K words = 20K.w start
-  \ - BG3 6*4K words = 24K.w start
-  0x0004 0x000F BG-BASE-ADDRESSES MASK!
-  0x11   0x11   BG-MODE           MASK!
-
   TITLE-NMI-STATE @ CASE
     0 OF
       COPY-TITLE-TILES-1
@@ -64,9 +56,6 @@ BANK!
     ENDOF
     4 OF
       TITLE-COPY-BG1
-
-      \ Set Mode 1 BG3 high priority (0x.9), BG1 BG2 BG3 tile size 16x16 (0x7.)
-      0x11 0x11 BG-MODE MASK!
 
       1 TITLE-NMI-STATE +!
     ENDOF
@@ -92,6 +81,10 @@ BANK!
 : TITLE-INIT
   0 TITLE-NMI-STATE !
   0 TITLE-TICKS !
+
+  \ - BG1 4*4K words = 16K.w start
+  0x0004 0x000F BG-BASE-ADDRESSES MASK!
+  0x11   0x11   BG-MODE           MASK!
 
   STARS-INIT
 ;
