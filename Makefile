@@ -1,76 +1,90 @@
-all: game.smc game.mlb
+BUILD=build
+ASSETS=assets
 
-%.smc %.labels %.dbg: %.o init.o lorom128.cfg tad-audio.o audio.o
-	ld65 -C lorom128.cfg -Ln $*.labels --dbgfile $*.dbg -o $*.smc $*.o init.o tad-audio.o audio.o
+all: $(BUILD)/game.smc $(BUILD)/game.mlb
 
-tad-audio.o: tad-audio.s
+build:
+	mkdir -p build
+
+$(BUILD)/%.smc $(BUILD)/%.labels $(BUILD)/%.dbg: $(BUILD)/%.o $(BUILD)/init.o lorom128.cfg $(BUILD)/tad-audio.o $(BUILD)/audio.o | build
+	ld65 -C lorom128.cfg -Ln $*.labels --dbgfile $*.dbg -o $(BUILD)/$*.smc $(BUILD)/$*.o $(BUILD)/init.o $(BUILD)/tad-audio.o $(BUILD)/audio.o
+
+$(BUILD)/tad-audio.o: tad-audio.s | build
 	ca65 $< -g -o $@ -DLOROM
 
-audio.o: audio.s
+$(BUILD)/audio.o: audio.s | build
 	ca65 $< -g -o $@ -DLOROM
 
-%.o: %.out.s preamble.s
+$(BUILD)/%.o: $(BUILD)/%.out.s preamble.s | build
 	ca65 $< -g -o $@
 
-init.o: init.s preamble.s
+$(BUILD)/init.o: init.s preamble.s | build
 	ca65 $< -g -o $@
 
 # A list of labels for use with Mesen.
-%.mlb: %.labels
+$(BUILD)/%.mlb: $(BUILD)/%.labels | build
 	< $< awk 'BEGIN {IFS=" "} {printf("SnesPrgRom:%x:%s\n", strtonum("0x" $$2) - 0x8000, substr($$3,2));}' > $@
 
 .PRECIOUS: %.out.s
-%.out.s: %.out.fth snes-forth.lua
-	./snes-forth.lua $< $@
+$(BUILD)/%.out.s: $(BUILD)/%.out.fth forth/snes-forth.lua | build
+	LUA_PATH=forth/?.lua forth/snes-forth.lua $< $@
 
-snes-forth.lua: bytestack.lua  cellstack.lua  dataspace.lua  dictionary.lua  input.lua
+forth/snes-forth.lua: forth/bytestack.lua  forth/cellstack.lua  forth/dataspace.lua  forth/dictionary.lua  forth/input.lua
 
-tests.out.fth: std.fth snes-std.fth tests/tests.fth
+$(BUILD)/tests.out.fth: std.fth snes-std.fth tests/tests.fth | build
 	cat $^ > $@
 
-game.out.fth: std.fth snes-std.fth joypad.fth sin-lut.fth oam.fth vram.fth cgram.fth maptiles.tiles.fth sprites.tiles.fth stars.tiles.fth starfield.p2.map.fth farstars.tiles2b.fth farstars.p0.map.fth title.tiles.fth title.p1.map.fth font.fth audio.fth stars.fth levels.fth level.fth title.fth end.fth game.fth 
+4BTILES=maptiles sprites stars title
+4BTILES_FTH=$(foreach name,$(4BTILES),$(BUILD)/$(name).tiles.fth)
+2BTILES=farstars
+2BTILES_FTH=$(foreach name,$(2BTILES),$(BUILD)/$(name).tiles2b.fth)
+MAPS=starfield.p2 farstars.p0 title.p1
+MAPS_FTH=$(foreach name,$(MAPS),$(BUILD)/$(name).map.fth)
+
+$(BUILD)/game.out.fth: std.fth snes-std.fth joypad.fth sin-lut.fth oam.fth vram.fth cgram.fth $(4BTILES_FTH) $(2BTILES_FTH) $(MAPS_FTH) font.fth audio.fth stars.fth levels.fth level.fth title.fth end.fth game.fth  | build
 	cat $^ > $@
 
-tests: tests.smc tests.mlb
+tests: $(BUILD)/tests.smc $(BUILD)/tests.mlb
 	echo tests
 
-farstars.png: stars.png
+$(ASSETS)/farstars.png: $(ASSETS)/stars.png
 	cp $< $@
 
-audio.terrificaudio: song.mml FM_Harp.brr sound_effects.txt
+$(ASSETS)/audio.terrificaudio: $(ASSETS)/song.mml $(ASSETS)/FM_Harp.brr $(ASSETS)/sound_effects.txt
 
-audio.s audio.bin: audio.terrificaudio
-	tad-compiler ca65-export audio.terrificaudio --output-asm audio.s --output-bin audio.bin --segment BANK1 --lorom
+$(BUILD)/audio.s $(BUILD)/audio.bin: $(ASSETS)/audio.terrificaudio | build
+	tad-compiler ca65-export $< --output-asm $(BUIDL)/audio.s --output-bin $(BUIDL)/audio.bin --segment BANK1 --lorom
 
-audio.inc: audio.terrificaudio
-	tad-compiler ca65-enums audio.terrificaudio --output audio.inc
+$(BUILD)/audio.inc: $(ASSETS)/audio.terrificaudio | build
+	tad-compiler ca65-enums $< --output $@
 
-audio.fth: tad-audio.inc audio.inc
+audio.fth: tad-audio.inc $(BUILD)/audio.inc
 
-%.tiles.pal.out %.tiles.tiles.out: %.png
-	superfamiconv -i $^ -p $*.tiles.pal.out -t $*.tiles.tiles.out -S
+$(BUILD)/%.tiles.pal.out $(BUILD)/%.tiles.tiles.out: $(ASSETS)/%.png | build
+	superfamiconv -i $^ -p $(BUILD)/$*.tiles.pal.out -t $(BUILD)/$*.tiles.tiles.out -S
 
-%.tiles.fth: %.tiles.pal.out %.tiles.tiles.out
+$(BUILD)/%.tiles.fth: $(BUILD)/%.tiles.pal.out $(BUILD)/%.tiles.tiles.out | build
 	./tiles-to-forth.lua $(shell echo '$*' | tr '[:lower:]' '[:upper:]') $^ BANK2 > $@
 
-%.tiles2b.pal.out %.tiles2b.tiles.out: %.png
-	superfamiconv -i $^ -p $*.tiles2b.pal.out -t $*.tiles2b.tiles.out -S -B 2
+$(BUILD)/%.tiles2b.pal.out $(BUILD)/%.tiles2b.tiles.out: $(ASSETS)/%.png | build
+	superfamiconv -i $^ -p $(BUILD)/$*.tiles2b.pal.out -t $(BUILD)/$*.tiles2b.tiles.out -S -B 2
 
-%.tiles2b.fth: %.tiles2b.pal.out %.tiles2b.tiles.out
+$(BUILD)/%.tiles2b.fth: $(BUILD)/%.tiles2b.pal.out $(BUILD)/%.tiles2b.tiles.out | build
 	./tiles-to-forth.lua $(shell echo '$*' | tr '[:lower:]' '[:upper:]') $^ BANK2 > $@
 
-%.map.csv: %.tmx
-	tiled --export-map csv $< $@
+$(BUILD)/%.map.csv: $(ASSETS)/%.tmx | build
+	xvfb-run -a tiled --export-map csv $< $@
 
 # These have .pX in their filename to indicate which palette they use.
-%.p0.map.fth: %.map.csv
+$(BUILD)/%.p0.map.fth: $(BUILD)/%.map.csv | build
 	./csv-to-tilemap.sh $(shell echo '$*' | tr '[:lower:]' '[:upper:]') $< 0 > $@
 
-%.p1.map.fth: %.map.csv
+$(BUILD)/%.p1.map.fth: $(BUILD)/%.map.csv | build
 	./csv-to-tilemap.sh $(shell echo '$*' | tr '[:lower:]' '[:upper:]') $< 1024 > $@
 
-%.p2.map.fth: %.map.csv
+$(BUILD)/%.p2.map.fth: $(BUILD)/%.map.csv | build
 	./csv-to-tilemap.sh $(shell echo '$*' | tr '[:lower:]' '[:upper:]') $< 2048 > $@
 
 clean:
-	rm *.smc *.labels *.dbg *.o *.mlb *.out.s *.out.fth dataspace.dump *.pal.out *.tiles.out *.tiles.fth *.tiles2b.fth *.sprites.fth audio.inc audio.bin audio.s *.map.csv *.map.fth
+	$(RM) *.smc *.labels *.dbg *.o *.mlb *.out.s *.out.fth dataspace.dump *.pal.out *.tiles.out *.tiles.fth *.tiles2b.fth *.sprites.fth audio.inc audio.bin audio.s *.map.csv *.map.fth
+	$(RM) -r $(BUILD)
