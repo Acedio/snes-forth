@@ -1596,7 +1596,7 @@ output:write([[
 
 .segment "UNSIZED"
 
-.include "preamble.s"
+.include "preamble.inc"
 
 .export _SNES_MAIN
 .export _SNES_NMI
