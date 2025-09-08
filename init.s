@@ -18,7 +18,7 @@
 
 .segment "UNSIZED"
 
-.include "preamble.s"
+.include "preamble.inc"
 
 reset:
   clc  ; native mode

@@ -7,18 +7,18 @@ build:
 	mkdir -p build
 
 $(BUILD)/%.smc $(BUILD)/%.labels $(BUILD)/%.dbg: $(BUILD)/%.o $(BUILD)/init.o lorom128.cfg $(BUILD)/tad-audio.o $(BUILD)/audio.o | build
-	ld65 -C lorom128.cfg -Ln $*.labels --dbgfile $*.dbg -o $(BUILD)/$*.smc $(BUILD)/$*.o $(BUILD)/init.o $(BUILD)/tad-audio.o $(BUILD)/audio.o
+	ld65 -C lorom128.cfg -Ln $(BUILD)/$*.labels --dbgfile $(BUILD)/$*.dbg -o $(BUILD)/$*.smc $(BUILD)/$*.o $(BUILD)/init.o $(BUILD)/tad-audio.o $(BUILD)/audio.o
 
 $(BUILD)/tad-audio.o: tad-audio.s | build
 	ca65 $< -g -o $@ -DLOROM
 
-$(BUILD)/audio.o: audio.s | build
+$(BUILD)/audio.o: $(BUILD)/audio.s | build
 	ca65 $< -g -o $@ -DLOROM
 
-$(BUILD)/%.o: $(BUILD)/%.out.s preamble.s | build
+$(BUILD)/%.o: $(BUILD)/%.out.s preamble.inc | build
 	ca65 $< -g -o $@
 
-$(BUILD)/init.o: init.s preamble.s | build
+$(BUILD)/init.o: init.s preamble.inc | build
 	ca65 $< -g -o $@
 
 # A list of labels for use with Mesen.
@@ -53,12 +53,16 @@ $(ASSETS)/farstars.png: $(ASSETS)/stars.png
 $(ASSETS)/audio.terrificaudio: $(ASSETS)/song.mml $(ASSETS)/FM_Harp.brr $(ASSETS)/sound_effects.txt
 
 $(BUILD)/audio.s $(BUILD)/audio.bin: $(ASSETS)/audio.terrificaudio | build
-	tad-compiler ca65-export $< --output-asm $(BUIDL)/audio.s --output-bin $(BUIDL)/audio.bin --segment BANK1 --lorom
+	tad-compiler ca65-export $< --output-asm $(BUILD)/audio.s --output-bin $(BUILD)/audio.bin --segment BANK1 --lorom
 
 $(BUILD)/audio.inc: $(ASSETS)/audio.terrificaudio | build
 	tad-compiler ca65-enums $< --output $@
 
-audio.fth: tad-audio.inc $(BUILD)/audio.inc
+audio.fth: $(BUILD)/tad-audio.inc $(BUILD)/audio.inc
+
+JUSTCOPY=tad-audio.inc preamble.inc
+$(foreach file,$(JUSTCOPY),$(BUILD)/$(file)): $(JUSTCOPY)
+	cp $(JUSTCOPY) $(BUILD)
 
 $(BUILD)/%.tiles.pal.out $(BUILD)/%.tiles.tiles.out: $(ASSETS)/%.png | build
 	superfamiconv -i $^ -p $(BUILD)/$*.tiles.pal.out -t $(BUILD)/$*.tiles.tiles.out -S
