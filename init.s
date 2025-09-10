@@ -3,7 +3,7 @@
 .a16
 
 .segment "HEADERNAME"
-  .byte "SNES TEST"
+  .byte "SUPER SOKONYAN"
 
 .segment "ROMINFO"
   .byte $30         ; Fast LoROM
