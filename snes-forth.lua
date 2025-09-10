@@ -1178,7 +1178,15 @@ addNative{name="EXECUTE", runtime=function()
   end
   ip = addr
   -- No rts since we're branching.
-end}
+end,
+asm=function() return [[
+  lda 1, X
+  inx
+  inx
+  pha
+  ; "return" to the new address
+  rts
+]] end}
 
 addColon("TRUE")
   compileLit(0xFFFF)
