@@ -31,7 +31,7 @@ $(BUILD)/%.out.s: $(BUILD)/%.out.fth forth/snes-forth.lua | build
 
 forth/snes-forth.lua: forth/bytestack.lua  forth/cellstack.lua  forth/dataspace.lua  forth/dictionary.lua  forth/input.lua
 
-$(BUILD)/tests.out.fth: std.fth snes-std.fth tests/tests.fth | build
+$(BUILD)/tests.out.fth: std.fth snes-std.fth tests/test-util.fth tests/tests.fth | build
 	cat $^ > $@
 
 4BTILES=maptiles sprites stars title

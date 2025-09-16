@@ -65,14 +65,17 @@
 \ Push control vars onto the return stack.
 ( TO FROM -- r: TO FROM )
 : DODO R> -ROT 2>R >R ;
-: DO ['] DODO COMPILE, POSTPONE BEGIN ; IMMEDIATE
+\ TODO: This whole structure where DO has to start an IF block because ?DO needs
+\       it (and they both use LOOP), is gross. Can we make it prettier?
+: DO TRUE COMPILE-LIT POSTPONE IF ['] DODO COMPILE, POSTPONE BEGIN ; IMMEDIATE
+: ?DO ['] 2DUP COMPILE, ['] <> COMPILE, POSTPONE IF ['] DODO COMPILE, POSTPONE BEGIN ; IMMEDIATE
 
 : UNLOOP R> 2R> 2DROP >R ;
 
 ( According to the standard, this should actually terminate any time we cross
   the line between END-1 and END. This is probably good enough for us. )
 : DO+LOOP R> R> ROT + R@ OVER >R >= SWAP >R ;
-: +LOOP ['] DO+LOOP COMPILE, POSTPONE UNTIL ['] UNLOOP COMPILE, ; IMMEDIATE
+: +LOOP ['] DO+LOOP COMPILE, POSTPONE UNTIL ['] UNLOOP COMPILE, POSTPONE ELSE ['] 2DROP COMPILE, POSTPONE THEN ; IMMEDIATE
 : LOOP 1 COMPILE-LIT POSTPONE +LOOP ; IMMEDIATE
 
 : I R> R@ SWAP >R ;
