@@ -427,6 +427,11 @@ addNative{name="HERE", runtime=function()
   rts()
 end}
 
+addNative{name="CODEHERE", runtime=function()
+  dataStack:push(dataspace:getCodeHere())
+  rts()
+end}
+
 -- All datatypes are one cell in Lua, but varying sizes on the SNES.
 addNative{name="CHARS", runtime=function()
   -- Noop.
@@ -835,6 +840,16 @@ addNative{name="COMPILE,", label="_COMPILE_COMMA", runtime=function()
   rts()
 end}
 
+addNative{name="COMPILE-WORD", label="_COMPILE_WORD", runtime=function()
+  dataspace:compileWord(dataStack:pop())
+  rts()
+end}
+
+addNative{name="COMPILE-CHAR", label="_COMPILE_CHAR", runtime=function()
+  dataspace:compileByte(dataStack:pop() & 0xFF)
+  rts()
+end}
+
 -- Pushes the address of the first character of the string, then the size of the
 -- string in bytes.
 addNative{name="COUNT", runtime=function()
@@ -1174,7 +1189,7 @@ addNative{name="EXECUTE", runtime=function()
   local addr = dataStack:pop()
   if debugging() then
     local name = dictionary:addrName(addr) or "missing name"
-    infos:write("Executing " .. name .. "\n")
+    infos:write("EXECUTEing " .. name .. "\n")
   end
   ip = addr
   -- No rts since we're branching.
@@ -1469,17 +1484,17 @@ do
   compileXtLit("DOS\"")
   compile("COMPILE,")
   -- Make space for the length and save its addr.
-  compile("HERE")
+  compile("CODEHERE")
   compileLit(0)
-  compile("DUP ,") -- Also grab a zero to track the length.
+  compile("DUP COMPILE-WORD") -- Also grab a zero to track the length.
   compile("KEY DROP") -- Discard the first whitespace.
   local loop = dataspace:getCodeHere()
-  compile("KEY DUP")
-  compileLit(string.byte('"'))
-  compile("<>")
-  local exitBranch = compileForwardBranch0()
-  compile("C, 1+")
-  compileBranchTo(loop)
+    compile("KEY DUP")
+    compileLit(string.byte('"'))
+    compile("<>")
+    local exitBranch = compileForwardBranch0()
+    compile("COMPILE-CHAR 1+")
+    compileBranchTo(loop)
   exitBranch.toHere()
   compile("DROP SWAP !") -- Drop the " and fill in the length
   compileRts()

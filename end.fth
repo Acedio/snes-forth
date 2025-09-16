@@ -92,10 +92,10 @@ BANK!
 
   S" : THE-END .(                   
                                 
- You did it! I think the levels 
- may have been a littttle bit   
- underwheling, but I hope you   
- still enjoyed your time :)     
+ You did it! Sadly I ran out of 
+ time and couldn't make more    
+ levels, but I hope you still   
+ enjoyed your time :)           
  Thank you for playing!         
                                 
  This was largely a yak-shaving 
