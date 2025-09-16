@@ -1,20 +1,36 @@
+<STATES
+  STATE: LEVEL-INIT
+  STATE: LEVEL-MIDDLE
+  STATE: LEVEL-DONE
+STATES>COUNT: NUM-LEVEL-STATES
+
 NUM-LEVEL-STATES
-<STATE-MACHINE LEVEL-STATE
+<STATE-MACHINE LEVEL-FSM
   LEVEL-INIT STATE-BEHAVIOR:
     \ Level init behavior.
-    ." Level init!"
-    LEVEL-DONE LEVEL-STATE !
+    ." Level init!" CR
+    LEVEL-MIDDLE STATE!
+  ;
+  LEVEL-MIDDLE STATE-BEHAVIOR:
+    \ Level init behavior.
+    ." Level mid!" CR
+    LEVEL-DONE STATE!
   ;
   LEVEL-DONE STATE-BEHAVIOR:
-    ." Level done!"
+    ." Level done!" CR
     \ Other behavior.
     \ Final state so never changes.
+    DROP
   ;
 STATE-MACHINE>
 
-\ Init state machine.
+BANK@
+LOWRAM BANK!
+CREATE LEVEL-STATE 1 CELLS ALLOT
+BANK!
+
 LEVEL-INIT LEVEL-STATE !
-\ ... later, in the loop
-LEVEL-STATE RUN-STATE
-LEVEL-STATE RUN-STATE
-LEVEL-STATE RUN-STATE
+LEVEL-STATE LEVEL-FSM
+LEVEL-STATE LEVEL-FSM
+LEVEL-STATE LEVEL-FSM
+
