@@ -39,15 +39,41 @@ function Dataspace.formatAddr(addr)
   return string.format("$%04X", addr)
 end
 
--- TODO: Print all banks?
-function Dataspace:print(file)
-  local i = self.banks[self.codeBank].SIZED_START
-  while i < self:getCodeHere() do
+function Dataspace.bankName(bank)
+  if bank == Dataspace.LOWRAM_BANK then
+    return "LOWMEM Bank"
+  end
+  return string.format("Bank %d", bank)
+end
+
+function Dataspace:printBank(file, bank)
+  file:write(string.format("== %s SIZED ==\n", Dataspace.bankName(bank)))
+  local i = self.banks[bank].SIZED_START
+  while i < self.banks[bank].here do
     local v = self[i]
-    file:write(string.format("%s: %s\n", Dataspace.formatAddr(i), v:toString(self, i)))
+    if v.label then
+      file:write(string.format("%s:\n", v.label))
+    end
+    file:write(string.format("  %s: %s\n", Dataspace.formatAddr(i), v:toString(self, i)))
     assert(v:size())
     i = i + v:size()
   end
+  file:write(string.format("== %s UNSIZED ==\n", Dataspace.bankName(bank)))
+  i = self.banks[bank].UNSIZED_START
+  while i < self.banks[bank].unsizedHere do
+    local v = self[i]
+    if v.label then
+      file:write(string.format("%s:\n", v.label))
+    end
+    file:write(string.format("  %s: %s\n", Dataspace.formatAddr(i), v:toString(self, i)))
+    i = i + 1
+  end
+end
+
+-- TODO: Print all banks?
+function Dataspace:print(file)
+  self:printBank(file, Dataspace.LOWRAM_BANK)
+  self:printBank(file, 0)
 end
 
 function Dataspace:assembly(file)
