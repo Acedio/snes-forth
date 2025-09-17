@@ -1,4 +1,4 @@
-6 CONSTANT INITIAL-LEVEL
+4 CONSTANT INITIAL-LEVEL
 
 (
 : LEVEL-X-STRING
@@ -191,6 +191,43 @@
   S"
 ||||||||||||||||||||||||||||||||
 |              |               |
+|              |               |
+|    #####     |               |
+|    # @ #     |               |
+|    # B #     |               |
+|   ## G ##    |               |
+|   #  #R #    |               |
+|   #w B b#    |               |
+|   #######    |               |
+|              |               |
+|              |               |
+|              |               |
+||||||||||||||||               |
+|                              |
+|                              |
+|                              |
+|                              |
+|                              |
+|                              |
+|                              |
+|                              |
+|                              |
+|                              |
+|                              |
+|                              |
+|                              |
+|                              |
+|                              |
+|                              |
+|                              |
+||||||||||||||||||||||||||||||||"
+  DROP
+;
+
+: LEVEL-6-STRING
+  S"
+||||||||||||||||||||||||||||||||
+|              |               |
 |   ######     |               |
 |   # @  #     |               |
 |   #RRRR#     |               |
@@ -224,7 +261,7 @@
   DROP
 ;
 
-: LEVEL-6-STRING
+: LEVEL-7-STRING
   S"
 ||||||||||||||||||||||||||||||||
 |              |               |
@@ -261,7 +298,7 @@
   DROP
 ;
 
-: LEVEL-7-STRING
+: LEVEL-8-STRING
   S"
 ||||||||||||||||||||||||||||||||
 |              |               |
@@ -344,6 +381,7 @@ CREATE LEVELS-ARRAY
   LEVEL-5-STRING , 1+
   LEVEL-6-STRING , 1+
   LEVEL-7-STRING , 1+
+  LEVEL-8-STRING , 1+
   LEVEL-FINAL-STRING , 1+
 CONSTANT NUM-LEVELS
 
