@@ -1,4 +1,4 @@
-0 CONSTANT INITIAL-LEVEL
+4 CONSTANT INITIAL-LEVEL
 
 (
 : LEVEL-X-STRING
@@ -189,6 +189,43 @@
 
 : LEVEL-5-STRING
   S"
+||||||||||||||||||||||||||||||||
+|              |               |
+|    ####      |               |
+|   ##@ #      |               |
+|   #  B####   |               |
+|   #  B  m#   |               |
+|   # G### #   |               |
+|   #  R   #   |               |
+|   ## R # #   |               |
+|    #m   g#   |               |
+|    #######   |               |
+|              |               |
+|              |               |
+||||||||||||||||               |
+|                              |
+|                              |
+|                              |
+|                              |
+|                              |
+|                              |
+|                              |
+|                              |
+|                              |
+|                              |
+|                              |
+|                              |
+|                              |
+|                              |
+|                              |
+|                              |
+|                              |
+||||||||||||||||||||||||||||||||"
+  DROP
+;
+
+: LEVEL-FINAL-STRING
+  S"
 ||||#|#|#|#|||||||||||||||||||||
 |              |               |
 |   #  w  #    |               |
@@ -231,6 +268,7 @@ CREATE LEVELS-ARRAY
   LEVEL-3-STRING , 1+
   LEVEL-4-STRING , 1+
   LEVEL-5-STRING , 1+
+  LEVEL-FINAL-STRING , 1+
 CONSTANT NUM-LEVELS
 
 ( level-id -- level-addr )
