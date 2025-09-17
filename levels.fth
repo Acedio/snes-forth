@@ -1,4 +1,4 @@
-4 CONSTANT INITIAL-LEVEL
+0 CONSTANT INITIAL-LEVEL
 
 (
 : LEVEL-X-STRING
@@ -191,6 +191,43 @@
   S"
 ||||||||||||||||||||||||||||||||
 |              |               |
+|              |               |
+|   #######    |               |
+|   #c @ c#    |               |
+|   # BGB #    |               |
+|   ##GRG##    |               |
+|   # BGy#     |               |
+|   #   c#     |               |
+|   ######     |               |
+|              |               |
+|              |               |
+|              |               |
+||||||||||||||||               |
+|                              |
+|                              |
+|                              |
+|                              |
+|                              |
+|                              |
+|                              |
+|                              |
+|                              |
+|                              |
+|                              |
+|                              |
+|                              |
+|                              |
+|                              |
+|                              |
+|                              |
+||||||||||||||||||||||||||||||||"
+  DROP
+;
+
+: LEVEL-6-STRING
+  S"
+||||||||||||||||||||||||||||||||
+|              |               |
 |    ####      |               |
 |   ##@ #      |               |
 |   #  B####   |               |
@@ -268,6 +305,7 @@ CREATE LEVELS-ARRAY
   LEVEL-3-STRING , 1+
   LEVEL-4-STRING , 1+
   LEVEL-5-STRING , 1+
+  LEVEL-6-STRING , 1+
   LEVEL-FINAL-STRING , 1+
 CONSTANT NUM-LEVELS
 
