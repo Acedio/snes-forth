@@ -1633,13 +1633,15 @@ while running do
     returnStack:print(infos)
   end
 
-  running = xpcall(instruction.runtime, function(msg)
+  -- Using xpcall allows us to catch asserts and additionally print out a Forth
+  -- stack trace.
+  assert(xpcall(instruction.runtime, function(msg)
     errors:write("\nForth stacktrace:\n")
     errors:write(stacktrace())
     errors:write("\nLua stacktrace:\n")
     errors:write(debug.traceback(msg) .. "\n")
     return msg
-  end, instruction, dataspace, oldip)
+  end, instruction, dataspace, oldip))
 end
 
 
