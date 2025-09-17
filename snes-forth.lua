@@ -488,6 +488,23 @@ addNative{name=".S", label="_DOT_S", runtime=function()
   rts()
 end}
 
+local function stacktrace()
+  local calls = {}
+  local i = #returnStack - 1
+  while i > 0 do
+    local address = ((returnStack[i] << 8) | returnStack[i+1]) - 3
+    local callString = dataspace[address]:toString(dataspace, address) or "{no name}"
+    table.insert(calls, string.format("$%04X: %s\n", address, callString))
+    i = i - 2
+  end
+  return table.concat(calls)
+end
+
+addNative{name="STACKTRACE", runtime=function()
+  infos:write(stacktrace())
+  rts()
+end}
+
 addNative{name="C,", label="_C_COMMA", runtime=function()
   dataspace:addByte(dataStack:pop() & 0xFF)
   rts()
@@ -599,13 +616,14 @@ addNative{name="BYE", runtime=function()
 end}
 
 addNative{name="ABORT", runtime=function()
-  -- TODO: Also print a stack trace?
   infos:write("ABORTED!" .. "\n")
   dataspace:print(dumpFile)
   dumpFile:write(" == data ==\n")
   dataStack:print(dumpFile)
   dumpFile:write(" == return ==\n")
   returnStack:print(dumpFile)
+  infos:write("Stacktrace:\n")
+  infos:write(stacktrace())
   assert(nil)
   rts()
 end}
@@ -657,6 +675,16 @@ end}
 
 addNative{name="KEY", runtime=function()
   dataStack:push(input:key())
+  rts()
+end}
+
+addNative{name="PRINT-LINE", runtime=function()
+  outputs:write(input.line)
+  rts()
+end}
+
+addNative{name="LINE#", runtime=function()
+  dataStack:push(input.lineNo)
   rts()
 end}
 
@@ -1563,10 +1591,15 @@ do
   addressParseErrorBranch.toHere()
   compile("2DROP DUP COUNT TYPE")
   compile("DOS\"")
-  dataspace:compileWord(2)
+  dataspace:compileWord(7)
   dataspace:compileByte(string.byte("?"))
   dataspace:compileByte(string.byte("\n"))
-  compile("TYPE ABORT")
+  dataspace:compileByte(string.byte("L"))
+  dataspace:compileByte(string.byte("I"))
+  dataspace:compileByte(string.byte("N"))
+  dataspace:compileByte(string.byte("E"))
+  dataspace:compileByte(string.byte(" "))
+  compile("TYPE LINE# . PRINT-LINE ABORT")
   eofBranch.toHere()
   compile("DROP")
   compileRts()
@@ -1600,7 +1633,13 @@ while running do
     returnStack:print(infos)
   end
 
-  instruction:runtime(dataspace, oldip)
+  running = xpcall(instruction.runtime, function(msg)
+    errors:write("\nForth stacktrace:\n")
+    errors:write(stacktrace())
+    errors:write("\nLua stacktrace:\n")
+    errors:write(debug.traceback(msg) .. "\n")
+    return msg
+  end, instruction, dataspace, oldip)
 end
 
 
