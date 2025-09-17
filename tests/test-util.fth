@@ -2,19 +2,34 @@ CREATE BASE-DEPTH 1 CELLS ALLOT
 CREATE ACTUAL-DEPTH 1 CELLS ALLOT
 CREATE ACTUAL-STACK 10 CELLS ALLOT
 
+: PRINT-ACTUAL
+  ." Actual stack:" CR
+  ACTUAL-DEPTH @ IF
+    ACTUAL-STACK ACTUAL-DEPTH @ CELLS EACH ?DO
+      I @ .
+    1 CELLS +LOOP
+  ELSE
+    ." {empty}" CR
+  THEN
+;
+
+( c-addr count -- )
+: .TEST-ERROR
+  CR PRINT-LINE ." TEST ERROR: " TYPE CR PRINT-ACTUAL ABORT
+;
+
 ( count addr -- )
-: PUSH-CELLS
+: !CELLS
   SWAP CELLS EACH ?DO
     I !
   1 CELLS +LOOP ;
 
-\ TODO: Printing the failing test case would make these a lot nicer.
 : T{ DEPTH BASE-DEPTH ! ;
 : -> DEPTH
      DUP ACTUAL-DEPTH !
-     BASE-DEPTH @ - ACTUAL-STACK PUSH-CELLS ;
-: }T DEPTH ACTUAL-DEPTH @ <> IF ABORT" Unequal stacks." THEN
+     BASE-DEPTH @ - ACTUAL-STACK !CELLS ;
+: }T DEPTH ACTUAL-DEPTH @ <> IF S" Unequal stacks." .TEST-ERROR THEN
      DEPTH BASE-DEPTH @ - CELLS ACTUAL-STACK + ACTUAL-STACK ?DO
-       I @ <> IF UNLOOP ABORT" Unexpected value." THEN
+       I @ <> IF UNLOOP S" Unexpected value." .TEST-ERROR THEN
      1 CELLS +LOOP ;
 

@@ -1,5 +1,3 @@
-TRUE DEBUG !
-
 \ TODO: Tests defined at the root level here don't actually get run on the SNES.
 
 \ Stack ops
@@ -10,7 +8,6 @@ T{ 1 2 3 ROT -> 2 3 1 }T
 T{ 1 2 3 -ROT -> 3 1 2 }T
 T{ 1 >R 2 R@ R> -> 2 1 1 }T
 T{ 1 2 2>R 2R@ 2R> -> 1 2 1 2 }T
-\ TODO: T{ 0x0012 0x3456 A.>R R> R> -> 0x3456 0x0012 }T
 T{ $123456 A.>R A.R> -> $123456 }T
 
 \ Control flow ops
@@ -108,3 +105,6 @@ T{ TEST-LOWRAM-VAR TEST-LOWRAM-VAR 1+ CSWAP! TEST-LOWRAM-VAR @ -> 0x3412 }T
 : SNES-NMI ;
 
 LUA-ONLY-TESTS
+
+: HURRAY! ." All tests passed!" CR ;
+HURRAY!

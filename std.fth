@@ -88,6 +88,7 @@
 : ABORT" POSTPONE IF
          POSTPONE S"
          ['] TYPE COMPILE,
+         ['] CR COMPILE,
          ['] ABORT COMPILE,
          POSTPONE THEN ; IMMEDIATE LABEL _ABORT_S
 
