@@ -204,6 +204,7 @@ BANK!
 \ These are word constants, but will be stored as bytes in the level map.
 0x0000 CONSTANT EMPTY-TILE
 0x0001 CONSTANT WALL-TILE
+0x0010 CONSTANT TUTORIAL-TILES
 \ TODO: Other goal tiles.
 0x0020 CONSTANT BALL-0-TILE \ Ball 1 is BALL-0-TILE 1+, etc
 
@@ -233,11 +234,11 @@ BANK!
 : DRAW-LEVEL
   BG1-SHADOW-TILEMAP
   LEVEL-MAP MAP-TILES-COUNT MAP-TILES EACH DO
-    I C@ CASE
-      EMPTY-TILE OF 0x0400 ENDOF
-      WALL-TILE OF 0x0420 ENDOF
-      >R 0x0400 R>
-    ENDCASE
+    I C@ DUP 0x20 < IF
+      2* 0x0400 +
+    ELSE
+      DROP 0x0400
+    THEN
     OVER !
     1 BGTILEMAP-ENTRIES +
   1 MAP-TILES +LOOP
@@ -284,6 +285,14 @@ BANK!
       [CHAR] M OF >R 2DUP R> -ROT MAGENTA ADD-BALL BALL-0-TILE + ENDOF
       [CHAR] W OF >R 2DUP R> -ROT WHITE   ADD-BALL BALL-0-TILE + ENDOF
       [CHAR] @ OF -ROT 2DUP SET-PLAYER-COORDS ROT  EMPTY-TILE    ENDOF
+      [CHAR] 0 OF                                  TUTORIAL-TILES 0 + ENDOF
+      [CHAR] 1 OF                                  TUTORIAL-TILES 1 + ENDOF
+      [CHAR] 2 OF                                  TUTORIAL-TILES 2 + ENDOF
+      [CHAR] 3 OF                                  TUTORIAL-TILES 3 + ENDOF
+      [CHAR] 4 OF                                  TUTORIAL-TILES 4 + ENDOF
+      [CHAR] 5 OF                                  TUTORIAL-TILES 5 + ENDOF
+      [CHAR] 6 OF                                  TUTORIAL-TILES 6 + ENDOF
+      [CHAR] 7 OF                                  TUTORIAL-TILES 7 + ENDOF
       >R EMPTY-TILE R>
     ENDCASE
     \ Store the tile.
