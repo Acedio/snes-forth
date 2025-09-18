@@ -85,3 +85,62 @@ BANK!
   BGTILEMAP-TILE-COUNT BGTILEMAP-ENTRIES SWAP
   DMA0-VRAM-TRANSFER
 ;
+
+\ Tilemap base addresses
+\ These are actually 6 bits shifted left 2. The bits we actually care about are
+\ actually the 6 MSBs, but visually they map well from e.g. 0x0C to the 0x0C00
+\ VRAM word address they refer to.
+
+\ 0x0000
+0x00 CONSTANT STARS-BG-MAP-BASE
+\ 0x0400
+0x04 CONSTANT FARSTARS-BG-MAP-BASE
+\ 0x0800
+0x08 CONSTANT TITLE-BG-MAP-BASE
+\ 0x0C00
+0x0C CONSTANT LEVEL-BG-MAP-BASE
+\ 0x1C00
+0x1C CONSTANT END-BG-MAP-BASE
+
+: MAP-BASE-TO-VRAM-WORD
+  SWAPBYTES
+;
+
+\ Tile data base addresses
+\ 4-bit (0-15) VRAM word addresses (0xN000)
+\ 0x3000
+0x03 CONSTANT LEVEL-BG-TILE-BASE
+\ 0x4000
+0x04 CONSTANT TITLE-BG-TILE-BASE
+\ 0x6000
+0x06 CONSTANT STARS-BG-TILE-BASE
+\ 0x7000
+0x07 CONSTANT FARSTARS-BG-TILE-BASE
+\ 0x8000
+0x01 CONSTANT END-BG-TILE-BASE
+
+\ Takes a number between 0-15 that indicates which 0xN000 (word) VRAM addr the
+\ tile base begins at.
+: BG1-TILE-BASE!
+  0x000F BG-BASE-ADDRESSES MASK!
+;
+
+: BG2-TILE-BASE!
+  16* 0x00F0 BG-BASE-ADDRESSES MASK!
+;
+
+: BG3-TILE-BASE!
+  SWAPBYTES 0x0F00 BG-BASE-ADDRESSES MASK!
+;
+
+: TILE-BASE-TO-VRAM-WORD
+  SWAPBYTES 16*
+;
+
+\ OAM tile bases (just one)
+\ 0x2000
+0x01 CONSTANT OAM-TILE-BASE
+
+: OAM-TILE-BASE-TO-VRAM-WORD
+  SWAPBYTES 16* 2*
+;

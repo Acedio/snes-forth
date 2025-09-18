@@ -25,7 +25,7 @@ $(BUILD)/init.o: init.s preamble.inc | build
 $(BUILD)/%.mlb: $(BUILD)/%.labels | build
 	< $< awk 'BEGIN {IFS=" "} {printf("SnesPrgRom:%x:%s\n", strtonum("0x" $$2) - 0x8000, substr($$3,2));}' > $@
 
-.PRECIOUS: %.out.s
+.PRECIOUS: $(BUILD)/%.out.s
 $(BUILD)/%.out.s: $(BUILD)/%.out.fth forth/snes-forth.lua | build
 	LUA_PATH=forth/?.lua forth/snes-forth.lua $< $@
 

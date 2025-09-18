@@ -8,8 +8,7 @@ BANK!
   FONT
   FONT-BANK
   FONT-CHARS 16* 2*
-  \ Start at the character data area, 4Kth word.
-  0x1000
+  END-BG-TILE-BASE TILE-BASE-TO-VRAM-WORD
   DMA0-VRAM-LONG-TRANSFER
 ;
 
@@ -21,8 +20,7 @@ BANK!
 
 : END-COPY-BG1
   BG1-SHADOW-TILEMAP
-  \ Start at the tilemap data area, 0th word.
-  0x0000
+  END-BG-MAP-BASE MAP-BASE-TO-VRAM-WORD
   COPY-BG-TO-VRAM
 ;
 
@@ -60,14 +58,12 @@ BANK!
       1 END-NMI-STATE +!
     ENDOF
     2 OF
-      \ - BG1 4*4K words = 16K.w start
-      0x0001 0x000F BG-BASE-ADDRESSES MASK!
+      END-BG-TILE-BASE BG1-TILE-BASE!
       0x08   0x18   BG-MODE           MASK!
       \ Leave on our cat hero.
       0x11   0x11   BG-LAYER-ENABLE   MASK!
 
-      \ Set BG1 base (VRAM @ 0)
-      0 0x2107 C!
+      END-BG-MAP-BASE 0x2107 C!
 
       \ Shift BG1 right by 4 pixels to center text.
       0xFC 0x210D C!
