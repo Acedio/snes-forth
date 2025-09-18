@@ -38,7 +38,7 @@ $(BUILD)/tests.out.fth: std.fth snes-std.fth tests/test-util.fth tests/tests.fth
 4BTILES_FTH=$(foreach name,$(4BTILES),$(BUILD)/$(name).tiles.fth)
 2BTILES=farstars
 2BTILES_FTH=$(foreach name,$(2BTILES),$(BUILD)/$(name).tiles2b.fth)
-MAPS=starfield.p2 farstars.p0 title.p1
+MAPS=starfield.p2 farstars.p1 title.p1
 MAPS_FTH=$(foreach name,$(MAPS),$(BUILD)/$(name).map.fth)
 
 $(BUILD)/game.out.fth: std.fth snes-std.fth joypad.fth sin-lut.fth oam.fth vram.fth cgram.fth $(4BTILES_FTH) $(2BTILES_FTH) $(MAPS_FTH) font.fth audio.fth stars.fth steps.fth levels.fth level.fth title.fth end.fth game.fth  | build

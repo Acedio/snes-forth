@@ -72,6 +72,7 @@ BANK!
 
       TITLE-BG-TILE-BASE BG1-TILE-BASE!
       TITLE-BG-MAP-BASE 0x2107 C!
+      0x11   0x11   BG-MODE           MASK!
 
       \ Zero X shift for BG1
       0x00 0x210D C!
@@ -93,8 +94,6 @@ BANK!
   0 TITLE-NMI-STATE !
   0 TITLE-TICKS !
   TITLE-LOOP TITLE-STATE !
-
-  0x11   0x11   BG-MODE           MASK!
 
   STARS-INIT
 ;

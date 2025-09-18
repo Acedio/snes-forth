@@ -13,8 +13,7 @@ BANK!
 ;
 
 : TEXT-PALETTE
-  0 0x2121 C!
-  0 SET-PALETTE-ENTRY
+  1 0x2121 C!
   0x7FFF SET-PALETTE-ENTRY
 ;
 
@@ -113,7 +112,7 @@ BANK!
   STARS-INIT
 ;
 
-\ Returns TRUE when done with title.
+\ Returns TRUE when done.
 : END-MAIN
   1 END-TICKS +!
 
