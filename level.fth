@@ -630,8 +630,16 @@ BANK!
     LEVEL-PLAYING OF
       PLAYER-MOVEMENT
 
+      JOY1-PRESSED @ BUTTON-A AND 0<> IF
+        LEVEL-TICKS @ 0x01 AND 0<> IF
+          AUDIO-PLAY-MEOW1
+        ELSE
+          AUDIO-PLAY-MEOW2
+        THEN
+      THEN
+
       CHECK-WIN LEVEL-SKIP? OR IF
-        AUDIO-PLAY-SFX
+        AUDIO-PLAY-CHIME
         LEVEL-WIN LEVEL-STATE !
       ELSE
         \ Check restart after level skip because both check for a START press.

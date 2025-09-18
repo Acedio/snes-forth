@@ -5,3 +5,13 @@
     play_note       g4  $0C
     play_note       c5  $0C
     play_note       b5  $60
+=== meow1 ===
+    set_instrument  meow1
+    set_volume 255
+
+    play_note       f4  $FF
+=== meow2 ===
+    set_instrument  meow2
+    set_volume 255
+
+    play_note       f4  $FF

@@ -9,6 +9,15 @@ I've written up some details on the development of the Forth cross-compiler
 [here](https://acedio.itch.io/super-sokonyan/devlog/1026430/writing-a-forth-for-the-sness-65816),
 for those interested!
 
+## Controls
+
+*D-Pad* - Move
+*Start* - Restart level
+*A* - Meow
+
+You can also skip a level by pressing *Start* while holding *Select*. But you
+don't need to skip any levels, do you? ;)
+
 ## Credits
 
 Font is adapted from Hourglass by [DamienG](https://damieng.com/zx-origins).

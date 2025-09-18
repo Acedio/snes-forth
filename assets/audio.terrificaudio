@@ -15,6 +15,30 @@
       "last_octave": 5,
       "envelope": "adsr 12 2 2 15",
       "comment": null
+    },
+    {
+      "name": "meow1",
+      "source": "meow1.wav",
+      "freq": 500.0,
+      "loop": "none",
+      "evaluator": "default",
+      "ignore_gaussian_overflow": false,
+      "first_octave": 4,
+      "last_octave": 4,
+      "envelope": "gain F127",
+      "comment": null
+    },
+    {
+      "name": "meow2",
+      "source": "meow2.wav",
+      "freq": 500.0,
+      "loop": "none",
+      "evaluator": "default",
+      "ignore_gaussian_overflow": false,
+      "first_octave": 4,
+      "last_octave": 4,
+      "envelope": "gain F127",
+      "comment": null
     }
   ],
   "samples": [],
@@ -24,7 +48,9 @@
   },
   "high_priority_sound_effects": [],
   "sound_effects": [
-    "menu_select"
+    "menu_select",
+    "meow1",
+    "meow2"
   ],
   "low_priority_sound_effects": [],
   "sound_effect_file": "sound_effects.txt",

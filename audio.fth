@@ -33,10 +33,30 @@ CODE AUDIO-PLAY-SONG
   rts
 END-CODE
 
-CODE AUDIO-PLAY-SFX
+CODE AUDIO-PLAY-CHIME
   phx
   A8
   lda #SFX::menu_select
+  jsr Tad_QueueSoundEffect
+  A16
+  plx
+  rts
+END-CODE
+
+CODE AUDIO-PLAY-MEOW1
+  phx
+  A8
+  lda #SFX::meow1
+  jsr Tad_QueueSoundEffect
+  A16
+  plx
+  rts
+END-CODE
+
+CODE AUDIO-PLAY-MEOW2
+  phx
+  A8
+  lda #SFX::meow2
   jsr Tad_QueueSoundEffect
   A16
   plx
