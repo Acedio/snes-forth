@@ -72,6 +72,9 @@ BANK!
       \ Shift BG1 right by 4 pixels to center text.
       0xFC 0x210D C!
       0xFF 0x210D C!
+      \ But no Y shift.
+      0x00 0x210E C!
+      0x00 0x210E C!
 
       1 END-NMI-STATE +!
     ENDOF

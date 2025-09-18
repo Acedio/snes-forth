@@ -3,6 +3,7 @@ LOWRAM BANK!
 CREATE TITLE-TICKS 1 CELLS ALLOT
 CREATE TITLE-NMI-STATE 1 CELLS ALLOT
 CREATE TITLE-STATE 1 CELLS ALLOT
+CREATE TITLE-BOBBLE 1 CELLS ALLOT
 BANK!
 
 0 CONSTANT TITLE-LOOP
@@ -73,9 +74,13 @@ BANK!
       \ Set BG1 base (VRAM @ 0x800 (0x400.w))
       4 0x2107 C!
 
-      \ Zero shift for BG1
+      \ Zero X shift for BG1
       0x00 0x210D C!
       0x00 0x210D C!
+      \ Sin bobble for BG1 Y shift
+      TITLE-BOBBLE @
+      DUP 0x210E C!
+      HIBYTE 0x210E C!
 
       STARS-NMI DROP
     ENDOF
@@ -97,6 +102,19 @@ BANK!
   STARS-INIT
 ;
 
+: 2^12/
+  HIBYTE LSR LSR LSR LSR \ Shift right 12 bits
+  DUP 0x0008 AND 0<> IF 0xFFF0 OR THEN \ Sign extend.
+;
+
+( ticks -- )
+: UPDATE-BOBBLE
+  0xFF AND
+  SIN-LUT \ Output ranges from 0x8001 to 0x7FFF
+  2^12/
+  10 + TITLE-BOBBLE !
+;
+
 \ Returns TRUE when done with title.
 : TITLE-MAIN
   1 TITLE-TICKS +!
@@ -109,6 +127,7 @@ BANK!
         AUDIO-PLAY-SFX
         TITLE-DONE TITLE-STATE !
       THEN
+      TITLE-TICKS @ UPDATE-BOBBLE
     ENDOF
     TITLE-DONE OF
       \ Extra state so the sound plays immediately.

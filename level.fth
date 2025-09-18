@@ -564,6 +564,8 @@ BANK!
       \ Zero shift for BG1
       0x00 0x210D C!
       0x00 0x210D C!
+      0x00 0x210E C!
+      0x00 0x210E C!
 
       1 LEVEL-NMI-STATE +!
     ENDOF
