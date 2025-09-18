@@ -92,18 +92,18 @@ BANK!
 
   S" : THE-END .(                   
                                 
- You did it! Sadly I ran out of 
- time and couldn't make more    
- levels, but I hope you still   
- enjoyed your time :)           
- Thank you for playing!         
+ You did it! It looks like you  
+ arrived here after taking 0    
+ steps. Nice! I hope the puzzles
+ were interesting and not too   
+ difficult. Either way...       
+     Thank you for playing!     
                                 
  This was largely a yak-shaving 
  project to create a Forth      
  compiler for the SNES! Check   
  out the code at:               
-                                
-   github.com/acedio/snes-forth 
+  github.com/acedio/snes-forth  
                                 
  ) ; \ See you next time! :D    "
   DROP [ 32 16 * COMPILE-LIT ] BG1-SHADOW-TILEMAP 0 9 TILEMAP-XY CELLS + COPY-STRING-TO-TILES

@@ -605,6 +605,17 @@ BANK!
   LEVEL @ LOAD-LEVEL
 ;
 
+: LEVEL-SKIP?
+  \ Skip the level if the player presses START while holding SELECT.
+  JOY1-HELD @ BUTTON-SELECT AND 0<>
+  JOY1-PRESSED @ BUTTON-START AND 0<>
+  AND
+;
+
+: RESTART?
+  JOY1-PRESSED @ BUTTON-START AND 0<>
+;
+
 : LEVEL-MAIN
   1 LEVEL-TICKS +!
 
@@ -614,13 +625,14 @@ BANK!
     LEVEL-PLAYING OF
       PLAYER-MOVEMENT
 
-      JOY1-PRESSED @ BUTTON-START AND 0<> IF
-        LEVEL @ LOAD-LEVEL
-      THEN
-
-      CHECK-WIN IF
+      CHECK-WIN LEVEL-SKIP? OR IF
         AUDIO-PLAY-SFX
         LEVEL-WIN LEVEL-STATE !
+      THEN
+
+      \ Check restart after level skip because both check for a START press.
+      RESTART? IF
+        LEVEL @ LOAD-LEVEL
       THEN
     ENDOF
     LEVEL-WIN OF
