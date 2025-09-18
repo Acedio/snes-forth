@@ -450,19 +450,21 @@ BANK!
 : PLAYER-MOVEMENT
   TRUE CASE
     JOY1-PRESSED @ BUTTON-UP AND 0<> OF
-      -1 0 MOVE-PLAYER DROP
+      -1 0 MOVE-PLAYER
     ENDOF
     JOY1-PRESSED @ BUTTON-DOWN AND 0<> OF
-      1 0 MOVE-PLAYER DROP
+      1 0 MOVE-PLAYER
     ENDOF
     JOY1-PRESSED @ BUTTON-LEFT AND 0<> OF
-      0 -1 MOVE-PLAYER DROP
+      0 -1 MOVE-PLAYER
     ENDOF
     JOY1-PRESSED @ BUTTON-RIGHT AND 0<> OF
-      0 1 MOVE-PLAYER DROP
+      0 1 MOVE-PLAYER
     ENDOF
+    \ Player didn't move.
+    >R FALSE R>
   ENDCASE
-  \ TODO: Can make a sound here?
+  IF INCR-STEPS THEN
 ;
 
 : CHECK-WIN
@@ -587,6 +589,7 @@ BANK!
 1 CONSTANT LEVEL-WIN
 
 : LEVEL-INIT
+  INIT-STEPS
   0 LEVEL-NMI-STATE !
   LEVEL-PLAYING LEVEL-STATE !
 
@@ -628,11 +631,11 @@ BANK!
       CHECK-WIN LEVEL-SKIP? OR IF
         AUDIO-PLAY-SFX
         LEVEL-WIN LEVEL-STATE !
-      THEN
-
-      \ Check restart after level skip because both check for a START press.
-      RESTART? IF
-        LEVEL @ LOAD-LEVEL
+      ELSE
+        \ Check restart after level skip because both check for a START press.
+        RESTART? IF
+          LEVEL @ LOAD-LEVEL
+        THEN
       THEN
     ENDOF
     LEVEL-WIN OF

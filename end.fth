@@ -97,6 +97,7 @@ BANK!
  steps. Nice! I hope the puzzles
  were interesting and not too   
  difficult. Either way...       
+                                
      Thank you for playing!     
                                 
  This was largely a yak-shaving 
@@ -106,7 +107,9 @@ BANK!
   github.com/acedio/snes-forth  
                                 
  ) ; \ See you next time! :D    "
-  DROP [ 32 16 * COMPILE-LIT ] BG1-SHADOW-TILEMAP 0 9 TILEMAP-XY CELLS + COPY-STRING-TO-TILES
+  DROP [ 32 17 * COMPILE-LIT ] BG1-SHADOW-TILEMAP 0 8 TILEMAP-XY CELLS + COPY-STRING-TO-TILES
+
+  STEPS-STRING BG1-SHADOW-TILEMAP 26 11 TILEMAP-XY CELLS + COPY-STRING-TO-TILES
 
   STARS-INIT
 ;
