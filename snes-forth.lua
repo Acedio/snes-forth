@@ -493,7 +493,10 @@ local function stacktrace()
   local i = #returnStack - 1
   while i > 0 do
     local address = ((returnStack[i] << 8) | returnStack[i+1]) - 3
-    local callString = dataspace[address]:toString(dataspace, address) or "{no name}"
+    local callString = "{unstringable}"
+    if dataspace[address] then
+      callString = dataspace[address]:toString(dataspace, address) or "{unstringable}"
+    end
     table.insert(calls, string.format("$%04X: %s\n", address, callString))
     i = i - 2
   end
