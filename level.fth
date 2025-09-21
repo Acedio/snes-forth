@@ -1,60 +1,6 @@
-\ These are in order such that 3 bits indicate color combinations, e.g. a color
-\ with bit 1 set always has red in it, bit 2 for green, and bit 3 for blue.
-1 CONSTANT RED
-2 CONSTANT GREEN
-3 CONSTANT YELLOW
-4 CONSTANT BLUE
-5 CONSTANT MAGENTA
-6 CONSTANT CYAN
-7 CONSTANT WHITE
-
-: BALL-ENABLED ; \ First cell.
-: BALL-Y 1 CELLS + ;
-: BALL-X 2 CELLS + ;
-: BALL-COLOR 3 CELLS + ;
-: BALLS 2* 2* CELLS ;
-
-8 CONSTANT MAX-BALLS
-
-BANK@
-LOWRAM BANK!
-CREATE LEVEL 1 CELLS ALLOT
-CREATE LEVEL-STATE 1 CELLS ALLOT
-CREATE LEVEL-NMI-STATE 1 CELLS ALLOT
-CREATE LEVEL-TICKS 1 CELLS ALLOT
-CREATE PLAYER-X 1 CELLS ALLOT
-CREATE PLAYER-Y 1 CELLS ALLOT
-CREATE BALL-ARRAY MAX-BALLS BALLS ALLOT
-BANK!
-
-: CLEAR-BALLS
-  BALL-ARRAY MAX-BALLS BALLS EACH DO
-    FALSE I BALL-ENABLED !
-  1 BALLS +LOOP
-;
-
-: NEXT-FREE-BALL-ID
-  MAX-BALLS 0 DO
-    BALL-ARRAY I BALLS +
-    ( &ball )
-    BALL-ENABLED @ 0= IF
-      I UNLOOP EXIT
-    THEN
-  LOOP
-  \ TODO: ABORT?
-  BREAKPOINT
-;
-
-( y x color -- ball-index )
-: ADD-BALL
-  NEXT-FREE-BALL-ID
-  >R R@ BALLS BALL-ARRAY +
-  TRUE OVER BALL-ENABLED !
-  TUCK BALL-COLOR !
-  TUCK BALL-X !
-  BALL-Y !
-  R>
-;
+\ This file contains the gameplay and graphics routines for the puzzles. For the
+\ data structures, see level-data.fth. For the levels themselves, see
+\ levels.fth.
 
 4 CONSTANT FIRST-BALL-OAM-OBJECT
 
@@ -92,49 +38,6 @@ BANK!
   MAX-BALLS 0 DO
     I DRAW-BALL
   LOOP
-;
-
-: GOAL-ENABLED ; \ First cell.
-: GOAL-Y 1 CELLS + ;
-: GOAL-X 2 CELLS + ;
-: GOAL-COLOR 3 CELLS + ;
-: GOALS 2* 2* CELLS ;
-
-8 CONSTANT MAX-GOALS
-
-BANK@
-LOWRAM BANK!
-CREATE GOAL-ARRAY MAX-GOALS GOALS ALLOT
-BANK!
-
-: CLEAR-GOALS
-  GOAL-ARRAY MAX-GOALS GOALS EACH DO
-    FALSE I GOAL-ENABLED !
-  1 GOALS +LOOP
-;
-
-( -- &goal )
-: NEXT-FREE-GOAL
-  MAX-GOALS 0 DO
-    GOAL-ARRAY I GOALS +
-    ( &goal )
-    DUP GOAL-ENABLED @ 0= IF
-      UNLOOP EXIT
-    THEN
-    DROP
-  LOOP
-  \ TODO: ABORT?
-  BREAKPOINT
-;
-
-( y x color -- )
-: ADD-GOAL
-  NEXT-FREE-GOAL
-  ( y x color &goal )
-  TRUE OVER GOAL-ENABLED !
-  TUCK GOAL-COLOR !
-  TUCK GOAL-X !
-  GOAL-Y !
 ;
 
 0x14 CONSTANT FIRST-GOAL-OAM-OBJECT
@@ -175,12 +78,6 @@ BANK!
   LOOP
 ;
 
-( y x -- )
-: SET-PLAYER-COORDS
-  PLAYER-X !
-  PLAYER-Y !
-;
-
 3 CONSTANT PLAYER-OAM-OBJECT
 
 ( ticks -- )
@@ -201,40 +98,10 @@ BANK!
   TRUE PLAYER-OAM-OBJECT OAM-OBJECT-LARGE!
 ;
 
-\ These are word constants, but will be stored as bytes in the level map.
-0x0000 CONSTANT EMPTY-TILE
-0x0001 CONSTANT WALL-TILE
-0x0010 CONSTANT TUTORIAL-TILES
-\ TODO: Other goal tiles.
-0x0020 CONSTANT BALL-0-TILE \ Ball 1 is BALL-0-TILE 1+, etc
-
-: MAP-TILES
-  \ 1 byte per entry
-;
-
-\ For now we're limited to one BGTILEMAP's-worth of tiles in a map.
-BGTILEMAP-TILE-COUNT CONSTANT MAP-TILES-COUNT
-
-BANK@
-LOWRAM BANK!
-CREATE LEVEL-MAP MAP-TILES-COUNT MAP-TILES ALLOT
-BANK!
-
-( y x -- &tile )
-: TILE-ADDR
-  SWAP 32 PPU-MULT DROP + MAP-TILES
-  LEVEL-MAP +
-;
-
-( y x -- tile )
-: TILE-AT
-  TILE-ADDR C@
-;
-
 0x30 CONSTANT LEVEL-MAP-PALETTE-CGRAM-ADDR \ Word addr
 LEVEL-MAP-PALETTE-CGRAM-ADDR SWAPBYTES LSR LSR CONSTANT LEVEL-MAP-PALETTE-OFFSET
 
-: DRAW-LEVEL
+: DRAW-TILEMAP
   BG1-SHADOW-TILEMAP
   LEVEL-MAP MAP-TILES-COUNT MAP-TILES EACH DO
     I C@ DUP 0x20 < IF
@@ -248,84 +115,10 @@ LEVEL-MAP-PALETTE-CGRAM-ADDR SWAPBYTES LSR LSR CONSTANT LEVEL-MAP-PALETTE-OFFSET
   DROP \ Drop the BGTILEMAP pointer
 ;
 
-( addr -- non-lf-addr )
-: SKIP-LINEFEEDS
-  BEGIN
-    DUP 1+ SWAP
-    C@
-    DUP 0x0A =
-  WHILE
-    DROP
-  REPEAT
-;
-
-( addr -- )
-: LOAD-LEVEL-FROM-STRING
-  CLEAR-BALLS
-  CLEAR-GOALS
-
-  \ Keep track of Y and X
-  0 0 ROT
-  LEVEL-MAP MAP-TILES-COUNT MAP-TILES EACH DO
-    SKIP-LINEFEEDS
-    ( y x &str char -- )
-    CASE
-      [CHAR]   OF                                  EMPTY-TILE    ENDOF
-      [CHAR] # OF                                  WALL-TILE     ENDOF
-      [CHAR] r OF >R 2DUP R> -ROT RED     ADD-GOAL EMPTY-TILE    ENDOF
-      [CHAR] y OF >R 2DUP R> -ROT YELLOW  ADD-GOAL EMPTY-TILE    ENDOF
-      [CHAR] g OF >R 2DUP R> -ROT GREEN   ADD-GOAL EMPTY-TILE    ENDOF
-      [CHAR] c OF >R 2DUP R> -ROT CYAN    ADD-GOAL EMPTY-TILE    ENDOF
-      [CHAR] b OF >R 2DUP R> -ROT BLUE    ADD-GOAL EMPTY-TILE    ENDOF
-      [CHAR] m OF >R 2DUP R> -ROT MAGENTA ADD-GOAL EMPTY-TILE    ENDOF
-      [CHAR] w OF >R 2DUP R> -ROT WHITE   ADD-GOAL EMPTY-TILE    ENDOF
-      \ Set the ball tile based on the index returned by ADD-BALL.
-      [CHAR] R OF >R 2DUP R> -ROT RED     ADD-BALL BALL-0-TILE + ENDOF
-      [CHAR] Y OF >R 2DUP R> -ROT YELLOW  ADD-BALL BALL-0-TILE + ENDOF
-      [CHAR] G OF >R 2DUP R> -ROT GREEN   ADD-BALL BALL-0-TILE + ENDOF
-      [CHAR] C OF >R 2DUP R> -ROT CYAN    ADD-BALL BALL-0-TILE + ENDOF
-      [CHAR] B OF >R 2DUP R> -ROT BLUE    ADD-BALL BALL-0-TILE + ENDOF
-      [CHAR] M OF >R 2DUP R> -ROT MAGENTA ADD-BALL BALL-0-TILE + ENDOF
-      [CHAR] W OF >R 2DUP R> -ROT WHITE   ADD-BALL BALL-0-TILE + ENDOF
-      [CHAR] @ OF -ROT 2DUP SET-PLAYER-COORDS ROT  EMPTY-TILE    ENDOF
-      [CHAR] 0 OF                                  TUTORIAL-TILES 0 + ENDOF
-      [CHAR] 1 OF                                  TUTORIAL-TILES 1 + ENDOF
-      [CHAR] 2 OF                                  TUTORIAL-TILES 2 + ENDOF
-      [CHAR] 3 OF                                  TUTORIAL-TILES 3 + ENDOF
-      [CHAR] 4 OF                                  TUTORIAL-TILES 4 + ENDOF
-      [CHAR] 5 OF                                  TUTORIAL-TILES 5 + ENDOF
-      [CHAR] 6 OF                                  TUTORIAL-TILES 6 + ENDOF
-      [CHAR] 7 OF                                  TUTORIAL-TILES 7 + ENDOF
-      >R EMPTY-TILE R>
-    ENDCASE
-    \ Store the tile.
-    I C!
-    \ Increment X, then overflow to Y and reset if necessary.
-    >R 1+ DUP 32 >= IF
-      DROP 1+ 0
-    THEN R>
-  1 MAP-TILES +LOOP
-  \ Drop the string indexing address, X, and Y
-  DROP DROP DROP
-;
-
-( level-id -- )
-: LOAD-LEVEL
-  LEVEL-STRING LOAD-LEVEL-FROM-STRING
-  DRAW-LEVEL
+: DRAW-LEVEL
+  DRAW-TILEMAP
   DRAW-BALLS
   DRAW-GOALS
-;
-
-( tile-id -- is-ball )
-: IS-BALL-TILE?
-  DUP BALL-0-TILE >=
-  SWAP BALL-0-TILE MAX-BALLS + < AND
-;
-
-( ball-tile-id -- ball-id )
-: BALL-FOR-TILE
-  BALL-0-TILE -
 ;
 
 ( dy dx &ball -- can-move )
@@ -349,7 +142,7 @@ LEVEL-MAP-PALETTE-CGRAM-ADDR SWAPBYTES LSR LSR CONSTANT LEVEL-MAP-PALETTE-OFFSET
   THEN
   ( &target-tile R: &merging-ball )
   \ Use ball tile as index into ball array
-  DUP C@ BALL-FOR-TILE DUP BALLS BALL-ARRAY +
+  DUP C@ TILE-BALL-INDEX DUP BALLS BALL-ARRAY +
   ( &target-tile target-ball-id &target-ball R: &merging-ball )
   DUP BALL-COLOR @ DUP
   ( &target-tile target-ball-id &target-ball target-color target-color )
@@ -417,11 +210,6 @@ LEVEL-MAP-PALETTE-CGRAM-ADDR SWAPBYTES LSR LSR CONSTANT LEVEL-MAP-PALETTE-OFFSET
   FALSE
 ;
 
-( tile-id -- ball-id )
-: BALL-INDEX
-  BALL-0-TILE -
-;
-
 ( dy dx -- moved )
 : MOVE-PLAYER
   OVER PLAYER-Y @ +
@@ -437,7 +225,7 @@ LEVEL-MAP-PALETTE-CGRAM-ADDR SWAPBYTES LSR LSR CONSTANT LEVEL-MAP-PALETTE-OFFSET
 
   ( dy dx ny nx tile-id )
   DUP IS-BALL-TILE? IF
-    BALL-INDEX >R
+    TILE-BALL-INDEX >R
     2SWAP R>
     ( ny nx dy dx ball-id )
     MOVE-BALL IF 
@@ -478,7 +266,7 @@ LEVEL-MAP-PALETTE-CGRAM-ADDR SWAPBYTES LSR LSR CONSTANT LEVEL-MAP-PALETTE-OFFSET
         DROP FALSE UNLOOP EXIT
       THEN
       \ Check for color match.
-      BALL-FOR-TILE BALLS BALL-ARRAY + BALL-COLOR @
+      TILE-BALL-INDEX BALLS BALL-ARRAY + BALL-COLOR @
       I GOAL-COLOR @ <> IF
         FALSE UNLOOP EXIT
       THEN
@@ -496,9 +284,6 @@ LEVEL-MAP-PALETTE-CGRAM-ADDR SWAPBYTES LSR LSR CONSTANT LEVEL-MAP-PALETTE-OFFSET
   OAM-TILE-BASE OAM-TILE-BASE-TO-VRAM-WORD
   DMA0-VRAM-LONG-TRANSFER
 ;
-
-\ TODO: VRAM organization
-\ TODO: Store details about VRAM locations all in the same place.
 
 : COPY-MAPTILES
   MAPTILES-TILES
@@ -607,6 +392,7 @@ LEVEL-MAP-PALETTE-CGRAM-ADDR SWAPBYTES LSR LSR CONSTANT LEVEL-MAP-PALETTE-OFFSET
   STARS-INIT
 
   LEVEL @ LOAD-LEVEL
+  DRAW-LEVEL
 ;
 
 : LEVEL-SKIP?
@@ -644,6 +430,7 @@ LEVEL-MAP-PALETTE-CGRAM-ADDR SWAPBYTES LSR LSR CONSTANT LEVEL-MAP-PALETTE-OFFSET
         \ Check restart after level skip because both check for a START press.
         RESTART? IF
           LEVEL @ LOAD-LEVEL
+          DRAW-LEVEL
         THEN
       THEN
     ENDOF
@@ -654,6 +441,7 @@ LEVEL-MAP-PALETTE-CGRAM-ADDR SWAPBYTES LSR LSR CONSTANT LEVEL-MAP-PALETTE-OFFSET
         DROP TRUE EXIT
       THEN LEVEL !
       LEVEL @ LOAD-LEVEL
+      DRAW-LEVEL
       LEVEL-LOAD-NMI-STATE LEVEL-NMI-STATE !
       LEVEL-PLAYING LEVEL-STATE !
     ENDOF
@@ -663,3 +451,4 @@ LEVEL-MAP-PALETTE-CGRAM-ADDR SWAPBYTES LSR LSR CONSTANT LEVEL-MAP-PALETTE-OFFSET
 
   FALSE \ Still running.
 ;
+

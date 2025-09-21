@@ -39,8 +39,7 @@
 ;
 )
 
-: LEVEL-1-STRING
-  S"
+LOAD-LEVEL"
 ||||||||||||||||||||||||||||||||
 |                              |
 |                              |
@@ -73,11 +72,12 @@
 |                              |
 |                              |
 ||||||||||||||||||||||||||||||||"
-  DROP
-;
 
-: LEVEL-2-STRING
-  S"
+HERE
+LEVEL-DATA,
+CONSTANT LEVEL-1-DATA
+
+LOAD-LEVEL"
 ||||||||||||||||||||||||||||||||
 |                              |
 |   #####                      |
@@ -110,11 +110,12 @@
 |                              |
 |                              |
 ||||||||||||||||||||||||||||||||"
-  DROP
-;
 
-: LEVEL-3-STRING
-  S"
+HERE
+LEVEL-DATA,
+CONSTANT LEVEL-2-DATA
+
+LOAD-LEVEL"
 ||||||||||||||||||||||||||||||||
 |              |               |
 |              |               |
@@ -147,11 +148,12 @@
 |                              |
 |                              |
 ||||||||||||||||||||||||||||||||"
-  DROP
-;
 
-: LEVEL-4-STRING
-  S"
+HERE
+LEVEL-DATA,
+CONSTANT LEVEL-3-DATA
+
+LOAD-LEVEL"
 ||||||||||||||||||||||||||||||||
 |                              |
 |   ####                       |
@@ -184,11 +186,12 @@
 |                              |
 |                              |
 ||||||||||||||||||||||||||||||||"
-  DROP
-;
 
-: LEVEL-5-STRING
-  S"
+HERE
+LEVEL-DATA,
+CONSTANT LEVEL-4-DATA
+
+LOAD-LEVEL"
 ||||||||||||||||||||||||||||||||
 |              |               |
 |              |               |
@@ -221,11 +224,12 @@
 |                              |
 |                              |
 ||||||||||||||||||||||||||||||||"
-  DROP
-;
 
-: LEVEL-6-STRING
-  S"
+HERE
+LEVEL-DATA,
+CONSTANT LEVEL-5-DATA
+
+LOAD-LEVEL"
 ||||||||||||||||||||||||||||||||
 |              |               |
 |    #####     |               |
@@ -258,11 +262,12 @@
 |                              |
 |                              |
 ||||||||||||||||||||||||||||||||"
-  DROP
-;
 
-: LEVEL-7-STRING
-  S"
+HERE
+LEVEL-DATA,
+CONSTANT LEVEL-6-DATA
+
+LOAD-LEVEL"
 ||||||||||||||||||||||||||||||||
 |              |               |
 |   ######     |               |
@@ -295,11 +300,12 @@
 |                              |
 |                              |
 ||||||||||||||||||||||||||||||||"
-  DROP
-;
 
-: LEVEL-8-STRING
-  S"
+HERE
+LEVEL-DATA,
+CONSTANT LEVEL-7-DATA
+
+LOAD-LEVEL"
 ||||||||||||||||||||||||||||||||
 |              |               |
 |              |               |
@@ -332,11 +338,12 @@
 |                              |
 |                              |
 ||||||||||||||||||||||||||||||||"
-  DROP
-;
 
-: LEVEL-9-STRING
-  S"
+HERE
+LEVEL-DATA,
+CONSTANT LEVEL-8-DATA
+
+LOAD-LEVEL"
 ||||||||||||||||||||||||||||||||
 |              |               |
 |    ####      |               |
@@ -369,11 +376,12 @@
 |                              |
 |                              |
 ||||||||||||||||||||||||||||||||"
-  DROP
-;
 
-: LEVEL-FINAL-STRING
-  S"
+HERE
+LEVEL-DATA,
+CONSTANT LEVEL-9-DATA
+
+LOAD-LEVEL"
 ||||#|#|#|#|||||||||||||||||||||
 |              |               |
 |   #  w  #    |               |
@@ -406,24 +414,26 @@
 |                              |
 |                              |
 ||||||||||||||||||||||||||||||||"
-  DROP
-;
+
+HERE
+LEVEL-DATA,
+CONSTANT LEVEL-FINAL-DATA
 
 0 \ Track the number of levels.
 CREATE LEVELS-ARRAY
-  LEVEL-1-STRING , 1+
-  LEVEL-2-STRING , 1+
-  LEVEL-3-STRING , 1+
-  LEVEL-4-STRING , 1+
-  LEVEL-5-STRING , 1+
-  LEVEL-6-STRING , 1+
-  LEVEL-7-STRING , 1+
-  LEVEL-8-STRING , 1+
-  LEVEL-9-STRING , 1+
-  LEVEL-FINAL-STRING , 1+
+  LEVEL-1-DATA , 1+
+  LEVEL-2-DATA , 1+
+  LEVEL-3-DATA , 1+
+  LEVEL-4-DATA , 1+
+  LEVEL-5-DATA , 1+
+  LEVEL-6-DATA , 1+
+  LEVEL-7-DATA , 1+
+  LEVEL-8-DATA , 1+
+  LEVEL-9-DATA , 1+
+  LEVEL-FINAL-DATA , 1+
 CONSTANT NUM-LEVELS
 
-( level-id -- level-addr )
-: LEVEL-STRING
-  CELLS LEVELS-ARRAY + @
+( level-id -- )
+: LOAD-LEVEL
+  CELLS LEVELS-ARRAY + @ 0x80 LEVEL-DATA@
 ;
