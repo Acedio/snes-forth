@@ -62,6 +62,8 @@ end
 
 local Call = Dataspace.Native:new()
 
+Call.type = "call"
+
 function Call:size()
   return 3
 end
@@ -70,8 +72,6 @@ end
 function Call:runtime(dataspace, opAddr)
   ip = ip + self:size()
   local callAddr = self:addr(dataspace, opAddr)
-  -- TODO: Can probably just remove this check as the interpreter will do it
-  assert(dataspace[callAddr].type == "native", string.format("Expected native at %s", Dataspace.formatAddr(callAddr)))
   -- TODO: To match the 65816 this should be ip - 1
   returnStack:pushWord(ip)
   ip = callAddr
@@ -94,7 +94,7 @@ end
 -- Closes over dictionary
 function Call:asm(dataspace, opAddr)
   local callAddr = self:addr(dataspace, opAddr)
-  assert(dataspace[callAddr].type == "native", string.format("Expected native at %s", Dataspace.formatAddr(callAddr)))
+  assert(dataspace[callAddr].runtime, string.format("Expected native at %s", Dataspace.formatAddr(callAddr)))
 
   local label = dictionary:addrLabel(callAddr)
   if label then
@@ -114,6 +114,59 @@ local function compileCall(addr)
   dataspace:compile(Call:new())
   dataspace:compileWord(addr)
 end
+
+local Jump = Dataspace.Native:new()
+
+function Jump:size()
+  return 3
+end
+
+-- Closes over returnStack and ip
+function Jump:runtime(dataspace, opAddr)
+  ip = ip + self:size()
+  local jumpAddr = self:addr(dataspace, opAddr)
+  -- TODO: To match the 65816 this should be ip - 1
+  ip = jumpAddr
+end
+
+function Jump:addr(dataspace, opAddr)
+  return dataspace:getWord(opAddr + 1)
+end
+
+-- Closes over dictionary
+function Jump:toString(dataspace, opAddr)
+  local jumpAddr = self:addr(dataspace, opAddr)
+  local name = dictionary:addrName(jumpAddr)
+  if not name then
+    return string.format("Jump to $%04X (missing name)", jumpAddr)
+  end
+  return string.format("Jump $%04X (to %s)", jumpAddr, name)
+end
+
+-- Closes over dictionary
+function Jump:asm(dataspace, opAddr)
+  local jumpAddr = self:addr(dataspace, opAddr)
+  assert(dataspace[jumpAddr].runtime, string.format("Expected native at %s", Dataspace.formatAddr(jumpAddr)))
+
+  local label = dictionary:addrLabel(jumpAddr)
+  if label then
+    return string.format([[
+      jmp %s
+    ]], label)
+  else
+    -- TODO: Assert that we're in sized space. Or maybe just assert that we
+    -- can get an address/label for the given (Lua) address?
+    return string.format([[
+      jsr $%04X ; Cross our fingers!
+    ]], jumpAddr)
+  end
+end
+
+local function compileJump(addr)
+  dataspace:compile(Jump:new())
+  dataspace:compileWord(addr)
+end
+
 
 local Branch0 = Dataspace.Native:new()
 
@@ -137,7 +190,8 @@ end
 -- Closes over dictionary
 function Branch0:toString(dataspace, opAddr)
   local offset = self:offset(dataspace, opAddr)
-  return string.format("Branch0 $%04X", offset)
+  local addr = opAddr + offset + self:size()
+  return string.format("Branch0 $%04X (to $%04X)", offset, addr)
 end
 
 -- Closes over dictionary
@@ -204,7 +258,8 @@ end
 -- Closes over dictionary
 function Branch:toString(dataspace, opAddr)
   local offset = self:offset(dataspace, opAddr)
-  return string.format("Branch $%04X", offset)
+  local addr = opAddr + offset + self:size()
+  return string.format("Branch $%04X (to $%04X)", offset, addr)
 end
 
 -- Closes over dictionary
@@ -242,6 +297,8 @@ local function compileForwardBranch()
 end
 
 local Lit = Dataspace.Native:new()
+
+Lit.type = "lit"
 
 function Lit:size()
   -- See :asm(), below.
@@ -316,6 +373,92 @@ end
 
 local function compileRts()
   dataspace:compile(Rts:new())
+end
+
+local Fetch = Dataspace.Native:new()
+
+Fetch.type = "fetch"
+
+function Fetch:size()
+  -- See :asm(), below.
+  return 3 + 1 + 1 + 2
+end
+
+-- Closes over dataStack and ip
+function Fetch:runtime(dataspace, opAddr)
+  ip = ip + self:size()
+  local addr = self:addr(dataspace, opAddr)
+  dataStack:push(dataspace:getWord(addr))
+end
+
+function Fetch:addr(dataspace, opAddr)
+  return dataspace:getWord(opAddr + 1)
+end
+
+function Fetch:toString(dataspace, opAddr)
+  local addr = self:addr(dataspace, opAddr)
+  return string.format("Fetch $%04X", addr)
+end
+
+function Fetch:asm(dataspace, opAddr)
+  local addr = self:addr(dataspace, opAddr)
+  return string.format([[
+    lda $%04X  ; dataspace address, 3 bytes
+    dex        ; 1 byte
+    dex        ; 1 byte
+    sta z:1, X ; 2 bytes
+  ]], addr)
+end
+
+local function compileFetch(addr)
+  dataspace:compile(Fetch:new())
+  dataspace:compileWord(addr)
+  -- Garbage bytes to fill for assembly.
+  dataspace:allotCodeBytes(1 + 1 + 2)
+  -- TODO: assert that we've added bytes equal to Fetch:size()
+end
+
+local Store = Dataspace.Native:new()
+
+Store.type = "store"
+
+function Store:size()
+  -- See :asm(), below.
+  return 3 + 1 + 1 + 2
+end
+
+-- Closes over dataStack and ip
+function Store:runtime(dataspace, opAddr)
+  ip = ip + self:size()
+  local addr = self:addr(dataspace, opAddr)
+  dataStack:push(dataspace:getWord(addr))
+end
+
+function Store:addr(dataspace, opAddr)
+  return dataspace:getWord(opAddr + 5)
+end
+
+function Store:toString(dataspace, opAddr)
+  local addr = self:addr(dataspace, opAddr)
+  return string.format("Store $%04X", addr)
+end
+
+function Store:asm(dataspace, opAddr)
+  local addr = self:addr(dataspace, opAddr)
+  return string.format([[
+    lda z:1, X ; 2 bytes
+    inc        ; 1 byte
+    inc        ; 1 byte
+    sta $%04X  ; dataspace address, 3 bytes
+  ]], addr)
+end
+
+local function compileStore(addr)
+  dataspace:compile(Store:new())
+  dataspace:compileWord(addr)
+  -- Garbage bytes to fill for assembly.
+  dataspace:allotCodeBytes(1 + 1 + 2)
+  -- TODO: assert that we've added bytes equal to Store:size()
 end
 
 -- Add words to the current colon defintion
@@ -861,9 +1004,30 @@ asm=function() return [[
   rts
 ]] end}
 
+local function tryPeephole(xt)
+  local word = dictionary:addrName(xt)
+  if word == "@" and dataspace[dataspace:getCodeHere() - Lit:size()].type == "lit" then
+    dataspace[dataspace:getCodeHere() - Lit:size()] = Fetch:new()
+    return true
+  elseif word == "!" and dataspace[dataspace:getCodeHere() - Lit:size()].type == "lit" then
+    local litAddr = dataspace:getCodeHere() - Lit:size()
+    local storeAddr = dataspace[litAddr]:value(dataspace, litAddr)
+    dataspace[litAddr] = Store:new()
+    -- TODO: This shouldn't be a constant. Or we should move peephole
+    -- optimizations next to the relevant words.
+    dataspace:setWord(litAddr + 5, storeAddr)
+    return true
+  end
+  return false
+end
+
 addNative{name="COMPILE,", label="_COMPILE_COMMA", runtime=function()
   local xt = dataStack:pop()
-  compileCall(xt)
+  if not tryPeephole(xt) then
+    compileCall(xt)
+  else
+    print("peeped!")
+  end
   if debugging() then
     local name = dictionary:addrName(xt) or "missing name"
     infos:write("Compiling " .. name .. "\n")
@@ -1158,26 +1322,6 @@ asm=function() return [[
   A8
   inc z:3, X
   A16
-  rts
-]] end}
-
-addNative{name="LIT", runtime=function()
-  -- return stack should be the next IP, where the literal is located
-  local litAddr = returnStack:popWord()
-  -- increment the return address to skip the literal
-  returnStack:pushWord(litAddr + 2)
-  dataStack:push(dataspace:getWord(litAddr))
-  rts()
-end,
-asm=function() return [[
-  ldy #1
-  lda (1, S), Y
-  PUSH_A
-  lda 1, S
-  inc A
-  inc A
-  sta 1, S
-
   rts
 ]] end}
 
@@ -1623,7 +1767,7 @@ while running do
   -- Capture ip value so instruction can modify the next ip.
   local oldip = ip
   local instruction = dataspace[oldip]
-  if instruction.type ~= "native" then
+  if instruction.runtime == nil then
     assertAddr(nil, "Attempted to execute a non-native cell: %s\n", oldip)
   end
 
