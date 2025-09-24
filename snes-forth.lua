@@ -372,6 +372,11 @@ function Rts:asm(dataspace, opAddr)
 end
 
 local function compileRts()
+  local previousInst = dataspace[dataspace:getCodeHere() - 3]
+  if previousInst and previousInst.type == "call" then
+    dataspace[dataspace:getCodeHere() - 3] = Jump:new()
+  end
+  -- The Rts is compiled either way in case it's a branch target.
   dataspace:compile(Rts:new())
 end
 
@@ -737,7 +742,7 @@ addNative{name="ALLOT", runtime=function()
 end}
 
 -- TODO: Maybe this should compile an RTS instead?
-addNative{name="EXIT", runtime=function()
+addNative{name="EXIT", tcoEnabled=false, runtime=function()
   returnStack:popWord()
   rts()
 end,
@@ -1056,7 +1061,7 @@ addNative{name="COUNT", runtime=function()
 end}
 
 -- Move a 2-byte word from from data stack to the R stack.
-addNative{name=">R", label="_TO_R", runtime=function()
+addNative{name=">R", label="_TO_R", tcoEnabled=false, runtime=function()
   local holdReturn = returnStack:popWord()
   returnStack:pushWord(dataStack:pop())
   returnStack:pushWord(holdReturn)
@@ -1075,7 +1080,7 @@ asm=function() return [[
 -- Move a 2-cell address from from data stack to 3-bytes on the R stack.
 -- 2 cell addresses store the LSB in the lowest position (so it's pushed onto
 -- the stack MSB first)
-addNative{name="A.>R", label="_A_TO_R", runtime=function()
+addNative{name="A.>R", label="_A_TO_R", tcoEnabled=false, runtime=function()
   local holdReturn = returnStack:popWord()
   returnStack:pushAddress(dataStack:popDouble())
   returnStack:pushWord(holdReturn)
@@ -1101,7 +1106,7 @@ asm=function() return [[
   rts
 ]] end}
 
-addNative{name="R>", label="_FROM_R", runtime=function()
+addNative{name="R>", label="_FROM_R", tcoEnabled=false, runtime=function()
   local holdReturn = returnStack:popWord()
   dataStack:push(returnStack:popWord())
   returnStack:pushWord(holdReturn)
@@ -1119,7 +1124,7 @@ asm=function() return [[
   rts
 ]] end}
 
-addNative{name="A.R>", label="_A_FROM_R", runtime=function()
+addNative{name="A.R>", label="_A_FROM_R", tcoEnabled=false, runtime=function()
   local holdReturn = returnStack:popWord()
   dataStack:pushDouble(returnStack:popAddress())
   returnStack:pushWord(holdReturn)
@@ -1148,7 +1153,7 @@ asm=function() return [[
   rts
 ]] end}
 
-addNative{name="R@", label="_FETCH_R", runtime=function()
+addNative{name="R@", label="_FETCH_R", tcoEnabled=false, runtime=function()
   local holdReturn = returnStack:popWord()
   dataStack:push(returnStack:topWord())
   returnStack:pushWord(holdReturn)
@@ -1160,7 +1165,7 @@ asm=function() return [[
   rts
 ]] end}
 
-addNative{name="A.R@", label="_A_FETCH_R", runtime=function()
+addNative{name="A.R@", label="_A_FETCH_R", tcoEnabled=false, runtime=function()
   local holdReturn = returnStack:popWord()
   dataStack:pushDouble(returnStack:topAddress())
   returnStack:pushWord(holdReturn)
@@ -1332,7 +1337,7 @@ addNative{name="COMPILE-LIT", runtime=function()
   rts()
 end}
 
-addNative{name="A.LIT", runtime=function()
+addNative{name="A.LIT", tcoEnabled=false, runtime=function()
   -- return stack should be the next IP, where the literal is located
   local litAddr = returnStack:popWord()
   -- increment the return address to skip the literal
