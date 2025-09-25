@@ -9,12 +9,14 @@ function Dictionary:new()
   return dictionary
 end
 
+-- TODO: Should only set one of label or addr. Maybe two methods?
 function Dictionary:add(name, label, addr)
   self[#self + 1] = {
     name = name,
     label = label,
     addr = addr,
   }
+  return self[#self]
 end
 
 function Dictionary:latest()
