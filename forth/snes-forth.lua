@@ -94,7 +94,6 @@ end
 -- Closes over dictionary
 function Call:asm(dataspace, opAddr)
   local callAddr = self:addr(dataspace, opAddr)
-  assert(dataspace[callAddr].runtime, string.format("Expected native at %s", Dataspace.formatAddr(callAddr)))
 
   local label = dictionary:addrLabel(callAddr)
   if label then
@@ -146,7 +145,6 @@ end
 -- Closes over dictionary
 function Jump:asm(dataspace, opAddr)
   local jumpAddr = self:addr(dataspace, opAddr)
-  assert(dataspace[jumpAddr].runtime, string.format("Expected native at %s", Dataspace.formatAddr(jumpAddr)))
 
   local label = dictionary:addrLabel(jumpAddr)
   if label then
@@ -446,10 +444,10 @@ end
 function Store:asm(dataspace, opAddr)
   local addr = self:addr(dataspace, opAddr)
   return string.format([[
-    lda z:1, X ; 2 bytes
-    inc        ; 1 byte
-    inc        ; 1 byte
-    sta $%04X  ; dataspace address, 3 bytes
+    lda z:1, X  ; 2 bytes
+    inx         ; 1 byte
+    inx         ; 1 byte
+    sta a:$%04X ; store address, 3 bytes
   ]], addr)
 end
 
@@ -1016,6 +1014,7 @@ local function tryPeephole(xt)
     -- TODO: This shouldn't be a constant. Or we should move peephole
     -- optimizations next to the relevant words.
     dataspace:setWord(litAddr + 5, storeAddr)
+    assertAddr(dataspace[litAddr]:addr(dataspace, litAddr) == storeAddr)
     return true
   end
   return false
@@ -1767,9 +1766,7 @@ while running do
   -- Capture ip value so instruction can modify the next ip.
   local oldip = ip
   local instruction = dataspace[oldip]
-  if instruction.runtime == nil then
-    assertAddr(nil, "Attempted to execute a non-native cell: %s\n", oldip)
-  end
+  assertAddr(instruction.runtime ~= nil, "Attempted to execute a non-native cell: %s\n", oldip)
 
   if debugging() then
     local name = dictionary:addrName(oldip) or dataspace[oldip]:toString(dataspace, oldip)
