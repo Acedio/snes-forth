@@ -153,6 +153,7 @@ HERE
 LEVEL-DATA,
 CONSTANT LEVEL-3-DATA
 
+(
 LOAD-LEVEL"
 ||||||||||||||||||||||||||||||||
 |                              |
@@ -190,6 +191,7 @@ LOAD-LEVEL"
 HERE
 LEVEL-DATA,
 CONSTANT LEVEL-4-DATA
+)
 
 LOAD-LEVEL"
 ||||||||||||||||||||||||||||||||
@@ -424,7 +426,7 @@ CREATE LEVELS-ARRAY
   LEVEL-1-DATA , 1+
   LEVEL-2-DATA , 1+
   LEVEL-3-DATA , 1+
-  LEVEL-4-DATA , 1+
+  \ LEVEL-4-DATA , 1+
   LEVEL-5-DATA , 1+
   LEVEL-6-DATA , 1+
   LEVEL-7-DATA , 1+
@@ -437,3 +439,4 @@ CONSTANT NUM-LEVELS
 : LOAD-LEVEL
   CELLS LEVELS-ARRAY + @ 0x80 LEVEL-DATA@
 ;
+
