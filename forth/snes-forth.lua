@@ -542,7 +542,16 @@ end
 addNative{name="BANK@", label="_BANK_FETCH", runtime=function()
   dataStack:push(dataspace:getDataBank())
   rts()
-end}
+end,
+asm=function() return [[
+  A8
+  phb
+  pla
+  A16
+  and $FF
+  PUSH_A
+  rts
+]] end}
 
 addNative{name="BANK!", label="_BANK_STORE", runtime=function()
   dataspace:setDataBank(dataStack:pop())

@@ -1,8 +1,6 @@
 CODE FONT
-  dex
-  dex
   lda #.LOWORD(FONT_DATA)
-  sta z:1, X
+  PUSH_A
   rts
 
 .pushseg
@@ -207,10 +205,8 @@ END-CODE
 96 CONSTANT FONT-CHARS
 
 CODE FONT-BANK
-  dex
-  dex
   lda #.BANKBYTE(FONT_DATA)
-  sta z:1, X
+  PUSH_A
   rts
 END-CODE
 
