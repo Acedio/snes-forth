@@ -31,10 +31,8 @@ end
 function makeDataWords(name, label, data)
   return string.format([[
 CODE %s
-  dex
-  dex
   lda #.LOWORD(%s_DATA)
-  sta z:1, X
+  PUSH_A
   rts
 
 .pushseg
@@ -49,10 +47,8 @@ END-CODE
 0x%04X CONSTANT %s-BYTES
 
 CODE %s-BANK
-  dex
-  dex
   lda #.BANKBYTE(%s_DATA)
-  sta z:1, X
+  PUSH_A
   rts
 END-CODE
   ]], name, label, segment, label, toWordRows(data), #data, name, name, label)
