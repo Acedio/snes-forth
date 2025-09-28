@@ -15,8 +15,7 @@ function Dataspace:new()
         here = 0x8000,
         UNSIZED_START = 0xFA00,
         unsizedHere = 0xFA00,
-        codeHereLabel = nil,
-        dataHereLabel = nil,
+        labels = {},
         segment = "CODE",
       },
       [Dataspace.LOWRAM_BANK] = {
@@ -24,8 +23,7 @@ function Dataspace:new()
         here = 0x300,
         UNSIZED_START = 0x1900,
         unsizedHere = 0x1900,
-        codeHereLabel = nil,
-        dataHereLabel = nil,
+        labels = {},
         segment = "BSS",
       },
     },
@@ -51,8 +49,9 @@ function Dataspace:printBank(file, bank)
   local i = self.banks[bank].SIZED_START
   while i < self.banks[bank].here do
     local v = self[i]
-    if v.label then
-      file:write(string.format("%s:\n", v.label))
+    local label = self.banks[bank].labels[i]
+    if label then
+      file:write(string.format("%s:\n", label))
     end
     file:write(string.format("  %s: %s\n", Dataspace.formatAddr(i), v:toString(self, i)))
     assert(v:size())
@@ -62,8 +61,9 @@ function Dataspace:printBank(file, bank)
   i = self.banks[bank].UNSIZED_START
   while i < self.banks[bank].unsizedHere do
     local v = self[i]
-    if v.label then
-      file:write(string.format("%s:\n", v.label))
+    local label = self.banks[bank].labels[i]
+    if label then
+      file:write(string.format("%s:\n", label))
     end
     file:write(string.format("  %s: %s\n", Dataspace.formatAddr(i), v:toString(self, i)))
     i = i + 1
@@ -77,7 +77,7 @@ function Dataspace:print(file)
 end
 
 function Dataspace:assembly(file)
-  for index,bankInfo in pairs(self.banks) do
+  for index, bankInfo in pairs(self.banks) do
     file:write(string.format([[
     .segment "%s"
     ]], bankInfo.segment))
@@ -87,8 +87,9 @@ function Dataspace:assembly(file)
     local i = bankInfo.SIZED_START
     while i < bankInfo.here do
       local v = self[i]
-      if v.label then
-        file:write(string.format("%s:\n", v.label))
+      local label = bankInfo.labels[i]
+      if label then
+        file:write(string.format("%s:\n", label))
       end
       file:write(v:asm(self, i) .. "\n")
       assert(v:size())
@@ -100,8 +101,9 @@ function Dataspace:assembly(file)
 
     for i=bankInfo.UNSIZED_START,bankInfo.unsizedHere-1 do
       local v = self[i]
-      if v.label then
-        file:write(string.format("%s:\n", v.label))
+      local label = bankInfo.labels[i]
+      if label then
+        file:write(string.format("%s:\n", label))
       end
       file:write(v:asm(self, i) .. "\n")
     end
@@ -155,21 +157,21 @@ end
 -- TODO: Is there a cleaner way of doing this? Maybe keeping a list of labels ->
 -- addresses somewhere?
 function Dataspace:labelCodeHere(label)
-  self.codeHereLabel = label
+  self.banks[self.codeBank].labels[self:getCodeHere()] = label
 end
 
 function Dataspace:labelDataHere(label)
-  self.dataHereLabel = label
+  self.banks[self.dataBank].labels[self:getDataHere()] = label
+end
+
+function Dataspace:setCodeLabel(addr, label)
+  self.banks[self.codeBank].labels[addr] = label
 end
 
 -- Add at the current data space pointer (HERE).
 function Dataspace:add(entry)
   assert(entry:size())
   local addr = self:getDataHere()
-  if self.dataHereLabel then
-    entry.label = self.dataHereLabel
-    self.dataHereLabel = nil
-  end
   self[self:getDataHere()] = entry
   self:setDataHere(self:getDataHere() + 1)
   return addr
@@ -179,10 +181,6 @@ end
 function Dataspace:compile(entry)
   assert(entry:size())
   local addr = self:getCodeHere()
-  if self.codeHereLabel then
-    entry.label = self.codeHereLabel
-    self.codeHereLabel = nil
-  end
   self[self:getCodeHere()] = entry
   self:setCodeHere(self:getCodeHere() + 1)
   return addr
