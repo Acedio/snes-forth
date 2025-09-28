@@ -7,7 +7,8 @@ build:
 	mkdir -p build
 
 $(BUILD)/%.smc $(BUILD)/%.labels $(BUILD)/%.dbg: $(BUILD)/%.o $(BUILD)/init.o lorom128.cfg $(BUILD)/tad-audio.o $(BUILD)/audio.o | build
-	ld65 -C lorom128.cfg -Ln $(BUILD)/$*.labels --dbgfile $(BUILD)/$*.dbg -o $(BUILD)/$*.smc $(BUILD)/$*.o $(BUILD)/init.o $(BUILD)/tad-audio.o $(BUILD)/audio.o
+# audio.o should come first to ensure that it gets precedence in its bank.
+	ld65 -C lorom128.cfg -Ln $(BUILD)/$*.labels --dbgfile $(BUILD)/$*.dbg -o $(BUILD)/$*.smc $(BUILD)/audio.o $(BUILD)/$*.o $(BUILD)/init.o $(BUILD)/tad-audio.o
 
 $(BUILD)/tad-audio.o: tad-audio.s | build
 	ca65 $< -g -o $@ -DLOROM
@@ -74,20 +75,21 @@ $(BUILD)/%.tiles2b.pal.out $(BUILD)/%.tiles2b.tiles.out: $(ASSETS)/%.png | build
 	superfamiconv -i $^ -p $(BUILD)/$*.tiles2b.pal.out -t $(BUILD)/$*.tiles2b.tiles.out -S -B 2
 
 $(BUILD)/%.tiles2b.fth: $(BUILD)/%.tiles2b.pal.out $(BUILD)/%.tiles2b.tiles.out | build
-	./tiles-to-forth.lua $(shell echo '$*' | tr '[:lower:]' '[:upper:]') $^ BANK2 > $@
+	./tiles-to-forth.lua $(shell echo '$*' | tr '[:lower:]' '[:upper:]') $^ BANK1 > $@
 
 $(BUILD)/%.map.csv: $(ASSETS)/%.tmx | build
 	xvfb-run -a tiled --export-map csv $< $@
 
 # These have .pX in their filename to indicate which palette they use.
+# TODO: This kind of configuration shouldn't be in the makefile :P
 $(BUILD)/%.p0.map.fth: $(BUILD)/%.map.csv | build
-	./csv-to-tilemap.sh $(shell echo '$*' | tr '[:lower:]' '[:upper:]') $< 0 > $@
+	./csv-to-tilemap.sh $(shell echo '$*' | tr '[:lower:]' '[:upper:]') $< 0 BANK1 > $@
 
 $(BUILD)/%.p1.map.fth: $(BUILD)/%.map.csv | build
-	./csv-to-tilemap.sh $(shell echo '$*' | tr '[:lower:]' '[:upper:]') $< 1024 > $@
+	./csv-to-tilemap.sh $(shell echo '$*' | tr '[:lower:]' '[:upper:]') $< 1024 BANK1 > $@
 
 $(BUILD)/%.p2.map.fth: $(BUILD)/%.map.csv | build
-	./csv-to-tilemap.sh $(shell echo '$*' | tr '[:lower:]' '[:upper:]') $< 2048 > $@
+	./csv-to-tilemap.sh $(shell echo '$*' | tr '[:lower:]' '[:upper:]') $< 2048 BANK1 > $@
 
 clean:
 	$(RM) *.smc *.labels *.dbg *.o *.mlb *.out.s *.out.fth dataspace.dump *.pal.out *.tiles.out *.tiles.fth *.tiles2b.fth *.sprites.fth audio.inc audio.bin audio.s *.map.csv *.map.fth

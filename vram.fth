@@ -79,11 +79,10 @@ BANK!
   [ 16 16 * 2/ COMPILE-LIT ] PPU-MULT DROP
 ;
 
-( &shadow-tilemap &vram -- )
 \ vram address is word-indexed.
-: COPY-BG-TO-VRAM
+: COPY-BG-TO-VRAM ( &tilemap page &vram -- )
   BGTILEMAP-TILE-COUNT BGTILEMAP-ENTRIES SWAP
-  DMA0-VRAM-TRANSFER
+  DMA0-VRAM-LONG-TRANSFER
 ;
 
 \ Tilemap base addresses
@@ -108,6 +107,8 @@ BANK!
 
 \ Tile data base addresses
 \ 4-bit (0-15) VRAM word addresses (0xN000)
+\ 0x1000
+0x01 CONSTANT END-BG-TILE-BASE
 \ 0x3000
 0x03 CONSTANT LEVEL-BG-TILE-BASE
 \ 0x4000
@@ -116,8 +117,6 @@ BANK!
 0x06 CONSTANT STARS-BG-TILE-BASE
 \ 0x7000
 0x07 CONSTANT FARSTARS-BG-TILE-BASE
-\ 0x8000
-0x01 CONSTANT END-BG-TILE-BASE
 
 \ Takes a number between 0-15 that indicates which 0xN000 (word) VRAM addr the
 \ tile base begins at.

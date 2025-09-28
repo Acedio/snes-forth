@@ -94,8 +94,8 @@ end
 -- Closes over dictionary
 function Call:asm(dataspace, opAddr)
   local callAddr = self:addr(dataspace, opAddr)
-  assert(dataspace[callAddr].runtime, string.format("Expected native at %s", Dataspace.formatAddr(callAddr)))
 
+  -- TODO: This logic should be shared between Call and Jump.
   local label = dictionary:addrLabel(callAddr)
   if label then
     return string.format([[
@@ -146,7 +146,6 @@ end
 -- Closes over dictionary
 function Jump:asm(dataspace, opAddr)
   local jumpAddr = self:addr(dataspace, opAddr)
-  assert(dataspace[jumpAddr].runtime, string.format("Expected native at %s", Dataspace.formatAddr(jumpAddr)))
 
   local label = dictionary:addrLabel(jumpAddr)
   if label then
@@ -346,6 +345,8 @@ end
 
 local Rts = Dataspace.Native:new()
 
+Rts.type = "rts"
+
 function Rts:size()
   return 1
 end
@@ -415,14 +416,6 @@ function Fetch:asm(dataspace, opAddr)
   ]], addr)
 end
 
-local function compileFetch(addr)
-  dataspace:compile(Fetch:new())
-  dataspace:compileWord(addr)
-  -- Garbage bytes to fill for assembly.
-  dataspace:allotCodeBytes(1 + 1 + 2)
-  -- TODO: assert that we've added bytes equal to Fetch:size()
-end
-
 local Store = Dataspace.Native:new()
 
 Store.type = "store"
@@ -436,7 +429,8 @@ end
 function Store:runtime(dataspace, opAddr)
   ip = ip + self:size()
   local addr = self:addr(dataspace, opAddr)
-  dataStack:push(dataspace:getWord(addr))
+  local val = dataStack:pop()
+  dataspace:setWord(addr, val)
 end
 
 function Store:addr(dataspace, opAddr)
@@ -451,19 +445,11 @@ end
 function Store:asm(dataspace, opAddr)
   local addr = self:addr(dataspace, opAddr)
   return string.format([[
-    lda z:1, X ; 2 bytes
-    inc        ; 1 byte
-    inc        ; 1 byte
-    sta $%04X  ; dataspace address, 3 bytes
+    lda z:1, X  ; 2 bytes
+    inx         ; 1 byte
+    inx         ; 1 byte
+    sta a:$%04X ; store address, 3 bytes
   ]], addr)
-end
-
-local function compileStore(addr)
-  dataspace:compile(Store:new())
-  dataspace:compileWord(addr)
-  -- Garbage bytes to fill for assembly.
-  dataspace:allotCodeBytes(1 + 1 + 2)
-  -- TODO: assert that we've added bytes equal to Store:size()
 end
 
 -- Add words to the current colon defintion
@@ -485,10 +471,13 @@ end
 
 -- Table should have at least name and runtime specified.
 local function addNative(entry)
-  entry.label = entry.label or Dataspace.defaultLabel(entry.name)
+  local label = entry.label or Dataspace.defaultLabel(entry.name)
+  -- label is not actually a part of Dataspace.Entry.
+  entry.label = nil
   -- Native fns are unsized, so they don't affect/use HERE.
   local addr = dataspace:compileUnsized(Dataspace.Native:new(entry))
-  dictionary:add(entry.name, entry.label, addr)
+  dataspace:setCodeLabel(addr, label)
+  dictionary:add(entry.name, label, addr)
 end
 
 -- Make a variable that is easily accessible to Lua and the SNES.
@@ -558,7 +547,16 @@ end
 addNative{name="BANK@", label="_BANK_FETCH", runtime=function()
   dataStack:push(dataspace:getDataBank())
   rts()
-end}
+end,
+asm=function() return [[
+  A8
+  phb
+  pla
+  A16
+  and $FF
+  PUSH_A
+  rts
+]] end}
 
 addNative{name="BANK!", label="_BANK_STORE", runtime=function()
   dataspace:setDataBank(dataStack:pop())
@@ -689,32 +687,39 @@ end}
 -- TODO: How will this work on the SNES?
 addNative{name="XT!", label="_XT_STORE", runtime=function()
   local addr = dataStack:pop()
-  -- Update the EXIT to instead jump to the code after DODOES.
+  -- Update the Rts to instead jump to the code after DODOES.
   -- CREATEd word looks like:
   --   lda $1234 ; dataspace address, 3 byte instruction
   --   dex ; 1 byte
   --   dex ; 1 byte
   --   sta z:1, x ; 2 bytes
-  --   jsr EXIT ; 1 byte opcode + 2 byte addr, we want the addr
-  local exitAddress = dictionary:latest().addr + 3 + 1 + 1 + 2 + 1
-  dataspace:setWord(exitAddress, addr)
+  --   rts ; 1 byte opcode, we want this addr
+  local dictEntry = dictionary:latest()
+  -- Can no longer inline easily because of the lack of an Rts.
+  -- TODO: Make this inline-able.
+  dictEntry.canInline = false
+  local rtsAddress = dictEntry.addr + 3 + 1 + 1 + 2
+  dataspace[rtsAddress] = Jump:new()
+  dataspace:setWord(rtsAddress + 1, addr)
   rts()
 end}
 
 addNative{name="CREATE", runtime=function()
   local name = input:word()
   local label = Dataspace.defaultLabel(name)
-  dictionary:add(name, label, dataspace:getCodeHere())
+  local dictEntry = dictionary:add(name, label, dataspace:getCodeHere())
+  dictEntry.canInline = true
   dataspace:labelCodeHere(label)
-  dataspace:labelDataHere(label .. "_data")
   -- The value of the Lit is 1 byte into the assembly.
   -- Need to wait to set this until after we're done compiling the execution
   -- behavior because data ptr and code ptr might be using the same bank.
   local dataAddrAddr = dataspace:getCodeHere() + 1
   compileLit(0)
-  -- TODO: We should use compileRts() here instead, but once we do that we'll
-  -- also need to add a Jmp instruction to replace it with when we call DOES>.
-  compile("EXIT")
+  compileRts()
+  -- Compile a filler word so when we fill in with XT! later we don't have to
+  -- resize.
+  dataspace:compileWord(0x1234)
+  dataspace:labelDataHere(label .. "_data")
   dataspace:setWord(dataAddrAddr, dataspace:getDataHere())
   rts()
 end}
@@ -723,7 +728,8 @@ addNative{name="CONSTANT", runtime=function()
   local name = input:word()
   local value = dataStack:pop()
   local label = Dataspace.defaultLabel(name)
-  dictionary:add(name, label, dataspace:getCodeHere())
+  local entry = dictionary:add(name, label, dataspace:getCodeHere())
+  entry.canInline = true
   dataspace:labelCodeHere(label)
   compileLit(value)
   compileRts()
@@ -1021,17 +1027,29 @@ local function tryPeephole(xt)
     -- TODO: This shouldn't be a constant. Or we should move peephole
     -- optimizations next to the relevant words.
     dataspace:setWord(litAddr + 5, storeAddr)
+    assertAddr(dataspace[litAddr]:addr(dataspace, litAddr) == storeAddr)
     return true
   end
   return false
 end
 
+local function tryInline(xt)
+  local dictEntry = dictionary:findXt(xt)
+  if not dictEntry.canInline then
+    return false
+  end
+  local addr = dictEntry.addr
+  while dataspace[addr].type ~= "rts" do
+    dataspace:compile(dataspace[addr])
+    addr = addr + 1
+  end
+  return true
+end
+
 addNative{name="COMPILE,", label="_COMPILE_COMMA", runtime=function()
   local xt = dataStack:pop()
-  if not tryPeephole(xt) then
+  if not tryPeephole(xt) and not tryInline(xt) then
     compileCall(xt)
-  else
-    print("peeped!")
   end
   if debugging() then
     local name = dictionary:addrName(xt) or "missing name"
@@ -1407,8 +1425,9 @@ end}
 
 addNative{name="LABEL", runtime=function()
   local label = input:word()
-  dictionary:latest().label = label
-  dataspace[dictionary:latest().addr].label = label
+  local dictEntry = dictionary:latest()
+  dictEntry.label = label
+  dataspace:setCodeLabel(dictEntry.addr, label)
   rts()
 end}
 
@@ -1773,9 +1792,7 @@ while running do
   local oldIp = ip
   local instruction = dataspace[oldIp]
   assertAddr(instruction, "Attempted to execute missing cell: %s\n", oldIp)
-  if instruction.runtime == nil then
-    assertAddr(nil, "Attempted to execute a non-native cell: %s\n", oldIp)
-  end
+  assertAddr(instruction.runtime, "Attempted to execute a non-native cell: %s\n", oldip)
 
   if debugging() then
     local name = dictionary:addrName(oldIp) or dataspace[oldIp]:toString(dataspace, oldIp)
