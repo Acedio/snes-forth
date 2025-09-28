@@ -1,3 +1,9 @@
+\ Byte access to WMDATA
+0x2180 CONSTANT WMDATA
+0x2181 CONSTANT WMADDR-ADDR
+\ Page is either 0 (for the first 64k, page 7E) or 1 (page 7F)
+0x2183 CONSTANT WMADDR-PAGE
+
 \ to-page is either 0 (for the first 64k, page 7E) or 1 (page 7F)
 ( from from-page bytes to to-page -- )
 : DMA0-WRAM-LONG-TRANSFER
@@ -11,10 +17,10 @@
   0x4304 C!
   \ Transfer from
   0x4302 !
-  \ Copy to addr (2180) repeatedly.
+  \ Copy to same addr repeatedly.
   0x0 0x4300 C!
   \ Copy to WRAM reg
-  0x80 0x4301 C!
+  WMDATA 0xFF AND 0x4301 C!
 
   \ Start DMA transfer.
   0x01 0x420B C!
