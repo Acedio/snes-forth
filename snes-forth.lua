@@ -1770,15 +1770,16 @@ end
 -- The processing loop.
 while running do
   -- Capture ip value so instruction can modify the next ip.
-  local oldip = ip
-  local instruction = dataspace[oldip]
+  local oldIp = ip
+  local instruction = dataspace[oldIp]
+  assertAddr(instruction, "Attempted to execute missing cell: %s\n", oldIp)
   if instruction.runtime == nil then
-    assertAddr(nil, "Attempted to execute a non-native cell: %s\n", oldip)
+    assertAddr(nil, "Attempted to execute a non-native cell: %s\n", oldIp)
   end
 
   if debugging() then
-    local name = dictionary:addrName(oldip) or dataspace[oldip]:toString(dataspace, oldip)
-    infos:write(string.format("Executing IP = %s (native %s)\n", Dataspace.formatAddr(oldip), name))
+    local name = dictionary:addrName(oldIp) or dataspace[oldIp]:toString(dataspace, oldIp)
+    infos:write(string.format("Executing IP = %s (native %s)\n", Dataspace.formatAddr(oldIp), name))
     infos:write(" == data ==\n")
     dataStack:print(infos)
     infos:write(" == return ==\n")
@@ -1793,7 +1794,7 @@ while running do
     errors:write("\nLua stacktrace:\n")
     errors:write(debug.traceback(msg) .. "\n")
     return msg
-  end, instruction, dataspace, oldip))
+  end, instruction, dataspace, oldIp))
 end
 
 
