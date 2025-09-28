@@ -373,9 +373,16 @@ function Rts:asm(dataspace, opAddr)
 end
 
 local function compileRts()
-  local previousInst = dataspace[dataspace:getCodeHere() - 3]
+  -- This performs tail-call optimization (TCO) if the previous instruction
+  -- supports it.
+  local previousInstAddr = dataspace:getCodeHere() - 3
+  local previousInst = dataspace[previousInstAddr]
   if previousInst and previousInst.type == "call" then
-    dataspace[dataspace:getCodeHere() - 3] = Jump:new()
+    local xt = previousInst:addr(dataspace, previousInstAddr)
+    local dictEntry = dictionary:findXt(xt)
+    if dictEntry and dictEntry.tcoEnabled then
+      dataspace[dataspace:getCodeHere() - 3] = Jump:new()
+    end
   end
   -- The Rts is compiled either way in case it's a branch target.
   dataspace:compile(Rts:new())
@@ -477,7 +484,9 @@ local function addNative(entry)
   -- Native fns are unsized, so they don't affect/use HERE.
   local addr = dataspace:compileUnsized(Dataspace.Native:new(entry))
   dataspace:setCodeLabel(addr, label)
-  dictionary:add(entry.name, label, addr)
+  local dictEntry = dictionary:add(entry.name, label, addr)
+  -- TCO is enabled by default.
+  dictEntry.tcoEnabled = entry.tcoEnabled == nil or entry.tcoEnabled
 end
 
 -- Make a variable that is easily accessible to Lua and the SNES.
@@ -1393,11 +1402,11 @@ addNative{name="EXECUTE", runtime=function()
   -- No rts since we're branching.
 end,
 asm=function() return [[
-  lda 1, X
-  inx
-  inx
+  POP_A
+  dec ; CPU expects return addresses to be one prior to the next IP.
   pha
-  ; "return" to the new address
+  ; "return" to the new address. This is faster than an indirect jump, but
+  ; maybe confuses Mesen's debugger?
   rts
 ]] end}
 
