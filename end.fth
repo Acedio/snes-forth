@@ -79,7 +79,7 @@ BANK!
   ENDCASE
 
   \ Maximum screen brightness
-  0x0F 0x2100 C!
+  0x0F SET-SCREEN-BRIGHTNESS
 ;
 
 : END-INIT

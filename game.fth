@@ -33,7 +33,7 @@ BANK!
       0x79 BG-MODE C!
 
       \ Maximum screen brightness
-      0x0F 0x2100 C!
+      0x0F SET-SCREEN-BRIGHTNESS
 
       1 NMI-STATE +!
     ENDOF

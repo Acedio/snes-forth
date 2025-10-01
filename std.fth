@@ -43,6 +43,10 @@
 \ CODEHERE 2 - is used below (and above) to update the branch offset (0x9999).
 : REPEAT 0x9999 COMPILE-BRANCH CODEHERE ADDRESS-OFFSET CODEHERE 2 - ! POSTPONE THEN ; IMMEDIATE
 
+\ An early exit pattern (without having to use ; more than once in a word, which
+\ would feel weird).
+: ;THEN COMPILE-RTS POSTPONE THEN ; IMMEDIATE
+
 ( A CASE is basically just a list of IF ELSE ... ELSE ELSE THEN. The final THEN
   is shared among all the ELSEs. )
 : CASE 0 ; IMMEDIATE \ Pushes the number of THENs to resolve onto the stack.

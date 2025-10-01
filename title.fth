@@ -42,6 +42,7 @@ BANK!
 : TITLE-NMI
   TITLE-NMI-STATE @ CASE
     0 OF
+      0x0 SET-SCREEN-BRIGHTNESS
       COPY-TITLE-TILES-1
 
       1 TITLE-NMI-STATE +!
@@ -67,6 +68,8 @@ BANK!
       1 TITLE-NMI-STATE +!
     ENDOF
     5 OF
+      FADE-IN
+
       \ Layers 1 and turn off OBJ.
       0x01 0x11 BG-LAYER-ENABLE MASK!
 
@@ -85,9 +88,6 @@ BANK!
       STARS-NMI DROP
     ENDOF
   ENDCASE
-
-  \ Maximum screen brightness
-  0x0F 0x2100 C!
 ;
 
 : TITLE-INIT
