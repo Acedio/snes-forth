@@ -34,5 +34,9 @@
   .a16
 .endmacro
 
+.macro ASSERT_SIZE label, size
+.assert * - label = size, error, .concat(.string(label), " size wasn't ", .string(size), ", was ", .string(*-label))
+.endmacro
+
 RETURN_STACK_ADDR := $01FF
 DATA_STACK_ADDR := $02FF
