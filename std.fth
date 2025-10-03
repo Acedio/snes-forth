@@ -23,7 +23,6 @@
 
 \ Stack manipulation stuff.
 : NIP SWAP DROP ;
-: OVER >R DUP R> SWAP ;
 : TUCK SWAP OVER ;
 ( a b c - b c a )
 : ROT >R SWAP R> SWAP ;
