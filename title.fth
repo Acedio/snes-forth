@@ -68,9 +68,9 @@ BANK!
       1 TITLE-NMI-STATE +!
     ENDOF
     5 OF
-      FADE-IN
+      FADE-IN DROP
 
-      \ Layers 1 and turn off OBJ.
+      \ Enable layer 1 and turn off OBJ.
       0x01 0x11 BG-LAYER-ENABLE MASK!
 
       TITLE-BG-TILE-BASE BG1-TILE-BASE!
