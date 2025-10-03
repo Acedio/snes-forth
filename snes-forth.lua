@@ -1024,6 +1024,16 @@ asm=function() return [[
   rts
 ]] end}
 
+addNative{name="OVER", runtime=function()
+  dataStack:push(dataStack[dataStack:entries() - 1])
+  rts()
+end,
+asm=function() return [[
+  lda z:3,X
+  PUSH_A
+  rts
+]] end}
+
 local function tryPeephole(xt)
   local word = dictionary:addrName(xt)
   if word == "@" and dataspace[dataspace:getCodeHere() - Lit:size()].type == "lit" then
