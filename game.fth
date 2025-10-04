@@ -32,8 +32,8 @@ BANK!
       \ Set Mode 1 BG3 high priority (0x.9), BG1 BG2 BG3 tile size 16x16 (0x7.)
       0x79 BG-MODE C!
 
-      \ Maximum screen brightness
-      0x0F SET-SCREEN-BRIGHTNESS
+      \ Minimum screen brightness
+      0 SET-SCREEN-BRIGHTNESS
 
       1 NMI-STATE +!
     ENDOF

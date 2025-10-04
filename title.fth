@@ -42,32 +42,37 @@ BANK!
 : TITLE-NMI
   TITLE-NMI-STATE @ CASE
     0 OF
-      0x0 SET-SCREEN-BRIGHTNESS
+      \ Fade out, just in case we're coming from the end screen.
+      FADE-OUT IF
+        1 TITLE-NMI-STATE +!
+      THEN
+    ENDOF
+    1 OF
       COPY-TITLE-TILES-1
 
       1 TITLE-NMI-STATE +!
     ENDOF
-    1 OF
+    2 OF
       COPY-TITLE-TILES-2
 
       1 TITLE-NMI-STATE +!
     ENDOF
-    2 OF
+    3 OF
       COPY-TITLE-PALETTE
 
       1 TITLE-NMI-STATE +!
     ENDOF
-    3 OF
+    4 OF
       STARS-NMI IF
         1 TITLE-NMI-STATE +!
       THEN
     ENDOF
-    4 OF
+    5 OF
       TITLE-COPY-BG1
 
       1 TITLE-NMI-STATE +!
     ENDOF
-    5 OF
+    6 OF
       FADE-IN DROP
 
       \ Enable layer 1 and turn off OBJ.

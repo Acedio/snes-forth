@@ -46,17 +46,22 @@ BANK!
 : END-NMI
   END-NMI-STATE @ CASE
     0 OF
+      FADE-OUT IF
+        1 END-NMI-STATE +!
+      THEN
+    ENDOF
+    1 OF
       COPY-FONT
       TEXT-PALETTE
 
       1 END-NMI-STATE +!
     ENDOF
-    1 OF
+    2 OF
       END-COPY-BG1
 
       1 END-NMI-STATE +!
     ENDOF
-    2 OF
+    3 OF
       END-BG-TILE-BASE BG1-TILE-BASE!
       0x08   0x18   BG-MODE           MASK!
       \ Leave on our cat hero.
@@ -73,13 +78,11 @@ BANK!
 
       1 END-NMI-STATE +!
     ENDOF
-    3 OF
+    4 OF
+      FADE-IN DROP
       STARS-NMI DROP
     ENDOF
   ENDCASE
-
-  \ Maximum screen brightness
-  0x0F SET-SCREEN-BRIGHTNESS
 ;
 
 : END-INIT
