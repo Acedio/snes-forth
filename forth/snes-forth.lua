@@ -1619,6 +1619,10 @@ end, [[
     bne :+
 ]])
 
+-- Signed comparison tips from
+-- http://www.6502.org/tutorials/compare_beyond.html. Not sure why this was such
+-- a mind-bend, haha.
+
 binaryCmpOp("<", "_LT", function(a, b)
   return toSigned(a) < toSigned(b)
 end, [[
