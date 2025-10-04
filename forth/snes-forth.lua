@@ -1593,9 +1593,7 @@ local function binaryCmpOp(name, label, op, asmOp)
   asm=function() return string.format([[
     ldy #$FFFF
     lda z:3, X
-    sec
-    sbc z:1, X
-    %s :+
+    %s
     ldy #$0000
   :
     sty z:3, X
@@ -1607,43 +1605,98 @@ end
 
 binaryCmpOp("=", "_EQ", function(a, b)
   return a == b
-end, "beq")
+end, [[
+    sec
+    sbc z:1, X
+    beq :+
+]])
 
 binaryCmpOp("<>", "_NE", function(a, b)
   return a ~= b
-end, "bne")
+end, [[
+    sec
+    sbc z:1, X
+    bne :+
+]])
 
 binaryCmpOp("<", "_LT", function(a, b)
   return toSigned(a) < toSigned(b)
-end, "bmi")
+end, [[
+    sec
+    sbc z:1, X
+    bvc :+
+    eor #$8000
+  :
+    bmi :+
+]])
 
 binaryCmpOp("<=", "_LTE", function(a, b)
   return toSigned(a) <= toSigned(b)
-end, "bmi")
+end, [[
+    sec
+    sbc z:1, X
+    beq :++
+    bvc :+
+    eor #$8000
+  :
+    bmi :+
+]])
 
 binaryCmpOp(">", "_GT", function(a, b)
   return toSigned(a) > toSigned(b)
-end, "bpl")
+end, [[
+    clc
+    sbc z:1, X
+    bvc :+
+    eor #$8000
+  :
+    bpl :+
+]])
 
 binaryCmpOp(">=", "_GTE", function(a, b)
   return toSigned(a) >= toSigned(b)
-end, "bpl")
+end, [[
+    sec
+    sbc z:1, X
+    bvc :+
+    eor #$8000
+  :
+    bpl :+
+]])
 
 binaryCmpOp("U<", "_UNSIGNED_LT", function(a, b)
   return toUnsigned(a) < toUnsigned(b)
-end, "bcc")
+end, [[
+    sec
+    sbc z:1, X
+    bcc :+
+]])
 
 binaryCmpOp("U<=", "_UNSIGNED_LTE", function(a, b)
   return toUnsigned(a) <= toUnsigned(b)
-end, "bcc")
+end, [[
+    sec
+    sbc z:1, X
+    bcc :+
+    beq :+
+]])
 
 binaryCmpOp("U>", "_UNSIGNED_GT", function(a, b)
   return toUnsigned(a) > toUnsigned(b)
-end, "bcs")
+end, [[
+    sec
+    sbc z:1, X
+    bcs :+
+    bne :+
+]])
 
 binaryCmpOp("U>=", "_UNSIGNED_GTE", function(a, b)
   return toUnsigned(a) >= toUnsigned(b)
-end, "bcs")
+end, [[
+    sec
+    sbc z:1, X
+    bcs :+
+]])
 
 do
   addColonWithLabel(":", "_COLON")

@@ -31,8 +31,8 @@
 \ Random math ops.
 : 0= 0 = ; LABEL _0_EQ
 : 0<> 0 <> ; LABEL _0_NE
-: 0< 0 < ; LABEL _0_GT
-: 0> 0 > ; LABEL _0_LT
+: 0< 0 < ; LABEL _0_LT
+: 0> 0 > ; LABEL _0_GT
 
 : 2/ DUP LSR SWAP 0x8000 AND OR ; LABEL _DIV2
 : 1- 1 - ; LABEL _DECR
