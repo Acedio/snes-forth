@@ -64,6 +64,18 @@ T{ 0xFFFF 0x0001 U< -> FALSE }T
 T{ 0xFFFF 0x0001 U> -> TRUE }T
 T{ 0x0001 0xFFFF U> -> FALSE }T
 
+\ Test overflowing signed comparisons.
+T{ 0x8000 1 < -> TRUE }T
+T{ 1 0x8000 < -> FALSE }T
+T{ -1 0x7FFF < -> TRUE }T
+T{ 0x7FFF -1 < -> FALSE }T
+T{ 1 0x8000 > -> TRUE }T
+T{ 0x8000 1 > -> FALSE }T
+T{ 0x7FFF -1 > -> TRUE }T
+T{ -1 0x7FFF > -> FALSE }T
+
+\ TODO: Test GTE, LTE
+
 \ Literals
 T{ $123456 -> 0x0012 0x3456 }T
 
