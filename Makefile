@@ -16,10 +16,10 @@ $(BUILD)/tad-audio.o: tad-audio.s | build
 $(BUILD)/audio.o: $(BUILD)/audio.s | build
 	ca65 $< -g -o $@ -DLOROM
 
-$(BUILD)/%.o: $(BUILD)/%.out.s preamble.inc | build
+$(BUILD)/%.o: $(BUILD)/%.out.s $(BUILD)/preamble.inc | build
 	ca65 $< -g -o $@
 
-$(BUILD)/init.o: init.s preamble.inc | build
+$(BUILD)/init.o: init.s $(BUILD)/preamble.inc | build
 	ca65 $< -g -o $@
 
 # A list of labels for use with Mesen.

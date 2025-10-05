@@ -47,22 +47,40 @@ T{ 0x1234 HIBYTE -> 0x0012 }T
 T{ 0x1234 SWAPBYTES -> 0x3412 }T
 
 \ Comparison ops
-T{ 1 2 < -> TRUE }T
-T{ 2 1 < -> FALSE }T
-T{ -1 1 < -> TRUE }T
-T{ 1 -1 < -> FALSE }T
-T{ 2 1 > -> TRUE }T
-T{ 1 2 > -> FALSE }T
-T{ 1 -1 > -> TRUE }T
-T{ -1 1 > -> FALSE }T
-T{ 1 1 = -> TRUE }T
-T{ 0 1 = -> FALSE }T
-T{ 0 1 <> -> TRUE }T
-T{ 1 1 <> -> FALSE }T
+T{  1  2 <  -> TRUE }T
+T{  2  2 <  -> FALSE }T
+T{ -1  1 <  -> TRUE }T
+T{  1 -1 <  -> FALSE }T
+T{  2  1 >  -> TRUE }T
+T{  2  2 >  -> FALSE }T
+T{  1 -1 >  -> TRUE }T
+T{ -1  1 >  -> FALSE }T
+T{  1  2 <= -> TRUE }T
+T{  2  2 <= -> TRUE }T
+T{  3  2 <= -> FALSE }T
+T{ -1  1 <= -> TRUE }T
+T{  1 -1 <= -> FALSE }T
+T{  2  1 >= -> TRUE }T
+T{  2  2 >= -> TRUE }T
+T{  2  3 >= -> FALSE }T
+T{  1 -1 >= -> TRUE }T
+T{ -1  1 >= -> FALSE }T
+T{  1  1 =  -> TRUE }T
+T{  0  1 =  -> FALSE }T
+T{  0  1 <> -> TRUE }T
+T{  1  1 <> -> FALSE }T
 T{ 0x0001 0xFFFF U< -> TRUE }T
 T{ 0xFFFF 0x0001 U< -> FALSE }T
+T{ 0xFFFF 0xFFFF U< -> FALSE }T
+T{ 0x0001 0xFFFF U<= -> TRUE }T
+T{ 0xFFFF 0x0001 U<= -> FALSE }T
+T{ 0xFFFF 0xFFFF U<= -> TRUE }T
 T{ 0xFFFF 0x0001 U> -> TRUE }T
 T{ 0x0001 0xFFFF U> -> FALSE }T
+T{ 0xFFFF 0xFFFF U> -> FALSE }T
+T{ 0xFFFF 0x0001 U>= -> TRUE }T
+T{ 0x0001 0xFFFF U>= -> FALSE }T
+T{ 0xFFFF 0xFFFF U>= -> TRUE }T
 
 \ Test overflowing signed comparisons.
 T{ 0x8000 1 < -> TRUE }T
@@ -73,8 +91,16 @@ T{ 1 0x8000 > -> TRUE }T
 T{ 0x8000 1 > -> FALSE }T
 T{ 0x7FFF -1 > -> TRUE }T
 T{ -1 0x7FFF > -> FALSE }T
-
-\ TODO: Test GTE, LTE
+T{ 0x8000 1 <= -> TRUE }T
+T{ 1 0x8000 <= -> FALSE }T
+T{ 0x8000 0x8000 <= -> TRUE }T
+T{ -1 0x7FFF <= -> TRUE }T
+T{ 0x7FFF -1 <= -> FALSE }T
+T{ 1 0x8000 >= -> TRUE }T
+T{ 0x8000 1 >= -> FALSE }T
+T{ 0x8000 0x8000 >= -> TRUE }T
+T{ 0x7FFF -1 >= -> TRUE }T
+T{ -1 0x7FFF >= -> FALSE }T
 
 \ Literals
 T{ $123456 -> 0x0012 0x3456 }T
@@ -107,7 +133,7 @@ T{ TEST-LOWRAM-VAR TEST-LOWRAM-VAR 1+ CSWAP! TEST-LOWRAM-VAR @ -> 0x3412 }T
 ;
 
 : SNES-ONLY-TESTS
-  T{ 0x4000 0x40 PPU-MULT -> $100000 }T
+  T{ 0x4000 0x40 PPU-MULT -> 0x0000 0x10 }T
 ;
 
 : SNES-MAIN
