@@ -1688,10 +1688,9 @@ end, [[
 binaryCmpOp("U>", "_UNSIGNED_GT", function(a, b)
   return toUnsigned(a) > toUnsigned(b)
 end, [[
-    sec
+    clc
     sbc z:1, X
     bcs :+
-    bne :+
 ]])
 
 binaryCmpOp("U>=", "_UNSIGNED_GTE", function(a, b)
