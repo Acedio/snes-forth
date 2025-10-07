@@ -1,3 +1,5 @@
+REQUIRE std.fth
+
 CODE FONT
   lda #.LOWORD(FONT_DATA)
   PUSH_A

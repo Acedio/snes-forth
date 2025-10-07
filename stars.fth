@@ -1,3 +1,12 @@
+REQUIRE std.fth
+
+REQUIRE cgram.fth
+REQUIRE build/farstars.p1.map.fth
+REQUIRE build/farstars.tiles2b.fth
+REQUIRE build/starfield.p2.map.fth
+REQUIRE build/stars.tiles.fth
+REQUIRE vram.fth
+
 : COPY-STARS
   STARS-TILES
   STARS-TILES-BANK

@@ -1,3 +1,5 @@
+REQUIRE std.fth
+
 CODE __AUDIO-IMPORTS
   rts
   .include "tad-audio.inc"

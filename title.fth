@@ -1,3 +1,14 @@
+REQUIRE std.fth
+
+REQUIRE audio.fth
+REQUIRE cgram.fth
+REQUIRE vram.fth
+REQUIRE build/title.tiles.fth
+REQUIRE build/title.p1.map.fth
+REQUIRE joypad.fth
+REQUIRE sin-lut.fth
+REQUIRE stars.fth
+
 BANK@
 LOWRAM BANK!
 CREATE TITLE-TICKS 1 CELLS ALLOT

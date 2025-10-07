@@ -1,3 +1,5 @@
+REQUIRE std.fth
+
 128 CONSTANT OAM-OBJECT-COUNT
 
 \ 4 bytes per object

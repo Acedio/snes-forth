@@ -1,3 +1,5 @@
+REQUIRE std.fth
+
 : SET-PALETTE-ENTRY
   \ 0b0BBBBBGGGGGRRRRR
   \ Set background, low byte first

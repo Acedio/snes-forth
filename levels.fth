@@ -1,3 +1,7 @@
+REQUIRE std.fth
+
+REQUIRE level-data.fth
+
 0 CONSTANT INITIAL-LEVEL
 
 (

@@ -1,3 +1,19 @@
+REQUIRE std.fth
+
+REQUIRE audio.fth
+REQUIRE build/maptiles.tiles.fth
+REQUIRE build/sprites.tiles.fth
+REQUIRE cgram.fth
+REQUIRE joypad.fth
+REQUIRE level-data.fth
+REQUIRE levels.fth
+REQUIRE oam.fth
+REQUIRE sin-lut.fth
+REQUIRE snes-std.fth
+REQUIRE stars.fth
+REQUIRE steps.fth
+REQUIRE vram.fth
+
 \ This file contains the gameplay and graphics routines for the puzzles. For the
 \ data structures, see level-data.fth. For the levels themselves, see
 \ levels.fth.

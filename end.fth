@@ -1,3 +1,14 @@
+REQUIRE std.fth
+
+REQUIRE audio.fth
+REQUIRE font.fth
+REQUIRE cgram.fth
+REQUIRE joypad.fth
+REQUIRE snes-std.fth
+REQUIRE stars.fth
+REQUIRE steps.fth
+REQUIRE vram.fth
+
 BANK@
 LOWRAM BANK!
 CREATE END-TICKS 1 CELLS ALLOT

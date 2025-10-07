@@ -1,3 +1,8 @@
+REQUIRE std.fth
+
+REQUIRE snes-std.fth
+REQUIRE wram.fth
+
 \ This file describes the data structures used to store and manipulate level
 \ data. It's separated from the level gameplay/drawing code itself because I
 \ want to store the data for levels in a separate file and that file must come
