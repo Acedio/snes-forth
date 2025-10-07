@@ -1,4 +1,7 @@
-\ TODO: Tests defined at the root level here don't actually get run on the SNES.
+REQUIRE std.fth
+
+REQUIRE snes-std.fth
+REQUIRE test-util.fth
 
 : TEST-STACK-OPS
   T{ 1 2 NIP -> 2 }T

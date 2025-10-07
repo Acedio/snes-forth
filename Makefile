@@ -32,7 +32,7 @@ $(BUILD)/%.out.s: %.fth forth/snes-forth.lua | build
 
 forth/snes-forth.lua: forth/bytestack.lua  forth/cellstack.lua  forth/dataspace.lua  forth/dictionary.lua  forth/input.lua
 
-tests.fth: std.fth snes-std.fth tests/test-util.fth tests/tests.fth
+tests.fth: std.fth snes-std.fth test-util.fth
 
 4BTILES=maptiles sprites stars title
 4BTILES_FTH=$(foreach name,$(4BTILES),$(BUILD)/$(name).tiles.fth)
@@ -44,7 +44,6 @@ MAPS_FTH=$(foreach name,$(MAPS),$(BUILD)/$(name).map.fth)
 game.fth: std.fth snes-std.fth joypad.fth sin-lut.fth oam.fth vram.fth cgram.fth wram.fth $(4BTILES_FTH) $(2BTILES_FTH) $(MAPS_FTH) font.fth audio.fth stars.fth steps.fth level-data.fth levels.fth level.fth title.fth end.fth
 
 tests: $(BUILD)/tests.smc $(BUILD)/tests.mlb
-	echo tests
 
 $(ASSETS)/farstars.png: $(ASSETS)/stars.png
 	cp $< $@
