@@ -1,9 +1,10 @@
 #!/usr/bin/lua
 
-local Input = {}
+local Source = {}
 
-function Input:fromString(str)
+function Source:fromString(name, str)
   local input = {
+    name = name,
     str = str,
     line = "",
     lineStart = 1,
@@ -16,19 +17,8 @@ function Input:fromString(str)
   return input
 end
 
-function Input:stdin()
-  return self:fromString(io.read("*all"))
-end
-
-function Input:readAll(filename)
-  local f = assert(io.open(filename, "r"))
-  local str = f:read("*all")
-  f:close()
-  return self:fromString(str)
-end
-
 -- Returns false if EOF
-function Input:nextLine()
+function Source:nextLine()
   if self.lineStart > string.len(self.str) then
     return false
   end
@@ -44,11 +34,11 @@ function Input:nextLine()
   return true
 end
 
-function Input:word()
+function Source:word()
   local first, last = string.find(self.line, "%S+", self.i)
   while first == nil do
     if not self:nextLine() then
-      return ""
+      return nil
     end
     first, last = string.find(self.line, "%S+", self.i)
   end
@@ -57,15 +47,13 @@ function Input:word()
 end
 
 -- Returns all text until `token`, then discards `token`.
-function Input:untilToken(token)
+function Source:untilToken(token)
   local str = ""
   local first = self.i
   local tokenFirst, tokenLast = string.find(self.line, token, first)
   while tokenFirst == nil do
     str = str .. string.sub(self.line, first, string.len(self.line))
-    if not self:nextLine() then
-      return str
-    end
+    assert(self:nextLine(), string.format("Expect token '%s' but hit EOF.", token))
     first = self.i
     tokenFirst, tokenLast = string.find(self.line, token, first)
   end
@@ -73,16 +61,94 @@ function Input:untilToken(token)
   return str .. string.sub(self.line, first, tokenFirst-1)
 end
 
--- TODO: EOF handling.
-function Input:peek()
+function Source:peek()
+  while self.i > string.len(self.line) do
+    if not self:nextLine() then
+      return nil
+    end
+  end
   return string.byte(string.sub(self.line, self.i, self.i))
 end
 
-function Input:key()
+function Source:key()
   local c = self:peek()
   self.i = self.i + 1
-  if self.i > string.len(self.line) then
-    self:nextLine()
+  while self.i > string.len(self.line) and self:nextLine() do
+    -- Keep moving on to the next line until we hit a character or EOF.
+  end
+  return c
+end
+
+local Input = {}
+
+function Input:new()
+  local input = {
+    sourceStack = {},
+    sources = {},
+  }
+  setmetatable(input, self)
+  self.__index = self
+  return input
+end
+
+function Input:pushSource(source)
+  table.insert(self.sourceStack, source)
+end
+
+function Input:popSource(source)
+  table.remove(self.sourceStack)
+end
+
+function Input:fromStdin()
+  self:pushSource(Source:fromString("stdin", io.read("*all")))
+end
+
+function Input:include(filename)
+  self.sources[filename] = true
+  local f = assert(io.open(filename, "r"))
+  local str = f:read("*all")
+  f:close()
+  self:pushSource(Source:fromString(filename, str))
+end
+
+function Input:require(filename)
+  if not self.sources[filename] then
+    self:include(filename)
+  end
+end
+
+function Input:topSource()
+  return self.sourceStack[#self.sourceStack]
+end
+
+function Input:word()
+  local word = self:topSource():word()
+  while word == nil do
+    self:popSource()
+    if #self.sourceStack == 0 then
+      -- EOF and no more files to read.
+      return nil
+    end
+    word = self:topSource():word()
+  end
+  return word
+end
+
+-- Returns all text until `token`, then discards `token`.
+function Input:untilToken(token)
+  -- Expects to find the token in the same file, so never moves to next file.
+  return self:topSource():untilToken(token)
+end
+
+function Input:key()
+  local c = self:topSource():key()
+  while c == nil do
+    self:popSource()
+    if #self.sourceStack == 0 then
+      -- EOF and no more files to read.
+      return nil
+    end
+    c = self:topSource():key()
   end
   return c
 end

@@ -27,11 +27,11 @@ end
 
 assert(#arg == 2, "Two arguments are required: ./snes-forth.lua [input] [output]")
 
-local input = nil
+local input = Input:new()
 if arg[1] == "-" then
-  input = Input:stdin()
+  input:fromStdin()
 else
-  input = Input:readAll(arg[1])
+  input:include(arg[1])
 end
 
 local outputs = io.stdout
@@ -834,23 +834,39 @@ addNative{name="WORD", runtime=function()
   rts()
 end}
 
-addNative{name="PEEK", runtime=function()
-  dataStack:push(input:peek())
-  rts()
-end}
-
 addNative{name="KEY", runtime=function()
   dataStack:push(input:key())
   rts()
 end}
 
 addNative{name="PRINT-LINE", runtime=function()
-  outputs:write(input.line)
+  outputs:write(input:topSource().line)
+  rts()
+end}
+
+addNative{name="FILENAME", runtime=function()
+  setWordBuffer(input:topSource().name)
+  local count = dataspace:getWord(wordBufferAddr)
+  local addr = wordBufferAddr + 2
+  dataStack:push(addr)
+  dataStack:push(count)
   rts()
 end}
 
 addNative{name="LINE#", runtime=function()
-  dataStack:push(input.lineNo)
+  dataStack:push(input:topSource().lineNo)
+  rts()
+end}
+
+addNative{name="INCLUDE", runtime=function()
+  local filename = input:word()
+  input:include(filename)
+  rts()
+end}
+
+addNative{name="REQUIRE", runtime=function()
+  local filename = input:word()
+  input:require(filename)
   rts()
 end}
 
@@ -1839,6 +1855,13 @@ do
   compile("DOS\"")
   dataspace:compileWord(7)
   dataspace:compileByte(string.byte("?"))
+  dataspace:compileByte(string.byte("\n"))
+  dataspace:compileByte(string.byte("F"))
+  dataspace:compileByte(string.byte("I"))
+  dataspace:compileByte(string.byte("L"))
+  dataspace:compileByte(string.byte("E"))
+  dataspace:compileByte(string.byte(" "))
+  compile("TYPE FILENAME TYPE")
   dataspace:compileByte(string.byte("\n"))
   dataspace:compileByte(string.byte("L"))
   dataspace:compileByte(string.byte("I"))
