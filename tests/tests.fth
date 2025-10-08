@@ -1,6 +1,7 @@
 REQUIRE std.fth
 
 REQUIRE snes-std.fth
+REQUIRE tests/snes-test-util.fth
 REQUIRE tests/test-util.fth
 
 : TEST-STACK-OPS
@@ -154,12 +155,13 @@ CREATE TEST-VAR 1 CELLS ALLOT
 ;
 
 : SNES-MAIN
+  SNES-TEST-INIT
+
   SHARED-TESTS
   SNES-ONLY-TESTS
-;
 
-\ Needed to run on the SNES.
-: SNES-NMI ;
+  SNES-TESTS-PASSED-YAY!
+;
 
 SHARED-TESTS
 LUA-ONLY-TESTS

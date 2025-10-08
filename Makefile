@@ -30,12 +30,10 @@ $(BUILD)/%.mlb: $(BUILD)/%.labels | build
 $(BUILD)/%.out.s: %.fth forth/snes-forth.lua | build
 	LUA_PATH=forth/?.lua forth/snes-forth.lua $< $@
 
-$(BUILD)/%.out.s: tests/%.fth forth/snes-forth.lua | build
+$(BUILD)/%.out.s: tests/%.fth forth/snes-forth.lua std.fth snes-std.fth tests/test-util.fth tests/snes-test-util.fth cgram.fth oam.fth vram.fth | build 
 	LUA_PATH=forth/?.lua forth/snes-forth.lua $< $@
 
 forth/snes-forth.lua: forth/bytestack.lua  forth/cellstack.lua  forth/dataspace.lua  forth/dictionary.lua  forth/input.lua
-
-tests/tests.fth: std.fth snes-std.fth tests/test-util.fth
 
 4BTILES=maptiles sprites stars title
 4BTILES_FTH=$(foreach name,$(4BTILES),$(BUILD)/$(name).tiles.fth)
