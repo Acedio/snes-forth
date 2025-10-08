@@ -156,7 +156,7 @@ function Jump:asm(dataspace, opAddr)
     -- TODO: Assert that we're in sized space. Or maybe just assert that we
     -- can get an address/label for the given (Lua) address?
     return string.format([[
-      jsr $%04X ; Cross our fingers!
+      jmp $%04X ; Cross our fingers!
     ]], jumpAddr)
   end
 end
@@ -546,11 +546,11 @@ end}
 
 local function addColonWithLabel(name, label)
   dataspace:labelCodeHere(label)
-  dictionary:add(name, label, dataspace:getCodeHere())
+  return dictionary:add(name, label, dataspace:getCodeHere())
 end
 
 local function addColon(name)
-  addColonWithLabel(name, Dataspace.defaultLabel(name))
+  return addColonWithLabel(name, Dataspace.defaultLabel(name))
 end
 
 addNative{name="BANK@", label="_BANK_FETCH", runtime=function()
@@ -1062,7 +1062,7 @@ local function tryPeephole(xt)
     -- TODO: This shouldn't be a constant. Or we should move peephole
     -- optimizations next to the relevant words.
     dataspace:setWord(litAddr + 5, storeAddr)
-    assertAddr(dataspace[litAddr]:addr(dataspace, litAddr) == storeAddr)
+    assertAddr(dataspace[litAddr]:addr(dataspace, litAddr) == storeAddr, "%s\n", litAddr)
     return true
   end
   return false
@@ -1466,27 +1466,34 @@ addNative{name="LABEL", runtime=function()
   rts()
 end}
 
-addColon("DODOES")
-  -- TODO: More to consider here, probably need to change XT!
-  -- TODO: Should probably use INLINE-DATA instead of R>
-  compile("R> XT!")  -- Ends the calling word (CREATEing) early.
+-- Given a return stack entry, push where the inline data for this word is.
+--
+-- The SNES and Lua diverge a bit on how the inline data is addressed, so this
+-- word allows for normalized access.
+-- On the 6502, JSR pushes an address that doesn't quite jump past the JSR
+-- instruction itself
+-- [link](https://retrocomputing.stackexchange.com/questions/19543/why-does-the-6502-jsr-instruction-only-increment-the-return-address-by-2-bytes)
+-- Also true for 816's
+-- [JSL](https://web.archive.org/web/20250114225959/http://www.6502.org/tutorials/65c816opcodes.html#6.2.2.1),
+-- which increments IP by 3 and not the full 4.
+-- TODO: Probably should make the return stack behave the same as the SNES
+-- (point at one byte behind the return address) 
+addNative{name="INLINE-DATA", runtime=function()
+  -- The return stack in Lua already points at the inline data.
+  rts()
+end,
+asm=function() return [[
+  ; We're one byte behind the inline data.
+  inc 1, X
+  rts
+]] end}
+
+local dictEntry = addColonWithLabel("DOES>", "_DOES")
+-- Unlikely that this would ever be TCO'd, but just in case.
+dictEntry.tcoEnabled = false
+  compile("R> INLINE-DATA XT!")
+  -- Snags the return address, so ends the calling word (CREATEing) early.
   compileRts()
-
-addColonWithLabel("DOES>", "_DOES")
-  compileXtLit("DODOES")
-  compile("COMPILE,")
-
-  -- Need to drop the return address so we skip returning to the codeword of the
-  -- DOES body.
-  -- TODO: It should just be a jmp instead instead of a jsr.
-  compileXtLit("R>")
-  compile("COMPILE,")
-
-  compileXtLit("DROP")
-  compile("COMPILE,")
-
-  compileRts()
-dictionary:latest().immediate = true
 
 -- TODO: Maybe pull these out into a mathops.lua file?
 local function unaryOp(name, label, op, asm)
@@ -1736,28 +1743,6 @@ do
   dictionary:latest().immediate = true
 end
 
--- Given a return stack entry, push where the inline data for this word is.
---
--- The SNES and Lua diverge a bit on how the inline data is addressed, so this
--- word allows for normalized access.
--- On the 6502, JSR pushes an address that doesn't quite jump past the JSR
--- instruction itself
--- [link](https://retrocomputing.stackexchange.com/questions/19543/why-does-the-6502-jsr-instruction-only-increment-the-return-address-by-2-bytes)
--- Also true for 816's
--- [JSL](https://web.archive.org/web/20250114225959/http://www.6502.org/tutorials/65c816opcodes.html#6.2.2.1),
--- which increments IP by 3 and not the full 4.
--- TODO: Probably should make the return stack behave the same as the SNES
--- (point at one byte behind the return address) 
-addNative{name="INLINE-DATA", runtime=function()
-  -- The return stack in Lua already points at the inline data.
-  rts()
-end,
-asm=function() return [[
-  ; We're one byte behind the inline data.
-  inc 1, X
-  rts
-]] end}
-
 -- Push the inline string address and the length.
 addColonWithLabel("DOS\"", "_DO_SLIT")
 do
@@ -1890,7 +1875,7 @@ while running do
   local oldIp = ip
   local instruction = dataspace[oldIp]
   assertAddr(instruction, "Attempted to execute missing cell: %s\n", oldIp)
-  assertAddr(instruction.runtime, "Attempted to execute a non-native cell: %s\n", oldip)
+  assertAddr(instruction.runtime, "Attempted to execute a non-native cell: %s\n", oldIp)
 
   if debugging() then
     local name = dictionary:addrName(oldIp) or dataspace[oldIp]:toString(dataspace, oldIp)
