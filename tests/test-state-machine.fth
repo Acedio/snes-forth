@@ -1,3 +1,5 @@
+REQUIRE state-machine.fth
+
 <STATES
   STATE: LEVEL-INIT
   STATE: LEVEL-MIDDLE

@@ -1,3 +1,5 @@
+REQUIRE std.fth
+
 : <STATES 0 ;
 : STATE: DUP CONSTANT 1+ ;
 : STATES>COUNT: CONSTANT ;
@@ -13,5 +15,5 @@
 ( &state-list -- )
 : STATE-MACHINE> DROP ;
 
-: STATE! SWAP ! ;
+: STATE! SWAP ! ; LABEL _STATE_STORE
 
