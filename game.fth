@@ -10,6 +10,7 @@ REQUIRE level.fth
 REQUIRE oam.fth
 REQUIRE title.fth
 REQUIRE vram.fth
+REQUIRE state-machine.fth
 
 
 BANK@
@@ -119,26 +120,7 @@ STATE-MACHINE>
 
     READ-JOY1
 
-    GAME-STATE @ CASE
-      GAME-STATE-TITLE OF
-        TITLE-MAIN IF
-          LEVEL-INIT
-          GAME-STATE-LEVEL GAME-STATE !
-        THEN
-      ENDOF
-      GAME-STATE-LEVEL OF
-        LEVEL-MAIN IF
-          END-INIT
-          GAME-STATE-END GAME-STATE !
-        THEN
-      ENDOF
-      GAME-STATE-END OF
-        END-MAIN IF
-          TITLE-INIT
-          GAME-STATE-TITLE GAME-STATE !
-        THEN
-      ENDOF
-    ENDCASE
+    GAME-STATE GAME-FSM
 
     AUDIO-UPDATE
 
