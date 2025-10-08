@@ -103,6 +103,8 @@ function Input:fromStdin()
   self:pushSource(Source:fromString("stdin", io.read("*all")))
 end
 
+-- TODO: Should also add some sort of PATH handling so we can search the
+-- directory of the source file first, then fall back to standard libraries.
 function Input:include(filename)
   self.sources[filename] = true
   local f = assert(io.open(filename, "r"))
