@@ -1,7 +1,7 @@
 REQUIRE std.fth
 
 REQUIRE snes-std.fth
-REQUIRE test-util.fth
+REQUIRE tests/test-util.fth
 
 : TEST-STACK-OPS
   T{ 1 2 NIP -> 2 }T
