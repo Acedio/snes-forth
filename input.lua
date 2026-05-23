@@ -83,8 +83,12 @@ local Input = {}
 
 function Input:new()
   local input = {
+    -- Tracks our file pointers as we recursively include directories.
     sourceStack = {},
+    -- Unique source filenames so that we don't follow cycles or re-include.
     sources = {},
+    -- TODO
+    systemIncludeDir = '/home/josh/projects/snes-forth/forth/include',
   }
   setmetatable(input, self)
   self.__index = self
@@ -103,11 +107,19 @@ function Input:fromStdin()
   self:pushSource(Source:fromString("stdin", io.read("*all")))
 end
 
+function pathJoin(a,b)
+  local sep = package.config:sub(1,1)
+  return a .. sep .. b
+end
+
 -- TODO: Should also add some sort of PATH handling so we can search the
 -- directory of the source file first, then fall back to standard libraries.
 function Input:include(filename)
   self.sources[filename] = true
-  local f = assert(io.open(filename, "r"))
+  local f = io.open(filename, "r")
+  if not f then
+    f = assert(io.open(pathJoin(self.systemIncludeDir, filename), "r"))
+  end
   local str = f:read("*all")
   f:close()
   self:pushSource(Source:fromString(filename, str))
