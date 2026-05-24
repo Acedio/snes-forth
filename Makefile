@@ -1,4 +1,5 @@
 BUILD=build
+SNESFORTH=./snes-forth.lua -i include
 
 all: tests
 
@@ -20,10 +21,10 @@ $(BUILD)/%.mlb: $(BUILD)/%.labels | build
 
 .PRECIOUS: $(BUILD)/%.out.s
 $(BUILD)/%.out.s: %.fth snes-forth.lua | build
-	./snes-forth.lua $< $@
+	$(SNESFORTH) $< $@
 
 $(BUILD)/%.out.s: tests/%.fth snes-forth.lua tests/test-util.fth tests/snes-test-util.fth | build 
-	./snes-forth.lua $< $@
+	$(SNESFORTH) $< $@
 
 snes-forth.lua: bytestack.lua  cellstack.lua  dataspace.lua  dictionary.lua  input.lua
 

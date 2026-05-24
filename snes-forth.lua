@@ -9,25 +9,31 @@ local Dictionary = require("dictionary")
 local dataStack = CellStack:new()
 local returnStack = ByteStack:new()
 
-toRemove = {}
-flags = {}
-for i=1,#arg do
-  if arg[i] == "-v" then
-    flags[arg[i]] = true
-    table.insert(toRemove, i)
-  elseif arg[i] == "-" then
+local includeDirs = {}
+local verboseMode = false
+local nonFlags = {}
+
+while #arg > 0 do
+  local argument = table.remove(arg, 1)
+  if argument == "-v" then
+    verboseMode = true
+  elseif argument == "-i" then
+    assert(#arg > 0, "Ran out of args when processing -i argument!")
+    table.insert(includeDirs, table.remove(arg, 1))
+  elseif argument == "-" then
     -- "-" is parsed as reading from stdin
   else
-    assert(string.sub(arg[i],1,1) ~= "-", "Unrecognized flag: " .. arg[i])
+    assert(string.sub(argument,1,1) ~= "-", "Unrecognized flag: " .. argument)
+    table.insert(nonFlags, argument)
   end
 end
-for _, i in ipairs(toRemove) do
-  table.remove(arg, i)
-end
+arg = nonFlags
 
 assert(#arg == 2, "Two arguments are required: ./snes-forth.lua [input] [output]")
 
-local input = Input:new()
+local input = Input:new{
+  includeDirs = includeDirs,
+}
 if arg[1] == "-" then
   input:fromStdin()
 else
@@ -522,7 +528,7 @@ end
 makeSystemVariable("STATE")
 local debugAddr = makeSystemVariable("DEBUG")
 
-if flags["-v"] then
+if verboseMode then
   dataspace:setWord(debugAddr, 0xFFFF)
 else
   dataspace:setWord(debugAddr, 0x0)

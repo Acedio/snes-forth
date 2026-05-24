@@ -81,15 +81,13 @@ end
 
 local Input = {}
 
-function Input:new()
-  local input = {
-    -- Tracks our file pointers as we recursively include directories.
-    sourceStack = {},
-    -- Unique source filenames so that we don't follow cycles or re-include.
-    sources = {},
-    -- TODO
-    systemIncludeDir = '/home/josh/projects/snes-forth/forth/include',
-  }
+function Input:new(o)
+  local input = o or {}
+  -- Tracks our file pointers as we recursively include directories.
+  input.sourceStack = {}
+  -- Unique source filenames so that we don't follow cycles or re-include.
+  input.sources = {}
+
   setmetatable(input, self)
   self.__index = self
   return input
@@ -112,13 +110,18 @@ function pathJoin(a,b)
   return a .. sep .. b
 end
 
--- TODO: Should also add some sort of PATH handling so we can search the
--- directory of the source file first, then fall back to standard libraries.
 function Input:include(filename)
   self.sources[filename] = true
   local f = io.open(filename, "r")
   if not f then
-    f = assert(io.open(pathJoin(self.systemIncludeDir, filename), "r"))
+    -- We didn't find it in the current directory, so scan the includeDirs.
+    for i=1,#self.includeDirs do
+      f = io.open(pathJoin(self.includeDirs[i], filename), "r")
+      if f then
+        break
+      end
+    end
+    assert(f, "Included file not found: " .. filename)
   end
   local str = f:read("*all")
   f:close()
