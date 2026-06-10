@@ -123,6 +123,19 @@ CREATE TEST-VAR 1 CELLS ALLOT
   T{ R> BANK! -> }T
 ;
 
+\ Set up a constant in bank 1.
+\ TODO: This is failing currently because as soon as we change the bank to a
+\ non-0 or zeropage, that messes with the forth compiler's page ^^;
+\ - One solution would be to have the compiler use absolute addressing.
+\ - The other would be to have the compiler push the bank and swap to the page
+\   it knows it's compiling to.
+BANK@ 1 BANK! HERE CONSTANT BANK1-VAR 21 , BANK!
+: TEST-BANK-READ
+  T{ BANK@ >R -> }T
+  T{ 1 BANK! BANK1-VAR @ -> 21 }T 
+  T{ R> BANK! -> }T
+;
+
 : MY-CONSTANT CREATE , DOES> @ ;
 21 MY-CONSTANT TEST-MY-CONSTANT 
 
@@ -152,6 +165,7 @@ CREATE TEST-VAR 1 CELLS ALLOT
   TEST-VARS
   TEST-DOES
   TEST-CSWAP
+  TEST-BANK-READ
 ;
 
 : SNES-MAIN

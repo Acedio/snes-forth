@@ -231,6 +231,8 @@ local function compileBranch0To(addr)
     toUnsigned(dataspace:getRelativeAddr(dataspace:getCodeHere(), addr)))
 end
 
+-- Creates a branch with a placeholder. Returns a closure that can be called to
+-- update the placeholder to the current code HERE.
 local function compileForwardBranch0()
   local branchOffsetAddr = compileBranch0(0x9999)
   return {
@@ -285,6 +287,7 @@ end
 
 local function compileBranchTo(addr)
   local offsetAddr = compileBranch(0x9999)
+  -- TODO: This needs to be an address in the same bank.
   dataspace:setWord(
     offsetAddr,
     toUnsigned(dataspace:getRelativeAddr(dataspace:getCodeHere(), addr)))
@@ -406,8 +409,8 @@ end
 -- Closes over dataStack and ip
 function Fetch:runtime(dataspace, opAddr)
   ip = ip + self:size()
-  local addr = self:addr(dataspace, opAddr)
-  dataStack:push(dataspace:getWord(addr))
+  local localAddr = self:addr(dataspace, opAddr)
+  dataStack:push(dataspace:getLocalWord(localAddr))
 end
 
 function Fetch:addr(dataspace, opAddr)
@@ -443,7 +446,7 @@ function Store:runtime(dataspace, opAddr)
   ip = ip + self:size()
   local addr = self:addr(dataspace, opAddr)
   local val = dataStack:pop()
-  dataspace:setWord(addr, val)
+  dataspace:setLocalWord(addr, val)
 end
 
 function Store:addr(dataspace, opAddr)
@@ -506,6 +509,7 @@ local function makeSystemVariable(name)
 
   local originalBank = dataspace:getDataBank()
   dataspace:setDataBank(Dataspace.LOWRAM_BANK)
+  -- TODO: Should this be masked?
   local dataaddr = dataspace:getDataHere()
   dataspace:addWord(0)
   dataspace:setDataBank(originalBank)
@@ -584,11 +588,12 @@ addNative{name="LOWRAM", runtime=function()
 end}
 
 addNative{name="HERE", runtime=function()
-  dataStack:push(dataspace:getDataHere())
+  dataStack:push(dataspace:getDataHere() & 0xFFFF)
   rts()
 end}
 
 addNative{name="CODEHERE", runtime=function()
+  -- TODO: Should this mask like HERE?
   dataStack:push(dataspace:getCodeHere())
   rts()
 end}
@@ -715,6 +720,7 @@ addNative{name="XT!", label="_XT_STORE", runtime=function()
   dictEntry.canInline = false
   local rtsAddress = dictEntry.addr + 3 + 1 + 1 + 2
   dataspace[rtsAddress] = Jump:new()
+  -- TODO: setLocalWord?
   dataspace:setWord(rtsAddress + 1, addr)
   rts()
 end}
@@ -735,6 +741,8 @@ addNative{name="CREATE", runtime=function()
   -- resize.
   dataspace:compileWord(0x1234)
   dataspace:labelDataHere(label .. "_data")
+  -- TODO: Should this be masked? It should at least only ever be within this
+  -- bank.
   dataspace:setWord(dataAddrAddr, dataspace:getDataHere())
   rts()
 end}
@@ -805,6 +813,7 @@ addNative{name="EMIT", runtime=function()
   rts()
 end}
 
+-- TODO: This should probably be in the zeropage.
 local wordBufferAddr = dataspace:getDataHere()
 local wordBufferSize = 32
 -- Currently allocating this in ROM, but if we move the interpreter to the SNES
@@ -817,21 +826,24 @@ local function setWordBuffer(str)
   assert(length < wordBufferSize, "Strings length too large: " .. str)
   dataspace:setWord(wordBufferAddr, length)
   for i=1,length do
+    -- TODO: setLocalByte?
     dataspace:setByte(wordBufferAddr + 1 + i, string.byte(string.sub(str, i, i)))
   end
 end
 
-local function getWordWithCount(addr, count)
+local function getWordWithCount(localAddr, count)
   local str = ""
   for i=0,count-1 do
-    str = str .. string.char(dataspace:getByte(addr + i))
+    -- TODO: Should this actually be getLocalByte? Wrap at end of bank?
+    str = str .. string.char(dataspace:getLocalByte(localAddr + i))
   end
   return str
 end
 
-local function getCountedWord(addr)
-  local count = dataspace:getWord(addr)
-  return getWordWithCount(addr + 2, count)
+local function getCountedWord(localAddr)
+  -- TODO: getLocalWord?
+  local count = dataspace:getWord(localAddr)
+  return getWordWithCount(localAddr + 2, count)
 end
 
 addNative{name="WORD", runtime=function()
@@ -852,6 +864,7 @@ end}
 
 addNative{name="FILENAME", runtime=function()
   setWordBuffer(input:topSource().name)
+  -- TODO: Should this be getLocalWord?
   local count = dataspace:getWord(wordBufferAddr)
   local addr = wordBufferAddr + 2
   dataStack:push(addr)
@@ -878,8 +891,8 @@ end}
 
 addNative{name="TYPE", runtime=function()
   local count = dataStack:pop()
-  local addr = dataStack:pop()
-  outputs:write(getWordWithCount(addr, count))
+  local localAddr = dataStack:pop()
+  outputs:write(getWordWithCount(localAddr, count))
   rts()
 end}
 
@@ -1113,7 +1126,7 @@ end}
 -- string in bytes.
 addNative{name="COUNT", runtime=function()
   local addr = dataStack:pop()
-  local length = dataspace:getWord(addr)
+  local length = dataspace:getLocalWord(addr)
   dataStack:push(addr + 2)
   dataStack:push(length)
   rts()
@@ -1267,8 +1280,8 @@ end}
 
 -- Takes a local address (2 bytes) off the stack and pushes a 2 byte word.
 addNative{name="@", label="_FETCH", runtime=function()
-  local addr = dataStack:pop()
-  dataStack:push(dataspace:getWord(addr))
+  local localAddr = dataStack:pop()
+  dataStack:push(dataspace:getLocalWord(localAddr))
   rts()
 end,
 asm=function() return [[
@@ -1280,7 +1293,7 @@ asm=function() return [[
 addNative{name="!", label="_STORE", runtime=function()
   local addr = dataStack:pop()
   local val = dataStack:pop()
-  dataspace:setWord(addr, val)
+  dataspace:setLocalWord(addr, val)
   rts()
 end,
 asm=function() return [[
@@ -1296,8 +1309,8 @@ asm=function() return [[
 -- Takes a local address (2 bytes) off the stack and pushes 1 byte plus a zeroed
 -- high byte.
 addNative{name="C@", label="_C_FETCH", runtime=function()
-  local addr = dataStack:pop()
-  dataStack:push(dataspace:getByte(addr))
+  local localAddr = dataStack:pop()
+  dataStack:push(dataspace:getLocalByte(localAddr))
   rts()
 end,
 asm=function() return [[
@@ -1312,7 +1325,7 @@ asm=function() return [[
 addNative{name="C!", label="_C_STORE", runtime=function()
   local addr = dataStack:pop()
   local val = dataStack:pop()
-  dataspace:setByte(addr, val & 0xFF)
+  dataspace:setLocalByte(addr, val & 0xFF)
   rts()
 end,
 asm=function() return [[
@@ -1330,7 +1343,6 @@ asm=function() return [[
 -- Takes a far address (2 cells) off the stack and pushes a 1 cell word.
 addNative{name="F@", label="_FAR_FETCH", runtime=function()
   local addr = dataStack:popDouble()
-  --TODO: Should be getFarWord
   dataStack:push(dataspace:getWord(addr))
   rts()
 end,
@@ -1348,7 +1360,6 @@ asm=function() return [[
 addNative{name="F!", label="_FAR_STORE", runtime=function()
   local addr = dataStack:popDouble()
   local val = dataStack:pop()
-  --TODO: Should be setFarWord
   dataspace:setWord(addr, val)
   rts()
 end,
@@ -1781,10 +1792,6 @@ do
   compileRts()
 end
 dictionary:latest().immediate = true
-
-local function branchToHereFrom(addr)
-  dataspace:setWord(addr, toUnsigned(dataspace:getRelativeAddr(addr + 2, dataspace:getCodeHere())))
-end
 
 do
   -- TODO: Can we define a simpler QUIT here and then define the real QUIT in

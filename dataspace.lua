@@ -18,6 +18,14 @@ function Dataspace:new()
         labels = {},
         segment = "CODE",
       },
+      [1] = {
+        SIZED_START = 0x18000,
+        here = 0x18000,
+        UNSIZED_START = 0x1FA00,
+        unsizedHere = 0x1FA00,
+        labels = {},
+        segment = "BANK1",
+      },
       [Dataspace.LOWRAM_BANK] = {
         SIZED_START = 0x300,
         here = 0x300,
@@ -74,6 +82,7 @@ end
 function Dataspace:print(file)
   self:printBank(file, Dataspace.LOWRAM_BANK)
   self:printBank(file, 0)
+  self:printBank(file, 1)
 end
 
 function Dataspace:assembly(file)
@@ -300,7 +309,6 @@ local function bankByte(value)
 end
 
 function Dataspace:getByte(addr)
-  -- TODO: Implement banking for this and setByte.
   self:assertAddr(io.stderr, self[addr].type == "byte", "Expected byte at %s", addr)
   return self[addr].byte
 end
@@ -322,6 +330,51 @@ end
 
 function Dataspace:getAddr(addr)
   return self:getByte(addr) | (self:getByte(addr + 1) << 8) | (self:getByte(addr + 2) << 16)
+end
+
+function Dataspace:getLocalByte(localAddr)
+  assert(localAddr >= 0 and localAddr <= 0xFFFF, "Invalid local addr " .. localAddr)
+  local addr
+  if self:getDataBank() == Dataspace.LOWRAM_BANK then
+    addr = localAddr
+  else
+    addr = (self:getDataBank() << 16) | localAddr
+  end
+  if self[addr] == nil then
+    print("nil thing at " .. addr .. " bank " .. self:getDataBank())
+  end
+  self:assertAddr(io.stderr, self[addr].type == "byte", "Expected byte at %s", addr)
+  return self[addr].byte
+end
+
+function Dataspace:setLocalByte(localAddr, value)
+  assert(localAddr >= 0 and localAddr <= 0xFFFF, "Invalid local addr " .. localAddr)
+  local addr
+  if self:getDataBank() == Dataspace.LOWRAM_BANK then
+    addr = localAddr
+  else
+    addr = (self:getDataBank() << 16) | localAddr
+  end
+  self:assertAddr(io.stderr, self[addr].type == "byte" and self[addr]:size() == 1, "Expected byte at %s", addr)
+  self[addr].byte = value
+end
+
+function Dataspace:getLocalWord(localAddr)
+  -- TODO: Technically this could wrap to the next bank?
+  return self:getLocalByte(localAddr) | (self:getLocalByte(localAddr + 1) << 8)
+end
+
+function Dataspace:setLocalWord(localAddr, value)
+  assert(value <= 0xFFFF, "Invalid word " .. value)
+  if self:getDataBank() == 1 then
+    print("set!")
+  end
+  self:setLocalByte(localAddr, lowByte(value))
+  self:setLocalByte(localAddr + 1, highByte(value))
+end
+
+function Dataspace:getLocalAddr(localAddr)
+  return self:getLocalByte(localAddr) | (self:getLocalByte(localAddr + 1) << 8) | (self:getLocalByte(localAddr + 2) << 16)
 end
 
 -- Convenience methods.
