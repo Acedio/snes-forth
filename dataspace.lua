@@ -4,6 +4,7 @@ local Dataspace = {}
 
 -- First 0x2000 bytes of RAM, accessible from every bank from 0 to 0x3F.
 Dataspace.LOWRAM_BANK = 0xFFFF
+Dataspace.LOWRAM_SIZE = 0x2000
 
 function Dataspace:new()
   local dataspace = {
@@ -335,27 +336,24 @@ end
 function Dataspace:getLocalByte(localAddr)
   assert(localAddr >= 0 and localAddr <= 0xFFFF, "Invalid local addr " .. localAddr)
   local addr
-  if self:getDataBank() == Dataspace.LOWRAM_BANK then
+  if self:getDataBank() == Dataspace.LOWRAM_BANK or localAddr < Dataspace.LOWRAM_SIZE then
     addr = localAddr
   else
     addr = (self:getDataBank() << 16) | localAddr
   end
-  if self[addr] == nil then
-    print("nil thing at " .. addr .. " bank " .. self:getDataBank())
-  end
-  self:assertAddr(io.stderr, self[addr].type == "byte", "Expected byte at %s", addr)
+  self:assertAddr(io.stderr, self[addr] ~= nil and self[addr].type == "byte", "Expected byte at %s", addr)
   return self[addr].byte
 end
 
 function Dataspace:setLocalByte(localAddr, value)
   assert(localAddr >= 0 and localAddr <= 0xFFFF, "Invalid local addr " .. localAddr)
   local addr
-  if self:getDataBank() == Dataspace.LOWRAM_BANK then
+  if self:getDataBank() == Dataspace.LOWRAM_BANK or localAddr < Dataspace.LOWRAM_SIZE then
     addr = localAddr
   else
     addr = (self:getDataBank() << 16) | localAddr
   end
-  self:assertAddr(io.stderr, self[addr].type == "byte" and self[addr]:size() == 1, "Expected byte at %s", addr)
+  self:assertAddr(io.stderr, self[addr] ~= nil and self[addr].type == "byte" and self[addr]:size() == 1, "Expected byte at %s", addr)
   self[addr].byte = value
 end
 
@@ -366,9 +364,6 @@ end
 
 function Dataspace:setLocalWord(localAddr, value)
   assert(value <= 0xFFFF, "Invalid word " .. value)
-  if self:getDataBank() == 1 then
-    print("set!")
-  end
   self:setLocalByte(localAddr, lowByte(value))
   self:setLocalByte(localAddr + 1, highByte(value))
 end

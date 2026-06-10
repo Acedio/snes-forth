@@ -583,7 +583,7 @@ addNative{name="BANK!", label="_BANK_STORE", runtime=function()
 end}
 
 addNative{name="LOWRAM", runtime=function()
-  dataStack:push(dataspace.LOWRAM_BANK)
+  dataStack:push(Dataspace.LOWRAM_BANK)
   rts()
 end}
 
@@ -813,13 +813,19 @@ addNative{name="EMIT", runtime=function()
   rts()
 end}
 
--- TODO: This should probably be in the zeropage.
-local wordBufferAddr = dataspace:getDataHere()
-local wordBufferSize = 32
--- Currently allocating this in ROM, but if we move the interpreter to the SNES
--- then it should be in RAM (probably high-ram).
-dataspace:addWord(0)
-dataspace:allotDataBytes(wordBufferSize)
+local wordBufferAddr
+local wordBufferSize
+do
+  local originalBank = dataspace:getDataBank()
+  dataspace:setDataBank(Dataspace.LOWRAM_BANK)
+  wordBufferAddr = dataspace:getDataHere()
+  wordBufferSize = 32
+  -- Currently allocating this in ROM, but if we move the interpreter to the
+  -- SNES then it should be in RAM (probably high-ram).
+  dataspace:addWord(0)
+  dataspace:allotDataBytes(wordBufferSize)
+  dataspace:setDataBank(originalBank)
+end
 
 local function setWordBuffer(str)
   local length = string.len(str)
@@ -841,8 +847,7 @@ local function getWordWithCount(localAddr, count)
 end
 
 local function getCountedWord(localAddr)
-  -- TODO: getLocalWord?
-  local count = dataspace:getWord(localAddr)
+  local count = dataspace:getLocalWord(localAddr)
   return getWordWithCount(localAddr + 2, count)
 end
 
@@ -898,11 +903,11 @@ end}
 
 -- Can probably be written in Forth? Though not interpreted-Forth.
 addNative{name="FIND", runtime=function()
-  local wordAddress = dataStack:pop()
-  local word = getCountedWord(wordAddress)
+  local wordLocalAddress = dataStack:pop()
+  local word = getCountedWord(wordLocalAddress)
   local dictEntry = dictionary:find(word)
   if not dictEntry then
-    dataStack:push(wordAddress)
+    dataStack:push(wordLocalAddress)
     dataStack:push(0)
   elseif dictEntry.immediate then
     dataStack:push(dictEntry.addr)
@@ -916,8 +921,8 @@ end}
 
 -- Non-standard. Returns TRUE or FALSE at the top of the stack.
 addNative{name=">NUMBER", label="_TO_NUMBER", runtime=function()
-  local strAddress = dataStack:pop()
-  local str = getCountedWord(strAddress)
+  local strLocalAddress = dataStack:pop()
+  local str = getCountedWord(strLocalAddress)
   local number = tonumber(str)
   if number == nil then
     dataStack:push(0)
@@ -943,8 +948,8 @@ end}
 -- Returns TRUE or FALSE at the top of the stack, and the parsed address below
 -- that.
 addNative{name=">ADDRESS", label="_TO_ADDRESS", runtime=function()
-  local strAddress = dataStack:pop()
-  local maybeAddress = getCountedWord(strAddress)
+  local strLocalAddress = dataStack:pop()
+  local maybeAddress = getCountedWord(strLocalAddress)
   if string.sub(maybeAddress, 1, 1) ~= "$" then
     dataStack:pushDouble(0)
     -- Failed.
@@ -1859,6 +1864,7 @@ do
   dataspace:compileByte(string.byte("L"))
   dataspace:compileByte(string.byte("E"))
   dataspace:compileByte(string.byte(" "))
+  -- TODO: TYPE here will not work when the data bank is not 0.
   compile("TYPE FILENAME TYPE")
   dataspace:compileByte(string.byte("\n"))
   dataspace:compileByte(string.byte("L"))
