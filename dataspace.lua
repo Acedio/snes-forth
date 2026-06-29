@@ -8,8 +8,7 @@ Dataspace.LOWRAM_SIZE = 0x2000
 
 function Dataspace:new()
   local dataspace = {
-    codeBank = 0,
-    dataBank = 0,
+    bank = 0,
     banks = {
       [0] = {
         SIZED_START = 0x8000,
@@ -48,7 +47,7 @@ end
 
 function Dataspace.bankName(bank)
   if bank == Dataspace.LOWRAM_BANK then
-    return "LOWMEM Bank"
+    return "LOWRAM Bank"
   end
   return string.format("Bank %d", bank)
 end
@@ -129,36 +128,22 @@ function Dataspace:assertAddr(dumpFile, cond, message, addr)
   end
 end
 
-function Dataspace:getCodeBank()
-  return self.codeBank
+-- TODO: codeBank and dataBank used to be separate but aren't anymore. Clean
+-- this up (and verify we don't actually need two! ^^;).
+function Dataspace:getBank()
+  return self.bank
 end
 
-function Dataspace:setCodeBank(bank)
-  self.codeBank = bank
+function Dataspace:setBank(bank)
+  self.bank = bank
 end
 
-function Dataspace:getDataBank()
-  return self.dataBank
+function Dataspace:getHere()
+  return self.banks[self.bank].here
 end
 
-function Dataspace:setDataBank(bank)
-  self.dataBank = bank
-end
-
-function Dataspace:getCodeHere()
-  return self.banks[self.codeBank].here
-end
-
-function Dataspace:getDataHere()
-  return self.banks[self.dataBank].here
-end
-
-function Dataspace:setCodeHere(val)
-  self.banks[self.codeBank].here = val
-end
-
-function Dataspace:setDataHere(val)
-  self.banks[self.dataBank].here = val
+function Dataspace:setHere(val)
+  self.banks[self.bank].here = val
 end
 
 -- Set the label for HERE.
@@ -166,40 +151,36 @@ end
 -- something is added at HERE.
 -- TODO: Is there a cleaner way of doing this? Maybe keeping a list of labels ->
 -- addresses somewhere?
-function Dataspace:labelCodeHere(label)
-  self.banks[self.codeBank].labels[self:getCodeHere()] = label
-end
-
-function Dataspace:labelDataHere(label)
-  self.banks[self.dataBank].labels[self:getDataHere()] = label
+function Dataspace:labelHere(label)
+  self.banks[self.bank].labels[self:getHere()] = label
 end
 
 function Dataspace:setCodeLabel(addr, label)
-  self.banks[self.codeBank].labels[addr] = label
+  self.banks[self.bank].labels[addr] = label
 end
 
 -- Add at the current data space pointer (HERE).
 function Dataspace:add(entry)
   assert(entry:size())
-  local addr = self:getDataHere()
-  self[self:getDataHere()] = entry
-  self:setDataHere(self:getDataHere() + 1)
+  local addr = self:getHere()
+  self[self:getHere()] = entry
+  self:setHere(self:getHere() + 1)
   return addr
 end
 
 -- Add at the current code space pointer.
 function Dataspace:compile(entry)
   assert(entry:size())
-  local addr = self:getCodeHere()
-  self[self:getCodeHere()] = entry
-  self:setCodeHere(self:getCodeHere() + 1)
+  local addr = self:getHere()
+  self[self:getHere()] = entry
+  self:setHere(self:getHere() + 1)
   return addr
 end
 
 function Dataspace:compileUnsized(entry)
-  local addr = self.banks[self.codeBank].unsizedHere
-  self[self.banks[self.codeBank].unsizedHere] = entry
-  self.banks[self.codeBank].unsizedHere = self.banks[self.codeBank].unsizedHere + 1
+  local addr = self.banks[self.bank].unsizedHere
+  self[self.banks[self.bank].unsizedHere] = entry
+  self.banks[self.bank].unsizedHere = self.banks[self.bank].unsizedHere + 1
   return addr
 end
 
@@ -336,10 +317,10 @@ end
 function Dataspace:getLocalByte(localAddr)
   assert(localAddr >= 0 and localAddr <= 0xFFFF, "Invalid local addr " .. localAddr)
   local addr
-  if self:getDataBank() == Dataspace.LOWRAM_BANK or localAddr < Dataspace.LOWRAM_SIZE then
+  if self:getBank() == Dataspace.LOWRAM_BANK or localAddr < Dataspace.LOWRAM_SIZE then
     addr = localAddr
   else
-    addr = (self:getDataBank() << 16) | localAddr
+    addr = (self:getBank() << 16) | localAddr
   end
   self:assertAddr(io.stderr, self[addr] ~= nil and self[addr].type == "byte", "Expected byte at %s", addr)
   return self[addr].byte
@@ -348,10 +329,10 @@ end
 function Dataspace:setLocalByte(localAddr, value)
   assert(localAddr >= 0 and localAddr <= 0xFFFF, "Invalid local addr " .. localAddr)
   local addr
-  if self:getDataBank() == Dataspace.LOWRAM_BANK or localAddr < Dataspace.LOWRAM_SIZE then
+  if self:getBank() == Dataspace.LOWRAM_BANK or localAddr < Dataspace.LOWRAM_SIZE then
     addr = localAddr
   else
-    addr = (self:getDataBank() << 16) | localAddr
+    addr = (self:getBank() << 16) | localAddr
   end
   self:assertAddr(io.stderr, self[addr] ~= nil and self[addr].type == "byte" and self[addr]:size() == 1, "Expected byte at %s", addr)
   self[addr].byte = value
