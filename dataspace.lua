@@ -128,8 +128,6 @@ function Dataspace:assertAddr(dumpFile, cond, message, addr)
   end
 end
 
--- TODO: codeBank and dataBank used to be separate but aren't anymore. Clean
--- this up (and verify we don't actually need two! ^^;).
 function Dataspace:getBank()
   return self.bank
 end
