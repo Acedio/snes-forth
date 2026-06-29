@@ -580,7 +580,15 @@ asm=function() return [[
 addNative{name="BANK!", label="_BANK_STORE", runtime=function()
   dataspace:setDataBank(dataStack:pop())
   rts()
-end}
+end,
+asm=function() return [[
+  POP_A
+  A8
+  pha
+  plb
+  A16
+  rts
+]] end}
 
 addNative{name="LOWRAM", runtime=function()
   dataStack:push(Dataspace.LOWRAM_BANK)
@@ -594,7 +602,7 @@ end}
 
 addNative{name="CODEHERE", runtime=function()
   -- TODO: Should this mask like HERE?
-  dataStack:push(dataspace:getCodeHere())
+  dataStack:push(dataspace:getCodeHere() & 0xFFFF)
   rts()
 end}
 
@@ -660,6 +668,7 @@ local function stacktrace()
   while i > 0 do
     local address = ((returnStack[i] << 8) | returnStack[i+1]) - 3
     local callString = "{unstringable}"
+    -- TODO: This is not correct when the bank has switched.
     if dataspace[address] then
       callString = dataspace[address]:toString(dataspace, address) or "{unstringable}"
     end

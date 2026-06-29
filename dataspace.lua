@@ -8,8 +8,7 @@ Dataspace.LOWRAM_SIZE = 0x2000
 
 function Dataspace:new()
   local dataspace = {
-    codeBank = 0,
-    dataBank = 0,
+    bank = 0,
     banks = {
       [0] = {
         SIZED_START = 0x8000,
@@ -48,7 +47,7 @@ end
 
 function Dataspace.bankName(bank)
   if bank == Dataspace.LOWRAM_BANK then
-    return "LOWMEM Bank"
+    return "LOWRAM Bank"
   end
   return string.format("Bank %d", bank)
 end
@@ -129,36 +128,38 @@ function Dataspace:assertAddr(dumpFile, cond, message, addr)
   end
 end
 
+-- TODO: codeBank and dataBank used to be separate but aren't anymore. Clean
+-- this up (and verify we don't actually need two! ^^;).
 function Dataspace:getCodeBank()
-  return self.codeBank
+  return self.bank
 end
 
 function Dataspace:setCodeBank(bank)
-  self.codeBank = bank
+  self.bank = bank
 end
 
 function Dataspace:getDataBank()
-  return self.dataBank
+  return self.bank
 end
 
 function Dataspace:setDataBank(bank)
-  self.dataBank = bank
+  self.bank = bank
 end
 
 function Dataspace:getCodeHere()
-  return self.banks[self.codeBank].here
+  return self.banks[self.bank].here
 end
 
 function Dataspace:getDataHere()
-  return self.banks[self.dataBank].here
+  return self.banks[self.bank].here
 end
 
 function Dataspace:setCodeHere(val)
-  self.banks[self.codeBank].here = val
+  self.banks[self.bank].here = val
 end
 
 function Dataspace:setDataHere(val)
-  self.banks[self.dataBank].here = val
+  self.banks[self.bank].here = val
 end
 
 -- Set the label for HERE.
@@ -167,15 +168,15 @@ end
 -- TODO: Is there a cleaner way of doing this? Maybe keeping a list of labels ->
 -- addresses somewhere?
 function Dataspace:labelCodeHere(label)
-  self.banks[self.codeBank].labels[self:getCodeHere()] = label
+  self.banks[self.bank].labels[self:getCodeHere()] = label
 end
 
 function Dataspace:labelDataHere(label)
-  self.banks[self.dataBank].labels[self:getDataHere()] = label
+  self.banks[self.bank].labels[self:getDataHere()] = label
 end
 
 function Dataspace:setCodeLabel(addr, label)
-  self.banks[self.codeBank].labels[addr] = label
+  self.banks[self.bank].labels[addr] = label
 end
 
 -- Add at the current data space pointer (HERE).
@@ -197,9 +198,9 @@ function Dataspace:compile(entry)
 end
 
 function Dataspace:compileUnsized(entry)
-  local addr = self.banks[self.codeBank].unsizedHere
-  self[self.banks[self.codeBank].unsizedHere] = entry
-  self.banks[self.codeBank].unsizedHere = self.banks[self.codeBank].unsizedHere + 1
+  local addr = self.banks[self.bank].unsizedHere
+  self[self.banks[self.bank].unsizedHere] = entry
+  self.banks[self.bank].unsizedHere = self.banks[self.bank].unsizedHere + 1
   return addr
 end
 

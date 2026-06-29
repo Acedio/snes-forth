@@ -15,13 +15,13 @@ end
 
 function CellStack:push(val)
   assert(type(val) == "number", "Value pushed was not number: " .. tostring(val))
-  assert(val >= 0 and val <= 0xFFFF, "Value pushed was out of cell range: " .. val)
+  assert(val >= 0 and val <= 0xFFFF, "Value pushed was out of cell range: " .. string.format("$%08X", val))
   table.insert(self, val)
 end
 
 function CellStack:pushDouble(val)
   assert(type(val) == "number", "Value pushed was not number: " .. tostring(val))
-  assert(val >= 0 and val <= 0xFFFFFFFF, "Value pushed was out of cell range: " .. val)
+  assert(val >= 0 and val <= 0xFFFFFFFF, "Value pushed was out of cell range: " .. string.format("$%016X", val))
   table.insert(self, val >> 16)
   table.insert(self, val & 0xFFFF)
 end
