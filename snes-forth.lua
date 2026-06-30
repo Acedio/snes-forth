@@ -219,7 +219,7 @@ local function compileBranch0(offset)
   -- A couple of filler words so addresses stay correct. Other than this space
   -- we compile 3 bytes of code (the op above and the offset below).
   dataspace:allotCodeBytes(branchEntry:size() - 2 - 1)
-  local offsetAddr = dataspace:getHere()
+  local offsetAddr = dataspace:getCodeHere()
   dataspace:compileWord(offset)
   return offsetAddr
 end
@@ -228,7 +228,7 @@ local function compileBranch0To(addr)
   local offsetAddr = compileBranch0(0x9999)
   dataspace:setWord(
     offsetAddr,
-    toUnsigned(dataspace:getRelativeAddr(dataspace:getHere(), addr)))
+    toUnsigned(dataspace:getRelativeAddr(dataspace:getCodeHere(), addr)))
 end
 
 -- Creates a branch with a placeholder. Returns a closure that can be called to
@@ -238,7 +238,7 @@ local function compileForwardBranch0()
   return {
     toHere = function()
       local branchOffset = toUnsigned(
-        dataspace:getRelativeAddr(branchOffsetAddr + 2, dataspace:getHere()))
+        dataspace:getRelativeAddr(branchOffsetAddr + 2, dataspace:getCodeHere()))
       dataspace:setWord(branchOffsetAddr, branchOffset)
     end
   }
@@ -280,7 +280,7 @@ end
 
 local function compileBranch(offset)
   dataspace:compile(Branch:new())
-  local offsetAddr = dataspace:getHere()
+  local offsetAddr = dataspace:getCodeHere()
   dataspace:compileWord(offset)
   return offsetAddr
 end
@@ -290,7 +290,7 @@ local function compileBranchTo(addr)
   -- TODO: This needs to be an address in the same bank.
   dataspace:setWord(
     offsetAddr,
-    toUnsigned(dataspace:getRelativeAddr(dataspace:getHere(), addr)))
+    toUnsigned(dataspace:getRelativeAddr(dataspace:getCodeHere(), addr)))
 end
 
 local function compileForwardBranch()
@@ -298,7 +298,7 @@ local function compileForwardBranch()
   return {
     toHere = function()
       local branchOffset = toUnsigned(
-        dataspace:getRelativeAddr(branchOffsetAddr + 2, dataspace:getHere()))
+        dataspace:getRelativeAddr(branchOffsetAddr + 2, dataspace:getCodeHere()))
       dataspace:setWord(branchOffsetAddr, branchOffset)
     end
   }
@@ -384,13 +384,13 @@ end
 local function compileRts()
   -- This performs tail-call optimization (TCO) if the previous instruction
   -- supports it.
-  local previousInstAddr = dataspace:getHere() - 3
+  local previousInstAddr = dataspace:getCodeHere() - 3
   local previousInst = dataspace[previousInstAddr]
   if previousInst and previousInst.type == "call" then
     local xt = previousInst:addr(dataspace, previousInstAddr)
     local dictEntry = dictionary:findXt(xt)
     if dictEntry and dictEntry.tcoEnabled then
-      dataspace[dataspace:getHere() - 3] = Jump:new()
+      dataspace[dataspace:getCodeHere() - 3] = Jump:new()
     end
   end
   -- The Rts is compiled either way in case it's a branch target.
@@ -507,12 +507,12 @@ local function makeSystemVariable(name)
   }
   addNative(native)
 
-  local originalBank = dataspace:getBank()
-  dataspace:setBank(Dataspace.LOWRAM_BANK)
+  local originalBank = dataspace:getDataBank()
+  dataspace:setDataBank(Dataspace.LOWRAM_BANK)
   -- TODO: Should this be masked?
-  local dataaddr = dataspace:getHere()
+  local dataaddr = dataspace:getDataHere()
   dataspace:addWord(0)
-  dataspace:setBank(originalBank)
+  dataspace:setDataBank(originalBank)
 
   native.runtime = function()
     dataStack:push(dataaddr)
@@ -555,8 +555,8 @@ addNative{name="CODE", label="_CODE", runtime=function()
 end}
 
 local function addColonWithLabel(name, label)
-  dataspace:labelHere(label)
-  return dictionary:add(name, label, dataspace:getHere())
+  dataspace:labelCodeHere(label)
+  return dictionary:add(name, label, dataspace:getCodeHere())
 end
 
 local function addColon(name)
@@ -564,7 +564,7 @@ local function addColon(name)
 end
 
 addNative{name="BANK@", label="_BANK_FETCH", runtime=function()
-  dataStack:push(dataspace:getBank())
+  dataStack:push(dataspace:getDataBank())
   rts()
 end,
 asm=function() return [[
@@ -578,7 +578,7 @@ asm=function() return [[
 ]] end}
 
 addNative{name="BANK!", label="_BANK_STORE", runtime=function()
-  dataspace:setBank(dataStack:pop())
+  dataspace:setDataBank(dataStack:pop())
   rts()
 end,
 asm=function() return [[
@@ -596,7 +596,12 @@ addNative{name="LOWRAM", runtime=function()
 end}
 
 addNative{name="HERE", runtime=function()
-  dataStack:push(dataspace:getHere() & 0xFFFF)
+  dataStack:push(dataspace:getDataHere() & 0xFFFF)
+  rts()
+end}
+
+addNative{name="CODEHERE", runtime=function()
+  dataStack:push(dataspace:getCodeHere() & 0xFFFF)
   rts()
 end}
 
@@ -731,22 +736,22 @@ end}
 addNative{name="CREATE", runtime=function()
   local name = input:word()
   local label = Dataspace.defaultLabel(name)
-  local dictEntry = dictionary:add(name, label, dataspace:getHere())
+  local dictEntry = dictionary:add(name, label, dataspace:getCodeHere())
   dictEntry.canInline = true
-  dataspace:labelHere(label)
+  dataspace:labelCodeHere(label)
   -- The value of the Lit is 1 byte into the assembly.
   -- Need to wait to set this until after we're done compiling the execution
   -- behavior because data ptr and code ptr might be using the same bank.
-  local dataAddrAddr = dataspace:getHere() + 1
+  local dataAddrAddr = dataspace:getCodeHere() + 1
   compileLit(0)
   compileRts()
   -- Compile a filler word so when we fill in with XT! later we don't have to
   -- resize.
   dataspace:compileWord(0x1234)
-  dataspace:labelHere(label .. "_data")
+  dataspace:labelDataHere(label .. "_data")
   -- TODO: Should this be masked? It should at least only ever be within this
   -- bank.
-  dataspace:setWord(dataAddrAddr, dataspace:getHere())
+  dataspace:setWord(dataAddrAddr, dataspace:getDataHere())
   rts()
 end}
 
@@ -754,9 +759,9 @@ addNative{name="CONSTANT", runtime=function()
   local name = input:word()
   local value = dataStack:pop()
   local label = Dataspace.defaultLabel(name)
-  local entry = dictionary:add(name, label, dataspace:getHere())
+  local entry = dictionary:add(name, label, dataspace:getCodeHere())
   entry.canInline = true
-  dataspace:labelHere(label)
+  dataspace:labelCodeHere(label)
   compileLit(value)
   compileRts()
   rts()
@@ -819,15 +824,15 @@ end}
 local wordBufferAddr
 local wordBufferSize
 do
-  local originalBank = dataspace:getBank()
-  dataspace:setBank(Dataspace.LOWRAM_BANK)
-  wordBufferAddr = dataspace:getHere()
+  local originalBank = dataspace:getDataBank()
+  dataspace:setDataBank(Dataspace.LOWRAM_BANK)
+  wordBufferAddr = dataspace:getDataHere()
   wordBufferSize = 32
   -- Currently allocating this in ROM, but if we move the interpreter to the
   -- SNES then it should be in RAM (probably high-ram).
   dataspace:addWord(0)
   dataspace:allotDataBytes(wordBufferSize)
-  dataspace:setBank(originalBank)
+  dataspace:setDataBank(originalBank)
 end
 
 local function setWordBuffer(str)
@@ -1079,11 +1084,11 @@ asm=function() return [[
 
 local function tryPeephole(xt)
   local word = dictionary:addrName(xt)
-  if word == "@" and dataspace[dataspace:getHere() - Lit:size()].type == "lit" then
-    dataspace[dataspace:getHere() - Lit:size()] = Fetch:new()
+  if word == "@" and dataspace[dataspace:getCodeHere() - Lit:size()].type == "lit" then
+    dataspace[dataspace:getCodeHere() - Lit:size()] = Fetch:new()
     return true
-  elseif word == "!" and dataspace[dataspace:getHere() - Lit:size()].type == "lit" then
-    local litAddr = dataspace:getHere() - Lit:size()
+  elseif word == "!" and dataspace[dataspace:getCodeHere() - Lit:size()].type == "lit" then
+    local litAddr = dataspace:getCodeHere() - Lit:size()
     local storeAddr = dataspace[litAddr]:value(dataspace, litAddr)
     dataspace[litAddr] = Store:new()
     -- TODO: This shouldn't be a constant. Or we should move peephole
@@ -1784,11 +1789,11 @@ do
   compileXtLit("DOS\"")
   compile("COMPILE,")
   -- Make space for the length and save its addr.
-  compile("HERE")
+  compile("CODEHERE")
   compileLit(0)
   compile("DUP COMPILE-WORD") -- Also grab a zero to track the length.
   compile("KEY DROP") -- Discard the first whitespace.
-  local loop = dataspace:getHere()
+  local loop = dataspace:getCodeHere()
     compile("KEY DUP")
     compileLit(string.byte('"'))
     compile("<>")
@@ -1805,7 +1810,7 @@ do
   -- TODO: Can we define a simpler QUIT here and then define the real QUIT in
   -- Forth?
   addColon("QUIT")
-  local loop = dataspace:getHere()
+  local loop = dataspace:getCodeHere()
   -- Grab the length of the counted string with @.
   compile("WORD DUP @")
   local eofBranch = compileForwardBranch0()
@@ -1881,13 +1886,13 @@ do
   compileRts()
 end
 
-ip = dataspace:getHere() -- start on creating QUIT, below
+ip = dataspace:getCodeHere() -- start on creating QUIT, below
 compile("QUIT")
 compile("BYE")
 
 if debugging() then
   dataspace:print(infos)
-  infos:write(string.format("HERE = %s\n", Dataspace.formatAddr(dataspace:getHere())))
+  infos:write(string.format("CODEHERE = %s\n", Dataspace.formatAddr(dataspace:getCodeHere())))
   infos:write(string.format("Starting IP at %04X\n", ip))
 end
 
