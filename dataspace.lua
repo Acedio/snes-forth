@@ -27,6 +27,22 @@ function Dataspace:new()
         labels = {},
         segment = "BANK1",
       },
+      [2] = {
+        SIZED_START = 0x28000,
+        here = 0x28000,
+        UNSIZED_START = 0x2FA00,
+        unsizedHere = 0x2FA00,
+        labels = {},
+        segment = "BANK2",
+      },
+      [3] = {
+        SIZED_START = 0x38000,
+        here = 0x38000,
+        UNSIZED_START = 0x3FA00,
+        unsizedHere = 0x3FA00,
+        labels = {},
+        segment = "BANK3",
+      },
       [Dataspace.LOWRAM_BANK] = {
         SIZED_START = 0x300,
         here = 0x300,
