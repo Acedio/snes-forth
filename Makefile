@@ -7,7 +7,7 @@ build:
 	mkdir -p build
 
 $(BUILD)/%.smc $(BUILD)/%.labels $(BUILD)/%.dbg: $(BUILD)/%.o $(BUILD)/init.o lorom128.cfg | build
-	ld65 -C lorom128.cfg -Ln $(BUILD)/$*.labels --dbgfile $(BUILD)/$*.dbg -o $(BUILD)/$*.smc $(BUILD)/$*.o $(BUILD)/init.o
+	ld65 -C lorom128.cfg -m $(BUILD)/map.mapfile -Ln $(BUILD)/$*.labels --dbgfile $(BUILD)/$*.dbg -o $(BUILD)/$*.smc $(BUILD)/$*.o $(BUILD)/init.o
 
 $(BUILD)/%.o: $(BUILD)/%.out.s $(BUILD)/preamble.inc | build
 	ca65 $< -g -o $@
