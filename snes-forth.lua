@@ -81,8 +81,9 @@ end
 function Call:runtime(dataspace, opAddr)
   ip = ip + self:size()
   local callAddr = self:addr(dataspace, opAddr)
-  -- TODO: To match the 65816 this should be ip - 1
-  returnStack:pushWord(ip)
+  -- This mimics the 65c02 behavior of pushing one byte prior to the actual
+  -- return address.
+  returnStack:pushWord(ip - 1)
   ip = callAddr
 end
 
@@ -134,7 +135,6 @@ end
 function Jump:runtime(dataspace, opAddr)
   ip = ip + self:size()
   local jumpAddr = self:addr(dataspace, opAddr)
-  -- TODO: To match the 65816 this should be ip - 1
   ip = jumpAddr
 end
 
@@ -363,7 +363,9 @@ end
 -- Should be called at the end of every (normal) native words runtime() to
 -- return control to the caller.
 local function rts()
-  ip = returnStack:popWord()
+  -- The +1 immitates 65c02 behavior, where the value pushed on the stack is one
+  -- prior to the address we wish to resume at.
+  ip = returnStack:popWord() + 1
 end
 
 -- Closes over dataStack and ip
@@ -666,7 +668,9 @@ local function stacktrace()
   local calls = {}
   local i = #returnStack - 1
   while i > 0 do
-    local address = ((returnStack[i] << 8) | returnStack[i+1]) - 3
+    -- Treat everything (potentially incorrectly) as 2-byte addresses.
+    -- Subtract 2 to go from return_address-1 to the start of the Call.
+    local address = ((returnStack[i] << 8) | returnStack[i+1]) - 2
     local callString = "{unstringable}"
     -- TODO: This is not correct when the bank has switched.
     if dataspace[address] then
@@ -1409,9 +1413,9 @@ end}
 
 addNative{name="A.LIT", tcoEnabled=false, runtime=function()
   -- return stack should be the next IP, where the literal is located
-  local litAddr = returnStack:popWord()
+  local litAddr = returnStack:popWord() + 1
   -- increment the return address to skip the literal
-  returnStack:pushWord(litAddr + 3)
+  returnStack:pushWord(litAddr + 2)
   dataStack:pushDouble(dataspace:getAddr(litAddr))
   rts()
 end,
@@ -1493,10 +1497,8 @@ end}
 -- Also true for 816's
 -- [JSL](https://web.archive.org/web/20250114225959/http://www.6502.org/tutorials/65c816opcodes.html#6.2.2.1),
 -- which increments IP by 3 and not the full 4.
--- TODO: Probably should make the return stack behave the same as the SNES
--- (point at one byte behind the return address) 
 addNative{name="INLINE-DATA", runtime=function()
-  -- The return stack in Lua already points at the inline data.
+  dataStack:push((dataStack:pop() + 1) & 0xFFFF)
   rts()
 end,
 asm=function() return [[
