@@ -69,62 +69,6 @@ local function toUnsigned(signedWord)
   return signedWord & 0xFFFF
 end
 
-local Call = Dataspace.Native:new()
-
-Call.type = "call"
-
-function Call:size()
-  return 3
-end
-
--- Closes over returnStack and ip
-function Call:runtime(dataspace, opAddr)
-  ip = ip + self:size()
-  local callAddr = self:addr(dataspace, opAddr)
-  -- This mimics the 65c02 behavior of pushing one byte prior to the actual
-  -- return address.
-  returnStack:pushWord(ip - 1)
-  ip = callAddr
-end
-
-function Call:addr(dataspace, opAddr)
-  return dataspace:getWord(opAddr + 1)
-end
-
--- Closes over dictionary
-function Call:toString(dataspace, opAddr)
-  local callAddr = self:addr(dataspace, opAddr)
-  local name = dictionary:addrName(callAddr)
-  if not name then
-    return string.format("Call to $%04X (missing name)", callAddr)
-  end
-  return string.format("Call $%04X (to %s)", callAddr, name)
-end
-
--- Closes over dictionary
-function Call:asm(dataspace, opAddr)
-  local callAddr = self:addr(dataspace, opAddr)
-
-  -- TODO: This logic should be shared between Call and Jump.
-  local label = dataspace:getLabelAtAddr(callAddr)
-  if label then
-    return string.format([[
-      jsr %s
-    ]], label)
-  else
-    -- TODO: Assert that we're in sized space. Or maybe just assert that we
-    -- can get an address/label for the given (Lua) address?
-    return string.format([[
-      jsr $%04X ; Cross our fingers!
-    ]], callAddr)
-  end
-end
-
-local function compileCall(addr)
-  dataspace:compile(Call:new())
-  dataspace:compileWord(addr)
-end
-
 local Jump = Dataspace.Native:new()
 
 function Jump:size()
@@ -176,6 +120,255 @@ local function compileJump(addr)
   dataspace:compileWord(addr)
 end
 
+local Rts = Dataspace.Native:new()
+
+Rts.type = "rts"
+
+function Rts:size()
+  return 1
+end
+
+-- Should be called at the end of every (normal) native words runtime() to
+-- return control to the caller.
+local function rts()
+  -- The +1 immitates 65c02 behavior, where the value pushed on the stack is one
+  -- prior to the address we wish to resume at.
+  ip = returnStack:popWord() + 1
+end
+
+-- Closes over dataStack and ip
+function Rts:runtime(dataspace, opAddr)
+  rts()
+end
+
+function Rts:toString(dataspace, opAddr)
+  return "Rts"
+end
+
+function Rts:asm(dataspace, opAddr)
+  return [[
+    rts
+  ]]
+end
+
+local function compileRts()
+  -- This performs tail-call optimization (TCO) if the previous instruction
+  -- supports it.
+  local previousInstAddr = dataspace:getCodeHere() - 3
+  local previousInst = dataspace[previousInstAddr]
+  if previousInst and previousInst.type == "call" then
+    local xt = previousInst:addr(dataspace, previousInstAddr)
+    local dictEntry = dictionary:findXt(xt)
+    if dictEntry and dictEntry.tcoEnabled then
+      dataspace[dataspace:getCodeHere() - 3] = Jump:new()
+    end
+  end
+  -- The Rts is compiled either way in case it's a branch target.
+  dataspace:compile(Rts:new())
+end
+
+local Rtl = Dataspace.Native:new()
+
+Rtl.type = "rtl"
+
+function Rtl:size()
+  return 1
+end
+
+-- Should be called at the end of every (normal) native words runtime() to
+-- return control to the caller.
+local function rtl()
+  -- The +1 immitates 65c02 behavior, where the value pushed on the stack is one
+  -- prior to the address we wish to resume at.
+  ip = returnStack:popAddress() + 1
+end
+
+-- Closes over dataStack and ip
+function Rtl:runtime(dataspace, opAddr)
+  rtl()
+end
+
+function Rtl:toString(dataspace, opAddr)
+  return "Rtl"
+end
+
+function Rtl:asm(dataspace, opAddr)
+  return [[
+    rtl
+  ]]
+end
+
+local function compileRtl()
+  -- TODO: We could theoretically also support TCO here, but it's more annoying
+  -- so not a priority.
+  dataspace:compile(Rtl:new())
+end
+
+local Call = Dataspace.Native:new()
+
+Call.type = "call"
+
+function Call:size()
+  return 3
+end
+
+-- Closes over returnStack and ip
+function Call:runtime(dataspace, opAddr)
+  ip = ip + self:size()
+  local callAddr = self:addr(dataspace, opAddr)
+  -- This mimics the 65c02 behavior of pushing one byte prior to the actual
+  -- return address.
+  returnStack:pushWord(ip - 1)
+  ip = callAddr
+end
+
+function Call:addr(dataspace, opAddr)
+  return dataspace:getWord(opAddr + 1)
+end
+
+-- Closes over dictionary
+function Call:toString(dataspace, opAddr)
+  local callAddr = self:addr(dataspace, opAddr)
+  local name = dictionary:addrName(callAddr)
+  if not name then
+    return string.format("Call to $%04X (missing name)", callAddr)
+  end
+  return string.format("Call $%04X (to %s)", callAddr, name)
+end
+
+-- Closes over dictionary
+function Call:asm(dataspace, opAddr)
+  local callAddr = self:addr(dataspace, opAddr)
+
+  -- TODO: This logic should be shared between Call and Jump (LongCall?).
+  local label = dataspace:getLabelAtAddr(callAddr)
+  if label then
+    return string.format([[
+      jsr %s
+    ]], label)
+  else
+    -- TODO: Assert that we're in sized space. Or maybe just assert that we
+    -- can get an address/label for the given (Lua) address?
+    return string.format([[
+      jsr $%04X ; Cross our fingers!
+    ]], callAddr)
+  end
+end
+
+local function compileCall(addr)
+  dataspace:compile(Call:new())
+  dataspace:compileWord(addr)
+end
+
+-- Set up trampolines in each bank so we can make long calls.
+local function compileTrampoline()
+  local addr = dataspace:getCodeHere()
+  compileRtl()
+  return addr
+end
+
+local function setupTrampolines()
+  local bankTrampolines = {}
+  local originalBank = dataspace:getCodeBank()
+  for bank=0,NUM_BANKS-1 do
+    dataspace:setCodeBank(bank)
+    bankTrampolines[bank] = compileTrampoline()
+  end
+  dataspace:setCodeBank(originalBank)
+  return bankTrampolines
+end
+
+local bankTrampolineAddrs = setupTrampolines()
+
+local LongCall = Dataspace.Native:new()
+
+LongCall.type = "longcall"
+
+function LongCall:size()
+  return 11
+end
+
+-- Closes over returnStack and ip
+function LongCall:runtime(dataspace, opAddr)
+  ip = ip + self:size()
+  local nextAddr = self:nextAddr(dataspace, opAddr)
+  local targetTrampoline = self:targetTrampoline(dataspace, opAddr)
+  local addr = self:addr(dataspace, opAddr)
+  returnStack:pushAddress(nextAddr)
+  returnStack:pushWord(targetTrampoline)
+  ip = addr
+end
+
+function LongCall:nextAddr(dataspace, opAddr)
+  return dataspace:getAddr(opAddr + 2)
+end
+
+function LongCall:targetTrampoline(dataspace, opAddr)
+  return dataspace:getAddr(opAddr + 5)
+end
+
+function LongCall:addr(dataspace, opAddr)
+  return dataspace:getAddr(opAddr + 8)
+end
+
+-- Closes over dictionary
+function LongCall:toString(dataspace, opAddr)
+  local nextAddr = self:nextAddr(dataspace, opAddr)
+  local targetTrampoline = self:targetTrampoline(dataspace, opAddr)
+  local addr = self:addr(dataspace, opAddr)
+  -- TODO: Pretty printing the word name instead of the label.
+  local label = dataspace:getLabelAtAddr(addr)
+  if label then
+    return string.format("LongCall %s via $%04X returning to $%04X", label, targetTrampoline, nextAddr)
+  end
+  return string.format("LongCall $%06X via $%04X returning to $%04X", addr, targetTrampoline, nextAddr)
+end
+
+-- Closes over dictionary
+function LongCall:asm(dataspace, opAddr)
+  local nextAddr = self:nextAddr(dataspace, opAddr)
+  local targetTrampoline = self:targetTrampoline(dataspace, opAddr)
+  local addr = self:addr(dataspace, opAddr)
+
+  local label = dataspace:getLabelAtAddr(addr)
+  if label then
+    return string.format([[
+    :
+      phk       ; 1 this bank
+      pea $%04X ; 3 next instruction
+      pea $%04X ; 3 trampoline of the target bank
+      jml %s    ; 4
+    .assert * - (:-) = 11, error, "Unexpected size"
+    ]], nextAddr, targetTrampoline, label)
+  else
+    return string.format([[
+    :
+      phk       ; 1 this bank
+      pea $%04X ; 3 next instruction
+      pea $%04X ; 3 trampoline of the target bank
+      jml $%04X ; 4
+    .assert * - (:-) = 11, error, "Unexpected size"
+    ]], nextAddr, targetTrampoline, addr)
+  end
+end
+
+local function compileLongCall(addr)
+  local bank = Dataspace.bankByte(addr)
+  -- This address and nextAddr follow the 65c02 behavior of pushing one byte
+  -- prior to the intended return address.
+  local targetTrampoline = assert(bankTrampolineAddrs[bank]) - 1
+
+  local longCallEntry = LongCall:new()
+  local nextAddr = dataspace:getCodeHere() + longCallEntry:size() - 1
+
+  dataspace:compile(longCallEntry)
+  dataspace:allotCodeBytes(1)
+  dataspace:compileWord(nextAddr & 0xFFFF)
+  dataspace:allotCodeBytes(1)
+  dataspace:compileWord(targetTrampoline & 0xFFFF)
+  dataspace:allotCodeBytes(1)
+  dataspace:compileAddress(addr)
+end
 
 local Branch0 = Dataspace.Native:new()
 
@@ -350,53 +543,6 @@ end
 -- Right now this is the same as `['] name ,`.
 local function compileXtLit(name)
   return compileLit(dictionary:findAddr(name))
-end
-
-local Rts = Dataspace.Native:new()
-
-Rts.type = "rts"
-
-function Rts:size()
-  return 1
-end
-
--- Should be called at the end of every (normal) native words runtime() to
--- return control to the caller.
-local function rts()
-  -- The +1 immitates 65c02 behavior, where the value pushed on the stack is one
-  -- prior to the address we wish to resume at.
-  ip = returnStack:popWord() + 1
-end
-
--- Closes over dataStack and ip
-function Rts:runtime(dataspace, opAddr)
-  rts()
-end
-
-function Rts:toString(dataspace, opAddr)
-  return "Rts"
-end
-
-function Rts:asm(dataspace, opAddr)
-  return [[
-    rts
-  ]]
-end
-
-local function compileRts()
-  -- This performs tail-call optimization (TCO) if the previous instruction
-  -- supports it.
-  local previousInstAddr = dataspace:getCodeHere() - 3
-  local previousInst = dataspace[previousInstAddr]
-  if previousInst and previousInst.type == "call" then
-    local xt = previousInst:addr(dataspace, previousInstAddr)
-    local dictEntry = dictionary:findXt(xt)
-    if dictEntry and dictEntry.tcoEnabled then
-      dataspace[dataspace:getCodeHere() - 3] = Jump:new()
-    end
-  end
-  -- The Rts is compiled either way in case it's a branch target.
-  dataspace:compile(Rts:new())
 end
 
 local Fetch = Dataspace.Native:new()
@@ -1770,6 +1916,12 @@ do
   compile("CELLS + SWAP @ DUP CHARS")
   compileLit(1)
   compile("CELLS + R> + >R")
+  compileRts()
+end
+
+do
+  addColon("TEST-LONG-CALL")
+  compileLongCall(0x021000)
   compileRts()
 end
 

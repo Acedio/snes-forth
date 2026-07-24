@@ -149,6 +149,7 @@ function Dataspace:setDataBank(bank)
   self.dataBank = bank
 end
 
+-- TODO: Should these be masked?
 function Dataspace:getCodeHere()
   return self.banks[self.codeBank].here
 end
