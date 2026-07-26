@@ -1784,28 +1784,6 @@ do
   compileRts()
 end
 
-addColonWithLabel("S\"", "_SLIT")
-do
-  compileXtLit("DOS\"")
-  compile("COMPILE,")
-  -- Make space for the length and save its addr.
-  compile("CODEHERE")
-  compileLit(0)
-  compile("DUP COMPILE-WORD") -- Also grab a zero to track the length.
-  compile("KEY DROP") -- Discard the first whitespace.
-  local loop = dataspace:getCodeHere()
-    compile("KEY DUP")
-    compileLit(string.byte('"'))
-    compile("<>")
-    local exitBranch = compileForwardBranch0()
-    compile("COMPILE-CHAR 1+")
-    compileBranchTo(loop)
-  exitBranch.toHere()
-  compile("DROP SWAP !") -- Drop the " and fill in the length
-  compileRts()
-end
-dictionary:latest().immediate = true
-
 do
   -- TODO: Can we define a simpler QUIT here and then define the real QUIT in
   -- Forth?

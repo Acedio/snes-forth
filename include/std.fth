@@ -83,6 +83,22 @@
 
 : I R> R@ SWAP >R ;
 
+: S"
+  ['] DOS" COMPILE,
+  CODEHERE 0 COMPILE-WORD
+  \ Discard the first space.
+  KEY DROP
+  \ Keep track of the length.
+  0
+  BEGIN
+    KEY
+    DUP [CHAR] " <>
+  WHILE
+    COMPILE-CHAR 1+
+  REPEAT
+  DROP SWAP !
+; IMMEDIATE LABEL _SLIT
+
 : CR S" 
 " TYPE ;
 
