@@ -193,14 +193,12 @@ function Branch0:offset(dataspace, opAddr)
   return toSigned(dataspace:getWord(opAddr + 8))
 end
 
--- Closes over dictionary
 function Branch0:toString(dataspace, opAddr)
   local offset = self:offset(dataspace, opAddr)
   local addr = opAddr + offset + self:size()
   return string.format("Branch0 $%04X (to $%04X)", offset, addr)
 end
 
--- Closes over dictionary
 function Branch0:asm(dataspace, opAddr)
   local branchOffset = self:offset(dataspace, opAddr)
   return string.format([[
@@ -263,14 +261,12 @@ function Branch:offset(dataspace, opAddr)
   return toSigned(dataspace:getWord(opAddr + 1))
 end
 
--- Closes over dictionary
 function Branch:toString(dataspace, opAddr)
   local offset = self:offset(dataspace, opAddr)
   local addr = opAddr + offset + self:size()
   return string.format("Branch $%04X (to $%04X)", offset, addr)
 end
 
--- Closes over dictionary
 function Branch:asm(dataspace, opAddr)
   local branchOffset = self:offset(dataspace, opAddr)
   return string.format([[
@@ -493,6 +489,8 @@ local function addNative(entry)
   entry.label = nil
   -- Native fns are unsized, so they don't affect/use HERE.
   local addr = dataspace:compileUnsized(Dataspace.Native:new(entry))
+  -- TODO: Can we stop associating addresses with the unsized entries? e.g. just
+  -- give them empty addrs and make them always use labels to call.
   dataspace:setCodeLabel(addr, label)
   local dictEntry = dictionary:add(entry.name, label, addr)
   -- TCO is enabled by default.
@@ -547,6 +545,8 @@ addNative{name="CODE", label="_CODE", runtime=function()
   local name = input:word()
   local asm = input:untilToken("END%-CODE")
   assert(asm)
+  -- TODO: Why does this use Native:new directly rather than just passing an
+  -- entry to addNative?
   local native = Dataspace.Native:new{
     name = name,
     asm = function(dataspace) return asm end,
@@ -696,19 +696,6 @@ end}
 addNative{name="A.,", label="_A_COMMA", runtime=function()
   -- TODO: Zero top byte? Or error?
   dataspace:addAddress(dataStack:popDouble())
-  rts()
-end}
-
--- TODO: This is now basically the same as "," now . Should that be the case?
--- e.g. should we be able to store a label in Dataspace and have it resolved by
--- the assembler? I think this is only necessary for calls to unsized words.
-addNative{name="XT,", label="_XT_COMMA", runtime=function()
-  local xt = dataStack:pop()
-  dataspace:addWord(xt)
-  if debugging() then
-    local name = dictionary:addrName(xt) or "missing name"
-    infos:write("Compiling XT " .. name .. "\n")
-  end
   rts()
 end}
 
@@ -1775,8 +1762,8 @@ do
 end
 
 -- Push the inline string address and the length.
-addColonWithLabel("DOS\"", "_DO_SLIT")
 do
+  addColonWithLabel("DOS\"", "_DO_SLIT")
   compile("R@ INLINE-DATA DUP")
   compileLit(1)
   compile("CELLS + SWAP @ DUP CHARS")
