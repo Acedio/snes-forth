@@ -22,6 +22,7 @@ while #arg > 0 do
     table.insert(includeDirs, table.remove(arg, 1))
   elseif argument == "-" then
     -- "-" is parsed as reading from stdin
+    table.insert(nonFlags, argument)
   else
     assert(string.sub(argument,1,1) ~= "-", "Unrecognized flag: " .. argument)
     table.insert(nonFlags, argument)
