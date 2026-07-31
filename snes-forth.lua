@@ -736,7 +736,6 @@ addNative{name="CREATE", runtime=function()
   -- Compile a filler word so when we fill in with XT! later we don't have to
   -- resize.
   dataspace:compileWord(0x1234)
-  dataspace:labelDataHere(label .. "_data")
   -- TODO: Should this be masked? It should at least only ever be within this
   -- bank.
   dataspace:setWord(dataAddrAddr, dataspace:getDataHere())
