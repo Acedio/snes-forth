@@ -103,7 +103,7 @@ function Call:asm(dataspace, opAddr)
   local callAddr = self:addr(dataspace, opAddr)
 
   -- TODO: This logic should be shared between Call and Jump.
-  local label = dictionary:addrLabel(callAddr)
+  local label = dataspace:getLabelAtAddr(callAddr)
   if label then
     return string.format([[
       jsr %s
@@ -154,7 +154,8 @@ end
 function Jump:asm(dataspace, opAddr)
   local jumpAddr = self:addr(dataspace, opAddr)
 
-  local label = dictionary:addrLabel(jumpAddr)
+  -- Prefer to use a label if we have one.
+  local label = dataspace:getLabelAtAddr(jumpAddr)
   if label then
     return string.format([[
       jmp %s

@@ -194,6 +194,10 @@ function Dataspace:setCodeLabel(addr, label)
   self.banks[self.codeBank].labels[addr] = label
 end
 
+function Dataspace:getLabelAtAddr(addr)
+  return self.banks[self.codeBank].labels[addr]
+end
+
 -- Add at the current data space pointer (HERE).
 function Dataspace:add(entry)
   assert(entry:size())

@@ -65,12 +65,4 @@ function Dictionary:addrName(addr)
   return maybeDict.name
 end
 
-function Dictionary:addrLabel(addr)
-  local maybeDict = self:findXt(addr)
-  if not maybeDict then
-    return nil
-  end
-  return maybeDict.label
-end
-
 return Dictionary
