@@ -95,43 +95,48 @@ function Dataspace:printBank(file, bank)
   end
 end
 
--- TODO: Print all banks?
 function Dataspace:print(file)
-  self:printBank(file, Dataspace.LOWRAM_BANK)
-  self:printBank(file, 0)
-  self:printBank(file, 1)
+  for index, bankInfo in pairs(self.banks) do
+    self:printBank(file, index)
+  end
+end
+
+function Dataspace:bankAssembly(file, bank, bankInfo)
+  file:write(string.format([[
+  .segment "%s"
+  ]], bankInfo.segment))
+
+  -- TODO: Maybe assert that the current address is where we think we are and
+  -- have the assembler check it?
+  local i = bankInfo.SIZED_START
+  while i < bankInfo.here do
+    local v = self[i]
+    local label = bankInfo.labels[i]
+    if label then
+      file:write(string.format("%s:\n", label))
+    end
+    file:write(v:asm(self, i) .. "\n")
+    assert(v:size())
+    i = i + v:size()
+  end
+
+  file:write(".segment \"" .. bankInfo.segment .. "_UNSIZED\"\n\n")
+
+  for i=bankInfo.UNSIZED_START,bankInfo.unsizedHere-1 do
+    local v = self[i]
+    local label = bankInfo.labels[i]
+    if label then
+      file:write(string.format("%s:\n", label))
+    end
+    file:write(v:asm(self, i) .. "\n")
+  end
 end
 
 function Dataspace:assembly(file)
-  for index, bankInfo in pairs(self.banks) do
-    file:write(string.format([[
-    .segment "%s"
-    ]], bankInfo.segment))
-
-    -- TODO: Maybe assert that the current address is where we think we are and
-    -- have the assembler check it?
-    local i = bankInfo.SIZED_START
-    while i < bankInfo.here do
-      local v = self[i]
-      local label = bankInfo.labels[i]
-      if label then
-        file:write(string.format("%s:\n", label))
-      end
-      file:write(v:asm(self, i) .. "\n")
-      assert(v:size())
-      i = i + v:size()
-    end
-
-    -- TODO: There should be one UNSIZED segment per bank.
-    file:write(".segment \"UNSIZED\"\n\n")
-
-    for i=bankInfo.UNSIZED_START,bankInfo.unsizedHere-1 do
-      local v = self[i]
-      local label = bankInfo.labels[i]
-      if label then
-        file:write(string.format("%s:\n", label))
-      end
-      file:write(v:asm(self, i) .. "\n")
+  for bank, bankInfo in pairs(self.banks) do
+    if bank ~= Dataspace.LOWRAM_BANK then
+      -- Skip the LOWRAM bank since we don't initialize it anyway.
+      self:bankAssembly(file, bank, bankInfo)
     end
   end
 end

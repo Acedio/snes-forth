@@ -1901,7 +1901,7 @@ output:write([[
 .a16
 .import not_implemented
 
-.segment "UNSIZED"
+.segment "CODE_UNSIZED"
 
 .include "preamble.inc"
 
