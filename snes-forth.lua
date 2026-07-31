@@ -46,8 +46,10 @@ local infos = io.stdout
 local errors = io.stderr
 local dumpFile = assert(io.open("dataspace.dump", "w"))
 
+local NUM_BANKS = 4
+
 local dictionary = Dictionary:new()
-local dataspace = Dataspace:new()
+local dataspace = Dataspace:new(NUM_BANKS)
   
 local running = true
 local ip = 0
@@ -1901,7 +1903,7 @@ output:write([[
 .a16
 .import not_implemented
 
-.segment "CODE_UNSIZED"
+.segment "BANK0_UNSIZED"
 
 .include "preamble.inc"
 

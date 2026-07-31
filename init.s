@@ -17,7 +17,7 @@
   .addr 0,0,0,0,0,nmi,0,0
   .addr 0,0,0,0,0,0,reset,0
 
-.segment "CODE_UNSIZED"
+.segment "BANK0_UNSIZED"
 
 .include "preamble.inc"
 

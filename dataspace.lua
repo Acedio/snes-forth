@@ -6,53 +6,32 @@ local Dataspace = {}
 Dataspace.LOWRAM_BANK = 0xFFFF
 Dataspace.LOWRAM_SIZE = 0x2000
 
-function Dataspace:new()
+function Dataspace:new(numBanks)
   local dataspace = {
     codeBank = 0,
     dataBank = 0,
+    numBanks = numBanks,
+    labels = {},
     banks = {
-      [0] = {
-        SIZED_START = 0x8000,
-        here = 0x8000,
-        UNSIZED_START = 0xFA00,
-        unsizedHere = 0xFA00,
-        labels = {},
-        segment = "CODE",
-      },
-      [1] = {
-        SIZED_START = 0x18000,
-        here = 0x18000,
-        UNSIZED_START = 0x1FA00,
-        unsizedHere = 0x1FA00,
-        labels = {},
-        segment = "BANK1",
-      },
-      [2] = {
-        SIZED_START = 0x28000,
-        here = 0x28000,
-        UNSIZED_START = 0x2FA00,
-        unsizedHere = 0x2FA00,
-        labels = {},
-        segment = "BANK2",
-      },
-      [3] = {
-        SIZED_START = 0x38000,
-        here = 0x38000,
-        UNSIZED_START = 0x3FA00,
-        unsizedHere = 0x3FA00,
-        labels = {},
-        segment = "BANK3",
-      },
       [Dataspace.LOWRAM_BANK] = {
         SIZED_START = 0x300,
         here = 0x300,
         UNSIZED_START = 0x1900,
         unsizedHere = 0x1900,
-        labels = {},
         segment = "BSS",
       },
     },
   }
+  for bank=0,numBanks-1 do
+    local bankOffset = 0x10000 * bank
+    dataspace.banks[bank] = {
+      SIZED_START = bankOffset + 0x8000,
+      here = bankOffset + 0x8000,
+      UNSIZED_START = bankOffset + 0xFA00,
+      unsizedHere = bankOffset + 0xFA00,
+      segment = "BANK" .. bank,
+    }
+  end
   setmetatable(dataspace, self)
   self.__index = self
   return dataspace
@@ -71,27 +50,27 @@ end
 
 function Dataspace:printBank(file, bank)
   file:write(string.format("== %s SIZED ==\n", Dataspace.bankName(bank)))
-  local i = self.banks[bank].SIZED_START
-  while i < self.banks[bank].here do
-    local v = self[i]
-    local label = self.banks[bank].labels[i]
+  local addr = self.banks[bank].SIZED_START
+  while addr < self.banks[bank].here do
+    local v = self[addr]
+    local label = self.labels[addr]
     if label then
       file:write(string.format("%s:\n", label))
     end
-    file:write(string.format("  %s: %s\n", Dataspace.formatAddr(i), v:toString(self, i)))
+    file:write(string.format("  %s: %s\n", Dataspace.formatAddr(addr), v:toString(self, addr)))
     assert(v:size())
-    i = i + v:size()
+    addr = addr + v:size()
   end
   file:write(string.format("== %s UNSIZED ==\n", Dataspace.bankName(bank)))
-  i = self.banks[bank].UNSIZED_START
-  while i < self.banks[bank].unsizedHere do
-    local v = self[i]
-    local label = self.banks[bank].labels[i]
+  addr = self.banks[bank].UNSIZED_START
+  while addr < self.banks[bank].unsizedHere do
+    local v = self[addr]
+    local label = self.labels[addr]
     if label then
       file:write(string.format("%s:\n", label))
     end
-    file:write(string.format("  %s: %s\n", Dataspace.formatAddr(i), v:toString(self, i)))
-    i = i + 1
+    file:write(string.format("  %s: %s\n", Dataspace.formatAddr(addr), v:toString(self, addr)))
+    addr = addr + 1
   end
 end
 
@@ -101,44 +80,48 @@ function Dataspace:print(file)
   end
 end
 
-function Dataspace:bankAssembly(file, bank, bankInfo)
+-- Print assembly for the current code bank.
+function Dataspace:bankAssembly(file)
+  local bank = self:getCodeBank()
+  local bankInfo = self.banks[bank]
   file:write(string.format([[
   .segment "%s"
   ]], bankInfo.segment))
 
   -- TODO: Maybe assert that the current address is where we think we are and
   -- have the assembler check it?
-  local i = bankInfo.SIZED_START
-  while i < bankInfo.here do
-    local v = self[i]
-    local label = bankInfo.labels[i]
+  local addr = bankInfo.SIZED_START
+  while addr < bankInfo.here do
+    local v = self[addr]
+    local label = self.labels[addr]
     if label then
       file:write(string.format("%s:\n", label))
     end
-    file:write(v:asm(self, i) .. "\n")
+    file:write(v:asm(self, addr) .. "\n")
     assert(v:size())
-    i = i + v:size()
+    addr = addr + v:size()
   end
 
   file:write(".segment \"" .. bankInfo.segment .. "_UNSIZED\"\n\n")
 
-  for i=bankInfo.UNSIZED_START,bankInfo.unsizedHere-1 do
-    local v = self[i]
-    local label = bankInfo.labels[i]
+  for addr=bankInfo.UNSIZED_START,bankInfo.unsizedHere-1 do
+    local v = self[addr]
+    local label = self.labels[addr]
     if label then
       file:write(string.format("%s:\n", label))
     end
-    file:write(v:asm(self, i) .. "\n")
+    file:write(v:asm(self, addr) .. "\n")
   end
 end
 
 function Dataspace:assembly(file)
-  for bank, bankInfo in pairs(self.banks) do
-    if bank ~= Dataspace.LOWRAM_BANK then
-      -- Skip the LOWRAM bank since we don't initialize it anyway.
-      self:bankAssembly(file, bank, bankInfo)
-    end
+  local originalBank = self:getCodeBank()
+  -- Skip the LOWRAM bank since we don't initialize it anyway.
+  for bank=0,self.numBanks-1 do
+    self:setCodeBank(bank)
+    self:bankAssembly(file, bank, bankInfo)
   end
+  self:setCodeBank(originalBank)
 end
 
 -- Message should include a %s where the addr should be input.
@@ -188,19 +171,19 @@ end
 -- TODO: Is there a cleaner way of doing this? Maybe keeping a list of labels ->
 -- addresses somewhere?
 function Dataspace:labelCodeHere(label)
-  self.banks[self.codeBank].labels[self:getCodeHere()] = label
+  self.labels[self:getCodeHere()] = label
 end
 
 function Dataspace:labelDataHere(label)
-  self.banks[self.dataBank].labels[self:getDataHere()] = label
+  self.labels[self:getDataHere()] = label
 end
 
 function Dataspace:setCodeLabel(addr, label)
-  self.banks[self.codeBank].labels[addr] = label
+  self.labels[addr] = label
 end
 
 function Dataspace:getLabelAtAddr(addr)
-  return self.banks[self.codeBank].labels[addr]
+  return self.labels[addr]
 end
 
 -- Add at the current data space pointer (HERE).
