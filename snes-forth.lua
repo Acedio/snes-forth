@@ -545,13 +545,10 @@ addNative{name="CODE", label="_CODE", runtime=function()
   local name = input:word()
   local asm = input:untilToken("END%-CODE")
   assert(asm)
-  -- TODO: Why does this use Native:new directly rather than just passing an
-  -- entry to addNative?
-  local native = Dataspace.Native:new{
+  addNative{
     name = name,
     asm = function(dataspace) return asm end,
   }
-  addNative(native)
   rts()
 end}
 
