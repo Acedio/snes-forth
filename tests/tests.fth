@@ -4,6 +4,12 @@ REQUIRE snes-std.fth
 REQUIRE tests/snes-test-util.fth
 REQUIRE tests/test-util.fth
 
+1 CBANK!
+
+: TEST-BANK-COMPILE 1 ;
+
+0 CBANK!
+
 : TEST-STACK-OPS
   T{ 1 2 NIP -> 2 }T
   T{ 1 2 OVER -> 1 2 1 }T

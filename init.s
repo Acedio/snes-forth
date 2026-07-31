@@ -46,8 +46,8 @@ fastrom:
   phk
   plb
 
-.import _SNES_MAIN
-  jsr _SNES_MAIN
+.import _BANK_0__SNES_MAIN
+  jsr _BANK_0__SNES_MAIN
 
 forever:
   jmp forever
@@ -83,8 +83,8 @@ nmiFast:
   tcd
 
 ; Call Forth NMI handler.
-.import _SNES_NMI
-  jsr _SNES_NMI
+.import _BANK_0__SNES_NMI
+  jsr _BANK_0__SNES_NMI
 
 ; Restore registers.
   A16

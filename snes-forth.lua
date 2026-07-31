@@ -48,9 +48,12 @@ local dumpFile = assert(io.open("dataspace.dump", "w"))
 
 local NUM_BANKS = 4
 
-local dictionary = Dictionary:new()
 local dataspace = Dataspace:new(NUM_BANKS)
-  
+local dictionaries = {}
+for bank=0,NUM_BANKS-1 do
+  dictionaries[bank] = Dictionary:new()
+end
+
 local running = true
 local ip = 0
 
@@ -67,6 +70,17 @@ end
 
 local function toUnsigned(signedWord)
   return signedWord & 0xFFFF
+end
+
+local function getCodeDictionary()
+  local bank = dataspace:getCodeBank()
+  assert(bank >= 0 and bank < NUM_BANKS)
+  return dictionaries[bank]
+end
+
+local function dictionaryForAddr(longAddr)
+  local bank = Dataspace.bankByte(longAddr)
+  return dictionaries[bank]
 end
 
 local Jump = Dataspace.Native:new()
@@ -89,7 +103,8 @@ end
 -- Closes over dictionary
 function Jump:toString(dataspace, opAddr)
   local jumpAddr = self:addr(dataspace, opAddr)
-  local name = dictionary:addrName(jumpAddr)
+  local localDictionary = assert(dictionaryForAddr(opAddr))
+  local name = localDictionary:addrName(jumpAddr)
   if not name then
     return string.format("Jump to $%04X (missing name)", jumpAddr)
   end
@@ -105,7 +120,7 @@ function Jump:asm(dataspace, opAddr)
   if label then
     return string.format([[
       jmp %s
-    ]], label)
+    ]], Dataspace.bankLabel(dataspace:getCodeBank(), label))
   else
     -- TODO: Assert that we're in sized space. Or maybe just assert that we
     -- can get an address/label for the given (Lua) address?
@@ -158,7 +173,7 @@ local function compileRts()
   local previousInst = dataspace[previousInstAddr]
   if previousInst and previousInst.type == "call" then
     local xt = previousInst:addr(dataspace, previousInstAddr)
-    local dictEntry = dictionary:findXt(xt)
+    local dictEntry = getCodeDictionary():findXt(xt)
     if dictEntry and dictEntry.tcoEnabled then
       dataspace[dataspace:getCodeHere() - 3] = Jump:new()
     end
@@ -229,7 +244,8 @@ end
 -- Closes over dictionary
 function Call:toString(dataspace, opAddr)
   local callAddr = self:addr(dataspace, opAddr)
-  local name = dictionary:addrName(callAddr)
+  local localDictionary = assert(dictionaryForAddr(opAddr))
+  local name = localDictionary:addrName(callAddr)
   if not name then
     return string.format("Call to $%04X (missing name)", callAddr)
   end
@@ -245,7 +261,7 @@ function Call:asm(dataspace, opAddr)
   if label then
     return string.format([[
       jsr %s
-    ]], label)
+    ]], Dataspace.bankLabel(dataspace:getCodeBank(), label))
   else
     -- TODO: Assert that we're in sized space. Or maybe just assert that we
     -- can get an address/label for the given (Lua) address?
@@ -319,7 +335,7 @@ function LongCall:toString(dataspace, opAddr)
   -- TODO: Pretty printing the word name instead of the label.
   local label = dataspace:getLabelAtAddr(addr)
   if label then
-    return string.format("LongCall %s via $%04X returning to $%04X", label, targetTrampoline, nextAddr)
+    return string.format("LongCall %s via $%04X returning to $%04X", Dataspace.bankLabel(Dataspace.bankByte(addr), label), targetTrampoline, nextAddr)
   end
   return string.format("LongCall $%06X via $%04X returning to $%04X", addr, targetTrampoline, nextAddr)
 end
@@ -339,7 +355,7 @@ function LongCall:asm(dataspace, opAddr)
       pea $%04X ; 3 trampoline of the target bank
       jml %s    ; 4
     .assert * - (:-) = 11, error, "Unexpected size"
-    ]], nextAddr, targetTrampoline, label)
+    ]], nextAddr, targetTrampoline, Dataspace.bankLabel(Dataspace.bankByte(addr), label))
   else
     return string.format([[
     :
@@ -542,7 +558,7 @@ end
 
 -- Right now this is the same as `['] name ,`.
 local function compileXtLit(name)
-  return compileLit(dictionary:findAddr(name))
+  return compileLit(getCodeDictionary():findAddr(name))
 end
 
 local Fetch = Dataspace.Native:new()
@@ -626,26 +642,41 @@ local function compile(names)
       break
     end
     local name = string.sub(names, first, last)
-    local callAddr = dictionary:findAddr(name)
+    local callAddr = getCodeDictionary():findAddr(name)
     assert(callAddr, "Couldn't find " .. name)
     compileCall(callAddr)
     last = last + 1
   end
 end
 
--- Table should have at least name and runtime specified.
-local function addNative(entry)
+-- Adds a native word to the current code bank.
+local function addNativeToCodeBank(entry)
+  -- TODO: label is not actually a part of Dataspace.Entry, but we leave it in
+  -- so further calls in addNative retain it. This isn't great, but I like only
+  -- having one arg to this fn so I can pass named arguments. Maybe I just have
+  -- two args, with the first one being the entry and the second being options?
   local label = entry.label or Dataspace.defaultLabel(entry.name)
-  -- label is not actually a part of Dataspace.Entry.
-  entry.label = nil
   -- Native fns are unsized, so they don't affect/use HERE.
   local addr = dataspace:compileUnsized(Dataspace.Native:new(entry))
   -- TODO: Can we stop associating addresses with the unsized entries? e.g. just
   -- give them empty addrs and make them always use labels to call.
   dataspace:setCodeLabel(addr, label)
-  local dictEntry = dictionary:add(entry.name, label, addr)
+  -- Only the lower 16 bits of the address.
+  local dictEntry = getCodeDictionary():add(entry.name, label, addr & 0xFFFF)
   -- TCO is enabled by default.
   dictEntry.tcoEnabled = entry.tcoEnabled == nil or entry.tcoEnabled
+end
+
+-- Adds a native word to every bank.
+-- Table should have at least name and runtime specified.
+local function addNative(entry)
+  local originalCodeBank = dataspace:getCodeBank()
+  -- TODO: Maybe only specific banks?
+  for bank=0,NUM_BANKS-1 do
+    dataspace:setCodeBank(bank)
+    addNativeToCodeBank(entry)
+  end
+  dataspace:setCodeBank(originalCodeBank)
 end
 
 -- Make a variable that is easily accessible to Lua and the SNES.
@@ -664,6 +695,7 @@ local function makeSystemVariable(name)
   dataspace:addWord(0)
   dataspace:setDataBank(originalBank)
 
+  -- TODO: Can we just reuse/share CONSTANT for this?
   native.runtime = function()
     dataStack:push(dataaddr)
     rts()
@@ -696,21 +728,12 @@ addNative{name="CODE", label="_CODE", runtime=function()
   local name = input:word()
   local asm = input:untilToken("END%-CODE")
   assert(asm)
-  addNative{
+  addNativeToCodeBank{
     name = name,
     asm = function(dataspace) return asm end,
   }
   rts()
 end}
-
-local function addColonWithLabel(name, label)
-  dataspace:labelCodeHere(label)
-  return dictionary:add(name, label, dataspace:getCodeHere())
-end
-
-local function addColon(name)
-  return addColonWithLabel(name, Dataspace.defaultLabel(name))
-end
 
 addNative{name="BANK@", label="_BANK_FETCH", runtime=function()
   dataStack:push(dataspace:getDataBank())
@@ -738,6 +761,16 @@ asm=function() return [[
   A16
   rts
 ]] end}
+
+addNative{name="CBANK@", label="_CBANK_FETCH", runtime=function()
+  dataStack:push(dataspace:getCodeBank())
+  rts()
+end}
+
+addNative{name="CBANK!", label="_CBANK_STORE", runtime=function()
+  dataspace:setCodeBank(dataStack:pop())
+  rts()
+end}
 
 addNative{name="LOWRAM", runtime=function()
   dataStack:push(Dataspace.LOWRAM_BANK)
@@ -860,7 +893,7 @@ addNative{name="XT!", label="_XT_STORE", runtime=function()
   --   dex ; 1 byte
   --   sta z:1, x ; 2 bytes
   --   rts ; 1 byte opcode, we want this addr
-  local dictEntry = dictionary:latest()
+  local dictEntry = getCodeDictionary():latest()
   -- Can no longer inline easily because of the lack of an Rts.
   -- TODO: Make this inline-able.
   dictEntry.canInline = false
@@ -874,7 +907,7 @@ end}
 addNative{name="CREATE", runtime=function()
   local name = input:word()
   local label = Dataspace.defaultLabel(name)
-  local dictEntry = dictionary:add(name, label, dataspace:getCodeHere())
+  local dictEntry = getCodeDictionary():add(name, label, dataspace:getCodeHere())
   dictEntry.canInline = true
   dataspace:labelCodeHere(label)
   -- The value of the Lit is 1 byte into the assembly.
@@ -896,13 +929,22 @@ addNative{name="CONSTANT", runtime=function()
   local name = input:word()
   local value = dataStack:pop()
   local label = Dataspace.defaultLabel(name)
-  local entry = dictionary:add(name, label, dataspace:getCodeHere())
+  local entry = getCodeDictionary():add(name, label, dataspace:getCodeHere())
   entry.canInline = true
   dataspace:labelCodeHere(label)
   compileLit(value)
   compileRts()
   rts()
 end}
+
+local function addColonWithLabel(name, label)
+  dataspace:labelCodeHere(label)
+  return getCodeDictionary():add(name, label, dataspace:getCodeHere() & 0xFFFF)
+end
+
+local function addColon(name)
+  return addColonWithLabel(name, Dataspace.defaultLabel(name))
+end
 
 addNative{name="CREATEDOCOL", runtime=function()
   local name = input:word()
@@ -1050,7 +1092,7 @@ end}
 addNative{name="FIND", runtime=function()
   local wordLocalAddress = dataStack:pop()
   local word = getCountedWord(wordLocalAddress)
-  local dictEntry = dictionary:find(word)
+  local dictEntry = getCodeDictionary():find(word)
   if not dictEntry then
     dataStack:push(wordLocalAddress)
     dataStack:push(0)
@@ -1220,7 +1262,7 @@ asm=function() return [[
 ]] end}
 
 local function tryPeephole(xt)
-  local word = dictionary:addrName(xt)
+  local word = getCodeDictionary():addrName(xt)
   if word == "@" and dataspace[dataspace:getCodeHere() - Lit:size()].type == "lit" then
     dataspace[dataspace:getCodeHere() - Lit:size()] = Fetch:new()
     return true
@@ -1238,7 +1280,7 @@ local function tryPeephole(xt)
 end
 
 local function tryInline(xt)
-  local dictEntry = dictionary:findXt(xt)
+  local dictEntry = getCodeDictionary():findXt(xt)
   if not dictEntry.canInline then
     return false
   end
@@ -1256,7 +1298,7 @@ addNative{name="COMPILE,", label="_COMPILE_COMMA", runtime=function()
     compileCall(xt)
   end
   if debugging() then
-    local name = dictionary:addrName(xt) or "missing name"
+    local name = getCodeDictionary():addrName(xt) or "missing name"
     infos:write("Compiling " .. name .. "\n")
   end
   rts()
@@ -1588,7 +1630,7 @@ asm=function() return [[
 addNative{name="EXECUTE", runtime=function()
   local addr = dataStack:pop()
   if debugging() then
-    local name = dictionary:addrName(addr) or "missing name"
+    local name = getCodeDictionary():addrName(addr) or "missing name"
     infos:write("EXECUTEing " .. name .. "\n")
   end
   ip = addr
@@ -1603,31 +1645,14 @@ asm=function() return [[
   rts
 ]] end}
 
-addColon("TRUE")
-  compileLit(0xFFFF)
-  compileRts()
-
-addColon("FALSE")
-  compileLit(0)
-  compileRts()
-
-addColonWithLabel("[", "_LBRACK")
-  compile("FALSE STATE !")
-  compileRts()
-dictionary:latest().immediate = true
-
-addColonWithLabel("]", "_RBRACK")
-  compile("TRUE STATE !")
-  compileRts()
-
 addNative{name="IMMEDIATE", runtime=function()
-  dictionary:latest().immediate = true
+  getCodeDictionary():latest().immediate = true
   rts()
 end}
 
 addNative{name="LABEL", runtime=function()
   local label = input:word()
-  local dictEntry = dictionary:latest()
+  local dictEntry = getCodeDictionary():latest()
   dictEntry.label = label
   dataspace:setCodeLabel(dictEntry.addr, label)
   rts()
@@ -1652,13 +1677,6 @@ asm=function() return [[
   inc 1, X
   rts
 ]] end}
-
-local dictEntry = addColonWithLabel("DOES>", "_DOES")
--- Unlikely that this would ever be TCO'd, but just in case.
-dictEntry.tcoEnabled = false
-  compile("R> INLINE-DATA XT!")
-  -- Snags the return address, so ends the calling word (CREATEing) early.
-  compileRts()
 
 -- TODO: Maybe pull these out into a mathops.lua file?
 local function unaryOp(name, label, op, asm)
@@ -1889,35 +1907,63 @@ end, [[
     bcs :+
 ]])
 
-do
-  addColonWithLabel(":", "_COLON")
-  compile("CREATEDOCOL ]")
-  compileRts()
-end
-
 addNative{name="COMPILE-RTS", runtime=function()
   compileRts()
   rts()
 end}
 
-do
-  addColonWithLabel(";", "_SEMICOLON")
-  compile("[ COMPILE-RTS")
-  compileRts()
-  -- TODO: The word should have been non-visible up to this point.
-  dictionary:latest().immediate = true
-end
+for bank=0,NUM_BANKS-1 do
+  dataspace:setCodeBank(bank)
+  addColon("TRUE")
+    compileLit(0xFFFF)
+    compileRts()
 
--- Push the inline string address and the length.
-do
-  addColonWithLabel("DOS\"", "_DO_SLIT")
-  compile("R@ INLINE-DATA DUP")
-  compileLit(1)
-  compile("CELLS + SWAP @ DUP CHARS")
-  compileLit(1)
-  compile("CELLS + R> + >R")
-  compileRts()
+  addColon("FALSE")
+    compileLit(0)
+    compileRts()
+
+  addColonWithLabel("[", "_LBRACK")
+    compile("FALSE STATE !")
+    compileRts()
+  getCodeDictionary():latest().immediate = true
+
+  addColonWithLabel("]", "_RBRACK")
+    compile("TRUE STATE !")
+    compileRts()
+
+  local dictEntry = addColonWithLabel("DOES>", "_DOES")
+  -- Unlikely that this would ever be TCO'd, but just in case.
+  dictEntry.tcoEnabled = false
+    compile("R> INLINE-DATA XT!")
+    -- Snags the return address, so ends the calling word (CREATEing) early.
+    compileRts()
+
+  do
+    addColonWithLabel(":", "_COLON")
+    compile("CREATEDOCOL ]")
+    compileRts()
+  end
+
+  do
+    addColonWithLabel(";", "_SEMICOLON")
+    compile("[ COMPILE-RTS")
+    compileRts()
+    -- TODO: The word should have been non-visible up to this point.
+    getCodeDictionary():latest().immediate = true
+  end
+
+  -- Push the inline string address and the length.
+  do
+    addColonWithLabel("DOS\"", "_DO_SLIT")
+    compile("R@ INLINE-DATA DUP")
+    compileLit(1)
+    compile("CELLS + SWAP @ DUP CHARS")
+    compileLit(1)
+    compile("CELLS + R> + >R")
+    compileRts()
+  end
 end
+dataspace:setCodeBank(0)
 
 do
   addColon("TEST-LONG-CALL")
@@ -2024,7 +2070,8 @@ while running do
   assertAddr(instruction.runtime, "Attempted to execute a non-native cell: %s\n", oldIp)
 
   if debugging() then
-    local name = dictionary:addrName(oldIp) or dataspace[oldIp]:toString(dataspace, oldIp)
+    local localDictionary = assert(dictionaryForAddr(oldIp))
+    local name = localDictionary:addrName(oldIp) or dataspace[oldIp]:toString(dataspace, oldIp)
     infos:write(string.format("Executing IP = %s (native %s)\n", Dataspace.formatAddr(oldIp), name))
     infos:write(" == data ==\n")
     dataStack:print(infos)
@@ -2061,8 +2108,8 @@ output:write([[
 
 .include "preamble.inc"
 
-.export _SNES_MAIN
-.export _SNES_NMI
+.export _BANK_0__SNES_MAIN
+.export _BANK_0__SNES_NMI
 
 ]])
 

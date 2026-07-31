@@ -95,7 +95,7 @@ function Dataspace:bankAssembly(file)
     local v = self[addr]
     local label = self.labels[addr]
     if label then
-      file:write(string.format("%s:\n", label))
+      file:write(string.format("%s:\n", Dataspace.bankLabel(bank, label)))
     end
     file:write(v:asm(self, addr) .. "\n")
     assert(v:size())
@@ -108,7 +108,7 @@ function Dataspace:bankAssembly(file)
     local v = self[addr]
     local label = self.labels[addr]
     if label then
-      file:write(string.format("%s:\n", label))
+      file:write(string.format("%s:\n", Dataspace.bankLabel(bank, label)))
     end
     file:write(v:asm(self, addr) .. "\n")
   end
@@ -214,6 +214,10 @@ end
 
 function Dataspace.defaultLabel(name)
   return "_" .. string.gsub(name, "%W", "_")
+end
+
+function Dataspace.bankLabel(bank, label)
+  return "_BANK_" .. bank .. "_" .. label
 end
 
 -- TODO: Now that we're mimicking SNES addressing in Lua these aren't really
