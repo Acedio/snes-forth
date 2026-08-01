@@ -305,15 +305,15 @@ function Dataspace.Byte:asm(dataspace)
   return string.format(".byte $%02X", self.byte & 0xFF)
 end
 
-local function lowByte(value)
+function Dataspace.lowByte(value)
   return value & 0xFF
 end
 
-local function highByte(value)
+function Dataspace.highByte(value)
   return (value >> 8) & 0xFF
 end
 
-local function bankByte(value)
+function Dataspace.bankByte(value)
   return (value >> 16) & 0xFF
 end
 
@@ -333,8 +333,8 @@ end
 
 function Dataspace:setWord(addr, value)
   assert(value <= 0xFFFF, "Invalid word " .. value)
-  self:setByte(addr, lowByte(value))
-  self:setByte(addr + 1, highByte(value))
+  self:setByte(addr, Dataspace.lowByte(value))
+  self:setByte(addr + 1, Dataspace.highByte(value))
 end
 
 function Dataspace:getAddr(addr)
@@ -372,8 +372,8 @@ end
 
 function Dataspace:setLocalWord(localAddr, value)
   assert(value <= 0xFFFF, "Invalid word " .. value)
-  self:setLocalByte(localAddr, lowByte(value))
-  self:setLocalByte(localAddr + 1, highByte(value))
+  self:setLocalByte(localAddr, Dataspace.lowByte(value))
+  self:setLocalByte(localAddr + 1, Dataspace.highByte(value))
 end
 
 function Dataspace:getLocalAddr(localAddr)
@@ -390,15 +390,15 @@ end
 
 function Dataspace:addWord(number)
   assert(number >= 0 and number <= 0xFFFF)
-  self:addByte(lowByte(number))
-  self:addByte(highByte(number))
+  self:addByte(Dataspace.lowByte(number))
+  self:addByte(Dataspace.highByte(number))
 end
 
 function Dataspace:addAddress(addr)
   assert(addr >= 0 and addr <= 0xFFFFFF)
-  self:addByte(lowByte(addr))
-  self:addByte(highByte(addr))
-  self:addByte(bankByte(addr))
+  self:addByte(Dataspace.lowByte(addr))
+  self:addByte(Dataspace.highByte(addr))
+  self:addByte(Dataspace.bankByte(addr))
 end
 
 function Dataspace:allotDataBytes(bytes)
@@ -415,15 +415,15 @@ end
 
 function Dataspace:compileWord(number)
   assert(number >= 0 and number <= 0xFFFF)
-  self:compileByte(lowByte(number))
-  self:compileByte(highByte(number))
+  self:compileByte(Dataspace.lowByte(number))
+  self:compileByte(Dataspace.highByte(number))
 end
 
 function Dataspace:compileAddress(addr)
   assert(addr >= 0 and addr <= 0xFFFFFF)
-  self:compileByte(lowByte(addr))
-  self:compileByte(highByte(addr))
-  self:compileByte(bankByte(addr))
+  self:compileByte(Dataspace.lowByte(addr))
+  self:compileByte(Dataspace.highByte(addr))
+  self:compileByte(Dataspace.bankByte(addr))
 end
 
 function Dataspace:allotCodeBytes(bytes)
