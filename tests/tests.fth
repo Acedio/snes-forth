@@ -6,6 +6,8 @@ REQUIRE tests/test-util.fth
 
 1 CBANK!
 
+INCLUDE std.fth
+
 : TEST-BANK-COMPILE 1 ;
 
 0 CBANK!

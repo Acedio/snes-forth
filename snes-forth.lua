@@ -72,6 +72,21 @@ local function toUnsigned(signedWord)
   return signedWord & 0xFFFF
 end
 
+-- Truncate the given value to the lower 16 bits.
+local function truncWord(v)
+  return v & 0xFFFF
+end
+
+-- Clear non-bank bits of an address.
+local function bankBits(addr)
+  return addr & 0xFF0000
+end
+
+-- Clear the non-local bits of an address.
+local function localBits(addr)
+  return addr & 0xFFFF
+end
+
 local function getCodeDictionary()
   local bank = dataspace:getCodeBank()
   assert(bank >= 0 and bank < NUM_BANKS)
@@ -93,7 +108,7 @@ end
 function Jump:runtime(dataspace, opAddr)
   ip = ip + self:size()
   local jumpAddr = self:addr(dataspace, opAddr)
-  ip = jumpAddr
+  ip = bankBits(ip) | jumpAddr
 end
 
 function Jump:addr(dataspace, opAddr)
@@ -114,13 +129,15 @@ end
 -- Closes over dictionary
 function Jump:asm(dataspace, opAddr)
   local jumpAddr = self:addr(dataspace, opAddr)
+  local bank = Dataspace.bankByte(opAddr)
+  local longAddr = bank << 16 | jumpAddr
 
   -- Prefer to use a label if we have one.
-  local label = dataspace:getLabelAtAddr(jumpAddr)
+  local label = dataspace:getLabelAtAddr(longAddr)
   if label then
     return string.format([[
       jmp %s
-    ]], Dataspace.bankLabel(dataspace:getCodeBank(), label))
+    ]], Dataspace.bankLabel(bank, label))
   else
     -- TODO: Assert that we're in sized space. Or maybe just assert that we
     -- can get an address/label for the given (Lua) address?
@@ -148,7 +165,7 @@ end
 local function rts()
   -- The +1 immitates 65c02 behavior, where the value pushed on the stack is one
   -- prior to the address we wish to resume at.
-  ip = returnStack:popWord() + 1
+  ip = bankBits(ip) | localBits(returnStack:popWord() + 1)
 end
 
 -- Closes over dataStack and ip
@@ -230,11 +247,11 @@ end
 -- Closes over returnStack and ip
 function Call:runtime(dataspace, opAddr)
   ip = ip + self:size()
-  local callAddr = self:addr(dataspace, opAddr)
+  local localAddr = self:addr(dataspace, opAddr)
   -- This mimics the 65c02 behavior of pushing one byte prior to the actual
   -- return address.
-  returnStack:pushWord(ip - 1)
-  ip = callAddr
+  returnStack:pushWord(localBits(ip - 1))
+  ip = bankBits(ip) | localAddr
 end
 
 function Call:addr(dataspace, opAddr)
@@ -255,13 +272,15 @@ end
 -- Closes over dictionary
 function Call:asm(dataspace, opAddr)
   local callAddr = self:addr(dataspace, opAddr)
+  local bank = Dataspace.bankByte(opAddr)
+  local longAddr = bank << 16 | callAddr
 
   -- TODO: This logic should be shared between Call and Jump (LongCall?).
-  local label = dataspace:getLabelAtAddr(callAddr)
+  local label = dataspace:getLabelAtAddr(longAddr)
   if label then
     return string.format([[
       jsr %s
-    ]], Dataspace.bankLabel(dataspace:getCodeBank(), label))
+    ]], Dataspace.bankLabel(bank, label))
   else
     -- TODO: Assert that we're in sized space. Or maybe just assert that we
     -- can get an address/label for the given (Lua) address?
@@ -379,9 +398,9 @@ local function compileLongCall(addr)
 
   dataspace:compile(longCallEntry)
   dataspace:allotCodeBytes(1)
-  dataspace:compileWord(nextAddr & 0xFFFF)
+  dataspace:compileWord(localBits(nextAddr))
   dataspace:allotCodeBytes(1)
-  dataspace:compileWord(targetTrampoline & 0xFFFF)
+  dataspace:compileWord(localBits(targetTrampoline))
   dataspace:allotCodeBytes(1)
   dataspace:compileAddress(addr)
 end
@@ -658,11 +677,12 @@ local function addNativeToCodeBank(entry)
   local label = entry.label or Dataspace.defaultLabel(entry.name)
   -- Native fns are unsized, so they don't affect/use HERE.
   local addr = dataspace:compileUnsized(Dataspace.Native:new(entry))
-  -- TODO: Can we stop associating addresses with the unsized entries? e.g. just
-  -- give them empty addrs and make them always use labels to call.
+  -- TODO: It would be great if we could stop associating addresses with unsized
+  -- entries, but currently we rely on being able to refer to them by address
+  -- until the assembly actually happens and they are turned into labels.
   dataspace:setCodeLabel(addr, label)
   -- Only the lower 16 bits of the address.
-  local dictEntry = getCodeDictionary():add(entry.name, label, addr & 0xFFFF)
+  local dictEntry = getCodeDictionary():add(entry.name, label, localBits(addr))
   -- TCO is enabled by default.
   dictEntry.tcoEnabled = entry.tcoEnabled == nil or entry.tcoEnabled
 end
@@ -778,12 +798,12 @@ addNative{name="LOWRAM", runtime=function()
 end}
 
 addNative{name="HERE", runtime=function()
-  dataStack:push(dataspace:getDataHere() & 0xFFFF)
+  dataStack:push(localBits(dataspace:getDataHere()))
   rts()
 end}
 
 addNative{name="CODEHERE", runtime=function()
-  dataStack:push(dataspace:getCodeHere() & 0xFFFF)
+  dataStack:push(localBits(dataspace:getCodeHere()))
   rts()
 end}
 
@@ -939,7 +959,7 @@ end}
 
 local function addColonWithLabel(name, label)
   dataspace:labelCodeHere(label)
-  return getCodeDictionary():add(name, label, dataspace:getCodeHere() & 0xFFFF)
+  return getCodeDictionary():add(name, label, localBits(dataspace:getCodeHere()))
 end
 
 local function addColon(name)
@@ -1088,6 +1108,8 @@ addNative{name="TYPE", runtime=function()
   rts()
 end}
 
+-- FIND the provided word in the current code bank's dictionary, pushing its XT
+-- onto the stack.
 -- Can probably be written in Forth? Though not interpreted-Forth.
 addNative{name="FIND", runtime=function()
   local wordLocalAddress = dataStack:pop()
@@ -1645,6 +1667,29 @@ asm=function() return [[
   rts
 ]] end}
 
+-- ( bank addr -- )
+addNative{name="EXECUTEL", runtime=function()
+  local localAddr = dataStack:pop()
+  local bank = dataStack:pop()
+  local longAddr = bank << 16 | localAddr
+  if debugging() then
+    local dictionary = assert(dictionaries[bank])
+    local name = dictionary:addrName(localAddr) or "missing name"
+    infos:write("EXECUTEing " .. name .. " in bank " .. bank .. "\n")
+  end
+  -- Convert the current return address to a long address so the trampoline can
+  -- RTL to it after the target word has executed.
+  local programBank = bankBits(ip)
+  local longReturnAddr = programBank | returnStack:popWord()
+  returnStack:pushAddress(longReturnAddr)
+  -- Follow the 65c02 behavior of pushing one byte prior to the return address.
+  local trampolineAddr = assert(bankTrampolineAddrs[bank]) - 1
+  returnStack:pushWord(localBits(trampolineAddr))
+  -- Finally, we jump.
+  ip = longAddr
+  -- No rts since we're branching.
+end}
+
 addNative{name="IMMEDIATE", runtime=function()
   getCodeDictionary():latest().immediate = true
   rts()
@@ -1654,7 +1699,8 @@ addNative{name="LABEL", runtime=function()
   local label = input:word()
   local dictEntry = getCodeDictionary():latest()
   dictEntry.label = label
-  dataspace:setCodeLabel(dictEntry.addr, label)
+  local longAddr = dataspace:getCodeBank() << 16 | dictEntry.addr
+  dataspace:setCodeLabel(longAddr, label)
   rts()
 end}
 
@@ -1669,7 +1715,7 @@ end}
 -- [JSL](https://web.archive.org/web/20250114225959/http://www.6502.org/tutorials/65c816opcodes.html#6.2.2.1),
 -- which increments IP by 3 and not the full 4.
 addNative{name="INLINE-DATA", runtime=function()
-  dataStack:push((dataStack:pop() + 1) & 0xFFFF)
+  dataStack:push(localBits(dataStack:pop() + 1))
   rts()
 end,
 asm=function() return [[
@@ -1682,7 +1728,7 @@ asm=function() return [[
 local function unaryOp(name, label, op, asm)
   addNative{name=name, label=label, runtime=function()
     local a = dataStack:pop()
-    dataStack:push(op(a) & 0xFFFF)
+    dataStack:push(truncWord(op(a)))
     rts()
   end, asm=function() return asm end}
 end
@@ -1743,7 +1789,7 @@ local function binaryOpRt(op)
   return function()
     local b = dataStack:pop()
     local a = dataStack:pop()
-    dataStack:push(op(a,b) & 0xFFFF)
+    dataStack:push(truncWord(op(a,b)))
     rts()
   end
 end
@@ -1780,12 +1826,12 @@ binaryOpWithLabel("+", "_PLUS", function(a,b)
 end, "clc\n  adc")
 
 addNative{name="SIN", label="_SIN", runtime=function()
-  dataStack:push(math.floor(0x7FFF * math.sin(dataStack:pop() * 2 * math.pi / 0x10000)) & 0xFFFF)
+  dataStack:push(toUnsigned(math.floor(0x7FFF * math.sin(dataStack:pop() * 2 * math.pi / 0x10000))))
   rts()
 end}
 
 addNative{name="*", label="_MULTIPLY", runtime=function()
-  dataStack:push((dataStack:pop() * dataStack:pop()) & 0xFFFF)
+  dataStack:push(truncWord(dataStack:pop() * dataStack:pop()))
   rts()
 end}
 
@@ -2018,7 +2064,10 @@ do
   compile("> STATE @ INVERT OR")
   local notImmediateBranch = compileForwardBranch0()
     -- Interpreting, just run the word.
-    compile("EXECUTE")
+    -- Attach the bank and long jump.
+    compile("CBANK@")
+    compile("SWAP")
+    compile("EXECUTEL")
     compileBranchTo(loop)
   notImmediateBranch.toHere()
 

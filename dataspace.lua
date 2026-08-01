@@ -55,7 +55,7 @@ function Dataspace:printBank(file, bank)
     local v = self[addr]
     local label = self.labels[addr]
     if label then
-      file:write(string.format("%s:\n", label))
+      file:write(string.format("%s:\n", Dataspace.bankLabel(bank, label)))
     end
     file:write(string.format("  %s: %s\n", Dataspace.formatAddr(addr), v:toString(self, addr)))
     assert(v:size())
@@ -67,7 +67,7 @@ function Dataspace:printBank(file, bank)
     local v = self[addr]
     local label = self.labels[addr]
     if label then
-      file:write(string.format("%s:\n", label))
+      file:write(string.format("%s:\n", Dataspace.bankLabel(bank, label)))
     end
     file:write(string.format("  %s: %s\n", Dataspace.formatAddr(addr), v:toString(self, addr)))
     addr = addr + 1
