@@ -158,3 +158,16 @@
   LOOP
 ;
 
+: 'L ( bank "name" -- )
+  CBANK@ >R CBANK! WORD FIND DROP R> CBANK! ; LABEL _TICK_LONG
+
+: BANK-CALL ( bank "name" -- )
+  DUP 'L
+  COMPILE,L
+; IMMEDIATE
+
+: BANK0-CALL ( "name" -- )
+  0 POSTPONE BANK-CALL ; IMMEDIATE
+: BANK1-CALL ( "name" -- )
+  1 POSTPONE BANK-CALL ; IMMEDIATE
+

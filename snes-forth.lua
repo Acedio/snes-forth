@@ -1326,6 +1326,18 @@ addNative{name="COMPILE,", label="_COMPILE_COMMA", runtime=function()
   rts()
 end}
 
+addNative{name="COMPILE,L", label="_COMPILE_COMMA_LONG", runtime=function()
+  local xt = dataStack:pop()
+  local bank = dataStack:pop()
+  local longAddr = bank << 16 | xt
+  compileLongCall(longAddr)
+  if debugging() then
+    local label = dataspace:getLabelAtAddr(longAddr) or "missing label"
+    infos:write(string.format("Compiling LongCall to $%06X (label %s)\n", longAddr, label))
+  end
+  rts()
+end}
+
 addNative{name="COMPILE-WORD", label="_COMPILE_WORD", runtime=function()
   dataspace:compileWord(dataStack:pop())
   rts()
@@ -2010,12 +2022,6 @@ for bank=0,NUM_BANKS-1 do
   end
 end
 dataspace:setCodeBank(0)
-
-do
-  addColon("TEST-LONG-CALL")
-  compileLongCall(0x021000)
-  compileRts()
-end
 
 do
   -- TODO: Can we define a simpler QUIT here and then define the real QUIT in
