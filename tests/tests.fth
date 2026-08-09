@@ -38,6 +38,10 @@ INCLUDE std.fth
 : TEST-MATH-OPS
   T{ 0 1 + -> 1 }T
   T{ -1 -2 - -> 1 }T
+  T{ -1 1+ -> 0 }T
+  T{ 0 1+ -> 1 }T
+  T{ -1 -1 DOUBLE+ -> 0 0 }T
+  T{ 0 0 DOUBLE+ -> 0 1 }T
   T{ 0x00 0x01 OR -> 1 }T
   T{ 0x05 0x03 AND -> 1 }T
   T{ 0x03 0x02 XOR -> 1 }T

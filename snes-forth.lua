@@ -1603,7 +1603,7 @@ asm=function() return [[
 ]] end}
 
 addNative{name="1+", label="_INCR", runtime=function()
-  dataStack:push(dataStack:pop() + 1)
+  dataStack:push((dataStack:pop() + 1) & 0xFFFF)
   rts()
 end,
 asm=function() return [[
@@ -1612,7 +1612,7 @@ asm=function() return [[
 ]] end}
 
 addNative{name="DOUBLE+", label="_DOUBLE_INCR", runtime=function()
-  dataStack:pushDouble(dataStack:popDouble() + 1)
+  dataStack:pushDouble((dataStack:popDouble() + 1) & 0xFFFFFFFF)
   rts()
 end,
 asm=function() return [[
