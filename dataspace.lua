@@ -151,19 +151,19 @@ end
 
 -- TODO: Should these be masked?
 function Dataspace:getCodeHere()
-  return self.banks[self.codeBank].here
+  return self.banks[self:getCodeBank()].here
 end
 
 function Dataspace:getDataHere()
-  return self.banks[self.dataBank].here
+  return self.banks[self:getDataBank()].here
 end
 
 function Dataspace:setCodeHere(val)
-  self.banks[self.codeBank].here = val
+  self.banks[self:getCodeBank()].here = val
 end
 
 function Dataspace:setDataHere(val)
-  self.banks[self.dataBank].here = val
+  self.banks[self:getDataBank()].here = val
 end
 
 -- Set the label for HERE.
@@ -191,7 +191,7 @@ end
 function Dataspace:add(entry)
   assert(entry:size())
   local addr = self:getDataHere()
-  self[self:getDataHere()] = entry
+  self[addr] = entry
   self:setDataHere(self:getDataHere() + 1)
   return addr
 end
@@ -200,15 +200,16 @@ end
 function Dataspace:compile(entry)
   assert(entry:size())
   local addr = self:getCodeHere()
-  self[self:getCodeHere()] = entry
+  self[addr] = entry
   self:setCodeHere(self:getCodeHere() + 1)
   return addr
 end
 
 function Dataspace:compileUnsized(entry)
-  local addr = self.banks[self.codeBank].unsizedHere
-  self[self.banks[self.codeBank].unsizedHere] = entry
-  self.banks[self.codeBank].unsizedHere = self.banks[self.codeBank].unsizedHere + 1
+  local codeBank = self:getCodeBank()
+  local addr = self.banks[codeBank].unsizedHere
+  self[addr] = entry
+  self.banks[codeBank].unsizedHere = self.banks[codeBank].unsizedHere + 1
   return addr
 end
 
