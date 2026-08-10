@@ -942,7 +942,7 @@ end}
 addNative{name="CREATE", runtime=function()
   local name = input:word()
   local label = Dataspace.defaultLabel(name)
-  local dictEntry = getCodeDictionary():add(name, label, dataspace:getCodeHere())
+  local dictEntry = getCodeDictionary():add(name, label, localBits(dataspace:getCodeHere()))
   dictEntry.canInline = true
   dataspace:labelCodeHere(label)
   -- The value of the Lit is 1 byte into the assembly.
@@ -964,7 +964,7 @@ addNative{name="CONSTANT", runtime=function()
   local name = input:word()
   local value = dataStack:pop()
   local label = Dataspace.defaultLabel(name)
-  local entry = getCodeDictionary():add(name, label, dataspace:getCodeHere())
+  local entry = getCodeDictionary():add(name, label, localBits(dataspace:getCodeHere()))
   entry.canInline = true
   dataspace:labelCodeHere(label)
   compileLit(value)
@@ -1321,9 +1321,11 @@ local function tryInline(xt)
   if not dictEntry.canInline then
     return false
   end
-  local addr = dictEntry.addr
+  local addr = dataspace:getCodeBank() << 16 | dictEntry.addr
   while dataspace[addr].type ~= "rts" do
     dataspace:compile(dataspace[addr])
+    -- Note: While different entry types have different sizes (e.g. Rts is one
+    -- byte, but Call is 3), they're still divided up byte-by-byte.
     addr = addr + 1
   end
   return true
@@ -2147,8 +2149,16 @@ while running do
   -- Capture ip value so instruction can modify the next ip.
   local oldIp = ip
   local instruction = dataspace[oldIp]
-  assertAddr(instruction, "Attempted to execute missing cell: %s\n", oldIp)
-  assertAddr(instruction.runtime, "Attempted to execute a non-native cell: %s\n", oldIp)
+  if not instruction then
+    dataspace:print(dumpFile)
+    infos:write(string.format("Dataspace dumped to %s\n", dumpFileName))
+    assertAddr(nil, "Attempted to execute missing cell: %s\n", oldIp)
+  end
+  if not instruction.runtime then
+    dataspace:print(dumpFile)
+    infos:write(string.format("Dataspace dumped to %s\n", dumpFileName))
+    assertAddr(nil, "Attempted to execute a non-native cell: %s\n", oldIp)
+  end
 
   if debugging() then
     local localDictionary = assert(dictionaryForAddr(oldIp))
