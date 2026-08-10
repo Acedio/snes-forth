@@ -126,11 +126,7 @@ end
 
 -- Message should include a %s where the addr should be input.
 function Dataspace:assertAddr(dumpFile, cond, message, addr)
-  if not cond then
-    print("Dumping dataspace.")
-    self:print(dumpFile)
-    assert(nil, string.format(message, Dataspace.formatAddr(addr)))
-  end
+  assert(cond, string.format(message, Dataspace.formatAddr(addr)))
 end
 
 function Dataspace:getCodeBank()

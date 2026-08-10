@@ -44,7 +44,8 @@ end
 local outputs = io.stdout
 local infos = io.stdout
 local errors = io.stderr
-local dumpFile = assert(io.open("dataspace.dump", "w"))
+local dumpFileName = "dataspace.dump"
+local dumpFile = assert(io.open(dumpFileName, "w"))
 
 local NUM_BANKS = 4
 
@@ -791,6 +792,20 @@ addNative{name="CBANK!", label="_CBANK_STORE", runtime=function()
   dataspace:setCodeBank(dataStack:pop())
   rts()
 end}
+
+addNative{name="PHK", label="_PHK", runtime=function()
+  dataStack:push((ip >> 16) & 0xFF)
+  rts()
+end,
+asm=function() return [[
+  A8
+  phk
+  pla
+  A16
+  and $FF
+  PUSH_A
+  rts
+]] end}
 
 addNative{name="LOWRAM", runtime=function()
   dataStack:push(Dataspace.LOWRAM_BANK)
@@ -2015,7 +2030,10 @@ for bank=0,NUM_BANKS-1 do
     addColonWithLabel("DOS\"", "_DO_SLIT")
     compile("R@ INLINE-DATA DUP")
     compileLit(1)
-    compile("CELLS + SWAP @ DUP CHARS")
+    compile("CELLS + SWAP @")
+    -- ( &str str_len -- )
+    -- Now we modify the return address so we skip the length and string.
+    compile("DUP CHARS")
     compileLit(1)
     compile("CELLS + R> + >R")
     compileRts()
@@ -2083,6 +2101,8 @@ do
 
   addressParseErrorBranch.toHere()
   compile("2DROP DUP COUNT TYPE")
+  -- Set the data bank to the running program bank (required for S" and TYPE)
+  compile("BANK@ PHK BANK!")
   compile("DOS\"")
   dataspace:compileWord(7)
   dataspace:compileByte(string.byte("?"))
@@ -2094,13 +2114,18 @@ do
   dataspace:compileByte(string.byte(" "))
   -- TODO: TYPE here will not work when the data bank is not 0.
   compile("TYPE FILENAME TYPE")
+  compile("DOS\"")
+  dataspace:compileWord(6)
   dataspace:compileByte(string.byte("\n"))
   dataspace:compileByte(string.byte("L"))
   dataspace:compileByte(string.byte("I"))
   dataspace:compileByte(string.byte("N"))
   dataspace:compileByte(string.byte("E"))
   dataspace:compileByte(string.byte(" "))
-  compile("TYPE LINE# . PRINT-LINE ABORT")
+  compile("TYPE LINE# . PRINT-LINE")
+  -- Reset the bank.
+  compile("BANK!")
+  compile("ABORT")
   eofBranch.toHere()
   compile("DROP")
   compileRts()
@@ -2111,7 +2136,8 @@ compile("QUIT")
 compile("BYE")
 
 if debugging() then
-  dataspace:print(infos)
+  dataspace:print(dumpFile)
+  infos:write(string.format("Dataspace dumped to %s\n", dumpFileName))
   infos:write(string.format("CODEHERE = %s\n", Dataspace.formatAddr(dataspace:getCodeHere())))
   infos:write(string.format("Starting IP at %04X\n", ip))
 end
@@ -2141,13 +2167,16 @@ while running do
     errors:write(stacktrace())
     errors:write("\nLua stacktrace:\n")
     errors:write(debug.traceback(msg) .. "\n")
+    dataspace:print(dumpFile)
+    errors:write(string.format("Dataspace dumped to %s\n", dumpFileName))
     return msg
   end, instruction, dataspace, oldIp))
 end
 
 
 if debugging() then
-  dataspace:print(infos)
+  dataspace:print(dumpFile)
+  infos:write(string.format("Dataspace dumped to %s\n", dumpFileName))
 
   dataStack:print(infos)
 end
