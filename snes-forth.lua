@@ -765,7 +765,7 @@ asm=function() return [[
   phb
   pla
   A16
-  and $FF
+  and #$FF
   PUSH_A
   rts
 ]] end}
@@ -802,7 +802,7 @@ asm=function() return [[
   phk
   pla
   A16
-  and $FF
+  and #$FF
   PUSH_A
   rts
 ]] end}
