@@ -1637,9 +1637,7 @@ asm=function() return [[
   beq @carry
   rts
 @carry:
-  A8
   inc z:3, X
-  A16
   rts
 ]] end}
 
