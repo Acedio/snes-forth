@@ -52,6 +52,10 @@ INCLUDE std.fth
   T{ 0x7F80 2* -> 0xFF00 }T
   T{ 0x1234 HIBYTE -> 0x0012 }T
   T{ 0x1234 SWAPBYTES -> 0x3412 }T
+  T{ 1 2 MAX -> 2 }T
+  T{ 1 -2 MAX -> 1 }T
+  T{ 1 2 MIN -> 1 }T
+  T{ 1 -2 MIN -> -2 }T
 ;
 
 : TEST-COMPARISON-OPS
