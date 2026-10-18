@@ -39,7 +39,6 @@
 : MAX 2DUP < IF SWAP THEN DROP ;
 : MIN 2DUP > IF SWAP THEN DROP ;
 
-: 2/ DUP LSR SWAP 0x8000 AND OR ; LABEL _DIV2
 : 1- 1 - ; LABEL _DECR
 
 \ A couple more flow control words.

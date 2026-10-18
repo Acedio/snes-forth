@@ -48,6 +48,7 @@ INCLUDE std.fth
   T{ 0xFFFE INVERT -> 1 }T
   T{ 0xFFFF NEGATE -> 1 }T
   T{ 0xFF00 LSR -> 0x7F80 }T
+  T{ 100 2/ -> 50 }T
   T{ 0xFF00 2/ -> 0xFF80 }T
   T{ 0x7F80 2* -> 0xFF00 }T
   T{ 0x1234 HIBYTE -> 0x0012 }T

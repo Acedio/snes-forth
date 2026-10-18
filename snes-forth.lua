@@ -1583,6 +1583,7 @@ asm=function() return [[
   rts
 ]] end}
 
+-- TODO: Need a CF@.
 -- Takes a far address (2 cells) off the stack and pushes a 1 cell word.
 addNative{name="F@", label="_FAR_FETCH", runtime=function()
   local addr = dataStack:popDouble()
@@ -1783,6 +1784,14 @@ unaryOp("2*", "_MUL2", function(a)
   return a << 1
 end, [[
   asl z:1, X
+  rts
+]])
+
+unaryOp("2/", "_DIV2", function(a)
+  return toSigned(a) // 2
+end, [[
+  cmp #$8000
+  ror z:1, X
   rts
 ]])
 
