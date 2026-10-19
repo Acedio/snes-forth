@@ -28,7 +28,7 @@
 : TUCK SWAP OVER ;
 ( a b c - b c a )
 : ROT >R SWAP R> SWAP ;
-: -ROT ROT ROT ; LABEL _NROT
+: -ROT SWAP >R SWAP R> ; LABEL _NROT
 
 \ Random math ops.
 : 0= 0 = ; LABEL _0_EQ
