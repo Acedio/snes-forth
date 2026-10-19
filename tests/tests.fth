@@ -48,8 +48,10 @@ INCLUDE std.fth
   T{ 0xFFFE INVERT -> 1 }T
   T{ 0xFFFF NEGATE -> 1 }T
   T{ 0xFF00 LSR -> 0x7F80 }T
-  T{ 100 2/ -> 50 }T
-  T{ 0xFF00 2/ -> 0xFF80 }T
+  \ Poisoning the accumulator due to a bug where we relied on the value being
+  \ 2/'d still being in the accumulator (which of course is not guaranteed).
+  T{ 100 -1 DROP 2/ -> 50 }T
+  T{ 0xFF00 1 DROP 2/ -> 0xFF80 }T
   T{ 0x7F80 2* -> 0xFF00 }T
   T{ 0x1234 HIBYTE -> 0x0012 }T
   T{ 0x1234 SWAPBYTES -> 0x3412 }T

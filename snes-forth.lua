@@ -1790,6 +1790,7 @@ end, [[
 unaryOp("2/", "_DIV2", function(a)
   return toSigned(a) // 2
 end, [[
+  lda z:1, X
   cmp #$8000
   ror z:1, X
   rts
