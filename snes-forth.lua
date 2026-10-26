@@ -1796,10 +1796,44 @@ end, [[
   rts
 ]])
 
+unaryOp("2/TZ", "_DIV2_TOWARDS_ZERO", function(a)
+  -- math.modf() splits a float into integer and non-int parts, essentially
+  -- flooring towards zero.
+  local i, _ = math.modf(toSigned(a)/2)
+  return i
+end, [[
+  lda z:1, X
+  cmp #$8000
+  bcs :+
+  ror z:1, X
+  rts
+:
+  dec
+  ror
+  inc
+  sta z:1, X
+  rts
+]])
+
 unaryOp("LSR", "_LSR", function(a)
   return a >> 1
 end, [[
   lsr z:1, X
+  rts
+]])
+
+unaryOp("256/", "_DIV256", function(a)
+  return toSigned(a) // 256
+end, [[
+  lda z:1, X
+  xba
+  bpl :+
+  ora #$FF00
+  sta z:1, X
+  rts
+:
+  and #$00FF
+  sta z:1, X
   rts
 ]])
 

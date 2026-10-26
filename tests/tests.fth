@@ -52,6 +52,10 @@ INCLUDE std.fth
   \ 2/'d still being in the accumulator (which of course is not guaranteed).
   T{ 100 -1 DROP 2/ -> 50 }T
   T{ 0xFF00 1 DROP 2/ -> 0xFF80 }T
+  \ T{ -3 2/TZ -> -1 }T
+  T{ 3 2/TZ -> 1 }T
+  T{ 0xFFFF 256/ -> 0xFFFF }T
+  T{ 0x0FFF 256/ -> 0x000F }T
   T{ 0x7F80 2* -> 0xFF00 }T
   T{ 0x1234 HIBYTE -> 0x0012 }T
   T{ 0x1234 SWAPBYTES -> 0x3412 }T
