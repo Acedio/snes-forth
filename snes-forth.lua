@@ -1837,6 +1837,28 @@ end, [[
   rts
 ]])
 
+unaryOp("256/TZ", "_DIV256_TOWARDS_ZERO", function(a)
+  -- math.modf() splits a float into integer and non-int parts, essentially
+  -- flooring towards zero.
+  local i, _ = math.modf(toSigned(a)/256)
+  return i
+end, [[
+  lda z:1, X
+  bmi :+
+  xba
+  and #$00FF
+  sta z:1, X
+  rts
+:
+  ; If negative, we can divide and round towards zero with ((val - 1)>>8 + 1).
+  dec
+  xba
+  ora #$FF00
+  inc
+  sta z:1, X
+  rts
+]])
+
 unaryOp("HIBYTE", "_HIBYTE", function(a)
   return (0xFF00 & a) >> 8
 end, [[
